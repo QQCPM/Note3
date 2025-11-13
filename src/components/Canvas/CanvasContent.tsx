@@ -4,6 +4,9 @@ import { createBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
 import TextBlock from '@/components/Blocks/TextBlock';
 import HeadingBlock from '@/components/Blocks/HeadingBlock';
+import DatabaseBlock from '@/components/Blocks/DatabaseBlock';
+import ArtifactBlock from '@/components/Blocks/ArtifactBlock';
+import TaskBlock from '@/components/Blocks/TaskBlock';
 
 interface CanvasContentProps {
   note: Note | null;
@@ -37,11 +40,17 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
       case 'heading1':
       case 'heading2':
         return <HeadingBlock key={block.id} block={block} />;
+      case 'database':
+        return <DatabaseBlock key={block.id} />;
+      case 'artifact':
+        return <ArtifactBlock key={block.id} />;
+      case 'task':
+        return <TaskBlock key={block.id} />;
       default:
         return (
           <div key={block.id} className="canvas-block">
             <div className="block-handle">⋮⋮</div>
-            <div className="text-sm text-text-secondary">
+            <div className="text-sm text-gray-500">
               Block type: {block.block_type} (not implemented yet)
             </div>
           </div>
@@ -51,16 +60,16 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto py-12 px-8">
+      <div className="max-w-4xl mx-auto py-12 px-8" id="canvas">
         {blocks.length === 0 ? (
           <div className="space-y-4">
-            <div className="text-text-tertiary text-sm text-center py-8">
+            <div className="text-gray-500 text-sm text-center py-8">
               This note is empty. Add a text block to get started.
             </div>
             <div className="flex justify-center">
               <button
                 onClick={handleAddTextBlock}
-                className="px-4 py-2 bg-bg-tertiary hover:bg-bg-elevated border border-border rounded text-sm text-text-primary transition-colors"
+                className="px-4 py-2 bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded text-sm text-white transition-colors"
               >
                 + Add Text Block
               </button>
@@ -70,14 +79,19 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
           <>
             {blocks.map(renderBlock)}
 
-            {/* Add block button at the end */}
-            <div className="mt-4 flex justify-start">
-              <button
-                onClick={handleAddTextBlock}
-                className="px-3 py-1.5 text-sm text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
-              >
-                + Add block
-              </button>
+            {/* Empty text block for adding more */}
+            <div className="canvas-block text-block">
+              <div className="block-handle">⋮⋮</div>
+              <textarea
+                rows={1}
+                placeholder="Type '/' for commands..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAddTextBlock();
+                  }
+                }}
+              ></textarea>
             </div>
           </>
         )}

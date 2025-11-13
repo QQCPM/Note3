@@ -46,7 +46,7 @@ const CanvasHeader: React.FC<CanvasHeaderProps> = ({ note }) => {
   if (!note) return null;
 
   return (
-    <header className="h-16 bg-bg-primary border-b border-border flex items-center justify-between px-6 flex-shrink-0">
+    <header className="h-16 bg-[#0d1117] border-b border-[#30363d] flex items-center justify-between px-6 flex-shrink-0">
       <div className="flex items-center gap-3">
         <span
           className="text-2xl cursor-pointer hover:opacity-80 transition-opacity"
@@ -63,8 +63,8 @@ const CanvasHeader: React.FC<CanvasHeaderProps> = ({ note }) => {
           placeholder="Untitled"
         />
       </div>
-      <div className="text-xs text-text-tertiary">
-        Type <kbd className="px-2 py-1 bg-bg-tertiary rounded text-text-secondary">/</kbd> for commands
+      <div className="text-xs text-gray-500">
+          Type <kbd className="px-2 py-1 bg-[#161b22] rounded text-gray-400">/</kbd> for commands
       </div>
     </header>
   );

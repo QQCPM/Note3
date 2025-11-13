@@ -21,6 +21,8 @@ interface AIPromptModalState {
 interface UIState {
   // Sidebar
   sidebarCollapsed: boolean;
+  aiSidebarCollapsed: boolean;
+  aiSidebarWidth: number;
   aiSidebarTab: 'agent' | 'mcp' | 'skills';
 
   // Menus & Modals
@@ -30,6 +32,8 @@ interface UIState {
 
   // Actions
   toggleSidebar: () => void;
+  toggleAISidebar: () => void;
+  setAISidebarWidth: (width: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setAISidebarTab: (tab: 'agent' | 'mcp' | 'skills') => void;
 
@@ -48,6 +52,8 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set) => ({
   sidebarCollapsed: false,
+  aiSidebarCollapsed: false,
+  aiSidebarWidth: 350,
   aiSidebarTab: 'agent',
 
   contextMenu: {
@@ -69,6 +75,8 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  toggleAISidebar: () => set((state) => ({ aiSidebarCollapsed: !state.aiSidebarCollapsed })),
+  setAISidebarWidth: (width) => set({ aiSidebarWidth: width }),
 
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 

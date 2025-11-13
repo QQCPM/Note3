@@ -21,14 +21,14 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <nav className="w-60 bg-bg-secondary border-r border-border flex flex-col flex-shrink-0">
+    <nav className="w-60 bg-[#010409] flex flex-col flex-shrink-0 rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="p-4 h-16 flex items-center border-b border-border">
+      <div className="p-4 h-16 flex items-center border-b border-[#30363d]">
         <h1 className="text-lg font-semibold text-white">Weave</h1>
       </div>
 
       {/* Note Tree */}
-      <div className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <div className="flex-1 p-3 space-y-1 overflow-y-auto" id="noteTree">
         <NoteTree notes={notes} />
       </div>
 
@@ -36,7 +36,7 @@ const Sidebar: React.FC = () => {
       <div className="p-4">
         <button
           onClick={handleNewPage}
-          className="w-full px-3 py-2 bg-transparent text-text-secondary hover:text-white text-sm transition-all text-left rounded hover:bg-bg-tertiary"
+          className="w-full px-3 py-2 bg-transparent text-gray-400 hover:text-white text-sm transition-all text-left"
         >
           + New Page
         </button>

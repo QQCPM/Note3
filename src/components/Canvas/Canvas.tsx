@@ -35,7 +35,7 @@ const Canvas: React.FC = () => {
 
   if (!activeNoteId) {
     return (
-      <main className="flex-1 flex flex-col overflow-hidden bg-bg-primary">
+      <main className="flex-1 flex flex-col overflow-hidden bg-bg-primary rounded-lg">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="text-6xl mb-4">📝</div>
@@ -51,7 +51,7 @@ const Canvas: React.FC = () => {
 
   if (loading) {
     return (
-      <main className="flex-1 flex flex-col overflow-hidden bg-bg-primary">
+      <main className="flex-1 flex flex-col overflow-hidden bg-bg-primary rounded-lg">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-text-secondary">Loading...</div>
         </div>
@@ -60,7 +60,7 @@ const Canvas: React.FC = () => {
   }
 
   return (
-    <main className="flex-1 flex flex-col overflow-hidden bg-bg-primary">
+    <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
       <CanvasHeader note={activeNote} />
       <CanvasContent note={activeNote} blocks={blocks} />
     </main>

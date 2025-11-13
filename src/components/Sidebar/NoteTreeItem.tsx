@@ -4,10 +4,9 @@ import type { NoteWithChildren } from '@/types';
 
 interface NoteTreeItemProps {
   note: NoteWithChildren;
-  level: number;
 }
 
-const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note, level }) => {
+const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note }) => {
   const { activeNoteId, setActiveNote, expandedNoteIds, toggleExpanded } = useNotesStore();
   const { showContextMenu } = useUIStore();
 
@@ -33,29 +32,27 @@ const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note, level }) => {
   };
 
   return (
-    <div className="note-folder">
+    <div>
       <div
         className={`note-tree-item ${isActive ? 'active' : ''}`}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
-        style={{ paddingLeft: `${level * 20 + 8}px` }}
       >
         <span
           className={`note-chevron ${isExpanded ? 'expanded' : ''}`}
           onClick={handleChevronClick}
-          style={{ opacity: hasChildren ? 1 : 0 }}
+          style={{ visibility: hasChildren ? 'visible' : 'hidden' }}
         >
           ▶
         </span>
-        <span className="note-icon">{note.icon}</span>
+        <span className="note-icon">{note.icon || '📝'}</span>
         <span className="note-title">{note.title}</span>
       </div>
 
-      {/* Render children if expanded */}
       {hasChildren && isExpanded && (
         <div className="sub-notes expanded">
-          {note.children!.map((child) => (
-            <NoteTreeItem key={child.id} note={child} level={level + 1} />
+          {note.children.map((child) => (
+            <NoteTreeItem key={child.id} note={child} />
           ))}
         </div>
       )}
