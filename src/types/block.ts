@@ -1,6 +1,6 @@
 // Block types matching database schema
 
-export type BlockType = 'text' | 'heading1' | 'heading2' | 'database' | 'artifact' | 'task';
+export type BlockType = 'text' | 'heading1' | 'heading2' | 'database' | 'artifact' | 'task' | 'web';
 
 export interface Block {
   id: string;
@@ -17,7 +17,8 @@ export type BlockData =
   | HeadingBlockData
   | DatabaseBlockData
   | ArtifactBlockData
-  | TaskBlockData;
+  | TaskBlockData
+  | WebBlockData;
 
 // Text Block
 export interface TextBlockData {
@@ -89,6 +90,15 @@ export interface Task {
   completed: boolean;
   priority?: 'low' | 'medium' | 'high';
   due_date?: string;
+}
+
+// Web Block
+export interface WebBlockData {
+  type: 'web';
+  url: string;
+  title?: string;
+  height?: number; // Custom height in pixels
+  prompt?: string; // Original prompt if AI-generated
 }
 
 // Block creation inputs

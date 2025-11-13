@@ -59,7 +59,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob:; img-src 'self' https: data: blob:;"
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob:; img-src 'self' https: http: data: blob:; frame-src 'self' https: http:; media-src 'self' https: http: data: blob:;"
     }
   },
   "plugins": {}
