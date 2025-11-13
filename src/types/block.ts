@@ -7,7 +7,7 @@ export interface Block {
   note_id: string;
   type: BlockType;
   position: number;
-  data: BlockData;
+  data: string; // JSON string stored in database
   created_at: string;
   updated_at: string;
 }
@@ -96,12 +96,12 @@ export interface CreateBlockInput {
   note_id: string;
   type: BlockType;
   position?: number;
-  data: BlockData;
+  data: string; // JSON string
 }
 
 export interface UpdateBlockInput {
   id: string;
   type?: BlockType;
   position?: number;
-  data?: BlockData;
+  data?: string; // JSON string
 }

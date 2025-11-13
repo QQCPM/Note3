@@ -24,7 +24,7 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
     try {
       const newBlock = await createBlock({
         note_id: note.id,
-        block_type: 'text',
+        type: 'text',
         data: JSON.stringify({ type: 'text', content: '' }),
       });
       addBlock(newBlock);
@@ -34,24 +34,24 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
   };
 
   const renderBlock = (block: Block) => {
-    switch (block.block_type) {
+    switch (block.type) {
       case 'text':
         return <TextBlock key={block.id} block={block} />;
       case 'heading1':
       case 'heading2':
         return <HeadingBlock key={block.id} block={block} />;
       case 'database':
-        return <DatabaseBlock key={block.id} />;
+        return <DatabaseBlock key={block.id} block={block} />;
       case 'artifact':
-        return <ArtifactBlock key={block.id} />;
+        return <ArtifactBlock key={block.id} block={block} />;
       case 'task':
-        return <TaskBlock key={block.id} />;
+        return <TaskBlock key={block.id} block={block} />;
       default:
         return (
           <div key={block.id} className="canvas-block">
             <div className="block-handle">⋮⋮</div>
             <div className="text-sm text-gray-500">
-              Block type: {block.block_type} (not implemented yet)
+              Block type: {block.type} (not implemented yet)
             </div>
           </div>
         );

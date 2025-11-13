@@ -1,98 +1,107 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { updateBlock } from '@/utils/tauri';
+import { useBlocksStore } from '@/store';
+import type { Block } from '@/types';
 
-const ArtifactBlock: React.FC = () => {
-  const iframeSrcDoc = `<!DOCTYPE html>
+interface ArtifactBlockProps {
+  block: Block;
+}
+
+interface ArtifactData {
+  title?: string;
+  prompt?: string;
+  html: string;
+  css: string;
+  javascript: string;
+}
+
+const ArtifactBlock: React.FC<ArtifactBlockProps> = ({ block }) => {
+  const { updateBlock: updateBlockInStore } = useBlocksStore();
+  const [data, setData] = useState<ArtifactData>({
+    html: '',
+    css: '',
+    javascript: '',
+  });
+  const [showCodeEditor, setShowCodeEditor] = useState(false);
+
+  // Parse block data
+  useEffect(() => {
+    try {
+      const parsed = JSON.parse(block.data);
+      setData(parsed);
+    } catch (error) {
+      console.error('Failed to parse artifact block data:', error);
+    }
+  }, [block.data]);
+
+  // Build iframe srcdoc
+  const buildSrcDoc = () => {
+    return `<!DOCTYPE html>
 <html>
 <head>
 <style>
-body {
-  margin: 0;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-family: Arial, sans-serif;
-}
-.container {
-  text-align: center;
-  color: white;
-}
-.neural-net {
-  margin: 30px 0;
-}
-.layer {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 20px;
-  margin: 0 30px;
-}
-.neuron {
-  width: 50px;
-  height: 50px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 3px solid white;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-.neuron:hover {
-  background: rgba(255, 255, 255, 0.4);
-  transform: scale(1.2);
-}
+${data.css}
 </style>
 </head>
 <body>
-  <div class='container'>
-    <h2>Neural Network Layers</h2>
-    <div class='neural-net'>
-      <div class='layer'>
-        <div class='neuron'></div>
-        <div class='neuron'></div>
-        <div class='neuron'></div>
-      </div>
-      <div class='layer'>
-        <div class='neuron'></div>
-        <div class='neuron'></div>
-      </div>
-      <div class='layer'>
-        <div class='neuron'></div>
-      </div>
-    </div>
-    <p>Click neurons to activate</p>
-  </div>
-  <script>
-    document.querySelectorAll('.neuron').forEach(neuron => {
-      neuron.addEventListener('click', () => {
-        neuron.style.background = 'rgba(255, 255, 255, 0.6)';
-        setTimeout(() => {
-          neuron.style.background = 'rgba(255, 255, 255, 0.2)';
-        }, 500);
-      });
-    });
-  </script>
+${data.html}
+<script>
+${data.javascript}
+</script>
 </body>
 </html>`;
+  };
+
+  const handleEditCode = () => {
+    // TODO: Open code editor modal
+    console.log('Edit code for artifact:', block.id);
+    alert('Code editor will open here. This will allow you to edit HTML, CSS, and JavaScript.');
+  };
+
+  const handleAskAI = () => {
+    // TODO: Open AI prompt to regenerate
+    console.log('Ask AI to regenerate artifact:', block.id);
+    alert('AI will help regenerate this artifact based on a new prompt.');
+  };
 
   return (
     <div className="canvas-block artifact-block">
       <div className="block-handle">⋮⋮</div>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-white">Live Artifact</span>
-          <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">Interactive</span>
+          <span className="text-sm font-semibold text-white">
+            {data.title || 'Live Artifact'}
+          </span>
+          <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">
+            Interactive
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <button className="px-3 py-1 text-xs bg-white/5 hover:bg-white/10 rounded">Edit Code</button>
-          <button className="px-3 py-1 text-xs bg-purple-500/20 text-purple-300 rounded">Ask AI</button>
+          <button
+            onClick={handleEditCode}
+            className="px-3 py-1 text-xs bg-white/5 hover:bg-white/10 rounded transition-colors"
+          >
+            Edit Code
+          </button>
+          <button
+            onClick={handleAskAI}
+            className="px-3 py-1 text-xs bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 rounded transition-colors"
+          >
+            Ask AI
+          </button>
         </div>
       </div>
       <iframe
         className="artifact-preview w-full"
         sandbox="allow-scripts"
-        srcDoc={iframeSrcDoc}
+        srcDoc={buildSrcDoc()}
+        title="Artifact Preview"
       ></iframe>
+      {data.prompt && (
+        <div className="mt-2 text-xs text-gray-500 italic">
+          Generated from: "{data.prompt}"
+        </div>
+      )}
     </div>
   );
 };

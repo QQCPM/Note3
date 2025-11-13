@@ -10,7 +10,7 @@ interface HeadingBlockProps {
 const HeadingBlock: React.FC<HeadingBlockProps> = ({ block }) => {
   const { updateBlock: updateBlockInStore } = useBlocksStore();
   const [content, setContent] = useState('');
-  const isH1 = block.block_type === 'heading1';
+  const isH1 = block.type === 'heading1';
 
   // Parse block data
   useEffect(() => {
@@ -30,7 +30,7 @@ const HeadingBlock: React.FC<HeadingBlockProps> = ({ block }) => {
     // Save to database
     try {
       const newData = JSON.stringify({
-        type: block.block_type,
+        type: block.type,
         content: newContent
       });
       const updated = await updateBlock(block.id, newData);
