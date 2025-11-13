@@ -32,7 +32,6 @@ export interface CreateNoteInput {
 }
 
 export interface UpdateNoteInput {
-  id: string;
   title?: string;
   icon?: string;
   position?: number;

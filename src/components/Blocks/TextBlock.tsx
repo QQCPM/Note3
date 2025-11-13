@@ -75,7 +75,6 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
 
   const showSlashMenuAtCursor = (textarea: HTMLTextAreaElement) => {
     const rect = textarea.getBoundingClientRect();
-    const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight);
 
     setSlashMenuPosition({
       x: rect.left,
@@ -134,12 +133,12 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
           break;
       }
 
-      const newBlock = await createBlock(
-        activeNoteId,
-        command.id === 'tasks' ? 'task' : (command.id as any),
-        block.position + 1,
-        JSON.stringify(blockData)
-      );
+      const newBlock = await createBlock({
+        note_id: activeNoteId,
+        type: command.id === 'tasks' ? 'task' : (command.id as any),
+        position: block.position + 1,
+        data: JSON.stringify(blockData),
+      });
 
       addBlock(newBlock);
     } catch (error) {
@@ -178,12 +177,12 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
         };
       }
 
-      const newBlock = await createBlock(
-        activeNoteId,
+      const newBlock = await createBlock({
+        note_id: activeNoteId,
         type,
-        block.position + 1,
-        JSON.stringify(blockData)
-      );
+        position: block.position + 1,
+        data: JSON.stringify(blockData),
+      });
 
       addBlock(newBlock);
     } catch (error) {

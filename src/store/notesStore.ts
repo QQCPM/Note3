@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Note, NoteWithChildren, CreateNoteInput, UpdateNoteInput } from '@/types';
+import { Note, NoteWithChildren } from '@/types';
 
 interface NotesState {
   notes: NoteWithChildren[];
@@ -33,7 +33,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   error: null,
 
   setNotes: (notes) => {
-    const noteMap = new Map(notes.map(n => [n.id, { ...n, children: [] }]));
+    const noteMap = new Map(notes.map(n => [n.id, { ...n, children: [] as NoteWithChildren[] }]));
 
     // Build tree structure
     const tree: NoteWithChildren[] = [];

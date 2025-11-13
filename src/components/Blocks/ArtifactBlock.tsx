@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { updateBlock } from '@/utils/tauri';
-import { useBlocksStore } from '@/store';
 import type { Block } from '@/types';
 
 interface ArtifactBlockProps {
@@ -16,13 +14,11 @@ interface ArtifactData {
 }
 
 const ArtifactBlock: React.FC<ArtifactBlockProps> = ({ block }) => {
-  const { updateBlock: updateBlockInStore } = useBlocksStore();
   const [data, setData] = useState<ArtifactData>({
     html: '',
     css: '',
     javascript: '',
   });
-  const [showCodeEditor, setShowCodeEditor] = useState(false);
 
   // Parse block data
   useEffect(() => {

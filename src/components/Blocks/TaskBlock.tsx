@@ -73,7 +73,7 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ block }) => {
     saveData({ ...data, tasks: newTasks });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent, taskId: string) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleAddTask();
@@ -102,7 +102,7 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ block }) => {
               type="text"
               value={task.text}
               onChange={(e) => handleEditTask(task.id, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, task.id)}
+              onKeyDown={handleKeyDown}
               className="flex-1 text-sm bg-transparent border-none outline-none text-white"
               style={{
                 textDecoration: task.completed ? 'line-through' : 'none',
