@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { Note, Block } from '@/types';
 import { createBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
@@ -15,23 +15,31 @@ interface CanvasContentProps {
 
 const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
   const { addBlock } = useBlocksStore();
+  const creatingInitialBlock = useRef(false);
 
   if (!note) return null;
 
-  const handleAddTextBlock = async () => {
-    if (!note) return;
-
-    try {
-      const newBlock = await createBlock({
+  // Auto-create first text block if note is empty
+  useEffect(() => {
+    if (note && blocks.length === 0 && !creatingInitialBlock.current) {
+      creatingInitialBlock.current = true;
+      createBlock({
         note_id: note.id,
         type: 'text',
+        position: 0,
         data: JSON.stringify({ type: 'text', content: '' }),
-      });
-      addBlock(newBlock);
-    } catch (error) {
-      console.error('Failed to create block:', error);
+      })
+        .then((newBlock) => {
+          addBlock(newBlock);
+        })
+        .catch((error) => {
+          console.error('Failed to create initial block:', error);
+        })
+        .finally(() => {
+          creatingInitialBlock.current = false;
+        });
     }
-  };
+  }, [note?.id, blocks.length, addBlock]);
 
   const renderBlock = (block: Block) => {
     switch (block.type) {
@@ -61,40 +69,7 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-4xl mx-auto py-12 px-8" id="canvas">
-        {blocks.length === 0 ? (
-          <div className="space-y-4">
-            <div className="text-gray-500 text-sm text-center py-8">
-              This note is empty. Add a text block to get started.
-            </div>
-            <div className="flex justify-center">
-              <button
-                onClick={handleAddTextBlock}
-                className="px-4 py-2 bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] rounded text-sm text-white transition-colors"
-              >
-                + Add Text Block
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {blocks.map(renderBlock)}
-
-            {/* Empty text block for adding more */}
-            <div className="canvas-block text-block">
-              <div className="block-handle">⋮⋮</div>
-              <textarea
-                rows={1}
-                placeholder="Type '/' for commands..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleAddTextBlock();
-                  }
-                }}
-              ></textarea>
-            </div>
-          </>
-        )}
+        {blocks.map(renderBlock)}
       </div>
     </div>
   );

@@ -37,11 +37,11 @@ body {
     position: absolute;
     left: -24px;
     top: 4px;
-    width: 20px;
-    height: 20px;
-    opacity: 0;
-    cursor: grab;
     color: #6e7681;
+    font-size: 14px;
+    opacity: 0;
+    cursor: pointer;
+    user-select: none;
     transition: opacity 0.2s;
 }
 

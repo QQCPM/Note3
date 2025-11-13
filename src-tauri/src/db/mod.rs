@@ -62,6 +62,7 @@ pub struct Block {
     pub id: String,
     pub note_id: String,
     #[sqlx(rename = "type")]
+    #[serde(rename = "type")]
     pub block_type: String,
     pub position: i64,
     pub data: String,

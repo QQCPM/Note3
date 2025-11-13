@@ -40,6 +40,13 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
     }
   }, [content]);
 
+  // Auto-focus on empty blocks (newly created)
+  useEffect(() => {
+    if (textareaRef.current && content === '') {
+      textareaRef.current.focus();
+    }
+  }, []);
+
   const handleChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     setContent(newContent);
@@ -61,6 +68,10 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
       // Update search query
       const query = textBeforeCursor.substring(lastSlashIndex + 1);
       setSlashQuery(query);
+    } else if (showSlashMenu && lastSlashIndex === -1) {
+      // Slash was deleted, close menu
+      setShowSlashMenu(false);
+      setSlashQuery('');
     }
 
     // Save to database (debounced in real app)
