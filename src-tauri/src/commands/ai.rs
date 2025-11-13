@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::Window;
+use tauri::{Emitter, Window};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIConfig {
@@ -104,7 +104,7 @@ pub async fn generate_artifact_stream(
 #[tauri::command]
 pub async fn generate_artifact(
     request: ArtifactGenerationRequest,
-    config: ModelConfig,
+    _config: ModelConfig,
 ) -> Result<ArtifactGenerationResponse, String> {
     // TODO: Implement actual AI generation
     // For now, return a placeholder
@@ -128,8 +128,8 @@ pub async fn generate_artifact(
 /// Generate database from natural language
 #[tauri::command]
 pub async fn generate_database(
-    prompt: String,
-    config: ModelConfig,
+    _prompt: String,
+    _config: ModelConfig,
 ) -> Result<DatabaseGenerationResponse, String> {
     // TODO: Implement actual AI generation
     // For now, return a sample database structure
@@ -168,8 +168,8 @@ pub async fn generate_database(
 /// Generate embedding for text
 #[tauri::command]
 pub async fn generate_embedding(
-    request: EmbeddingRequest,
-    config: ModelConfig,
+    _request: EmbeddingRequest,
+    _config: ModelConfig,
 ) -> Result<EmbeddingResponse, String> {
     // TODO: Implement actual embedding generation
     // This will call local embedding model or OpenAI API
@@ -187,9 +187,9 @@ pub async fn generate_embedding(
 /// Semantic search using embeddings
 #[tauri::command]
 pub async fn semantic_search(
-    query: String,
-    limit: Option<i64>,
-    config: ModelConfig,
+    _query: String,
+    _limit: Option<i64>,
+    _config: ModelConfig,
 ) -> Result<Vec<crate::db::Note>, String> {
     // TODO: Implement actual semantic search
     // 1. Generate embedding for query
@@ -243,7 +243,7 @@ pub async fn get_ai_config() -> Result<AIConfig, String> {
 
 /// Save AI configuration
 #[tauri::command]
-pub async fn save_ai_config(config: AIConfig) -> Result<(), String> {
+pub async fn save_ai_config(_config: AIConfig) -> Result<(), String> {
     // TODO: Save to persistent storage (SQLite or config file)
     // For now, just validate and return success
 
