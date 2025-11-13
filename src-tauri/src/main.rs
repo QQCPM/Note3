@@ -43,6 +43,14 @@ fn main() {
             create_block,
             update_block,
             delete_block,
+            // AI commands
+            generate_artifact_stream,
+            generate_artifact,
+            generate_database,
+            generate_embedding,
+            semantic_search,
+            get_ai_config,
+            save_ai_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

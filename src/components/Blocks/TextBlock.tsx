@@ -5,6 +5,7 @@ import type { Block } from '@/types';
 import SlashCommandMenu from '@/components/Canvas/SlashCommandMenu';
 import AIPromptModal from '@/components/Canvas/AIPromptModal';
 import { nanoid } from 'nanoid';
+import { aiService } from '@/services/ai';
 
 interface TextBlockProps {
   block: Block;
@@ -161,41 +162,119 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
     if (!activeNoteId) return;
 
     try {
-      // TODO: Call AI generation API
       console.log('Generating', type, 'with prompt:', prompt);
 
-      // For now, create a placeholder block
+      setShowAIModal(false);
+      setAIModalType(null);
+
+      // Call AI service to generate content
       let blockData: any = {};
 
       if (type === 'artifact') {
-        blockData = {
+        // First create placeholder block
+        const placeholderData = {
           type: 'artifact',
           prompt,
-          html: '<p>Loading...</p>',
-          css: '',
+          title: 'Generating...',
+          html: '<div style="padding: 40px; text-align: center;"><h2>Generating artifact...</h2><p>Please wait while AI creates your artifact.</p></div>',
+          css: 'body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; color: white; }',
           javascript: '',
         };
+
+        const placeholderBlock = await createBlock({
+          note_id: activeNoteId,
+          type,
+          position: block.position + 1,
+          data: JSON.stringify(placeholderData),
+        });
+
+        addBlock(placeholderBlock);
+
+        // Generate actual artifact in background
+        try {
+          const result = await aiService.generateArtifact(prompt);
+
+          blockData = {
+            type: 'artifact',
+            prompt,
+            title: result.title || 'AI Generated Artifact',
+            html: result.html,
+            css: result.css,
+            javascript: result.javascript,
+          };
+
+          // Update the placeholder block with actual content
+          const updated = await updateBlock(placeholderBlock.id, JSON.stringify(blockData));
+          updateBlockInStore(placeholderBlock.id, updated);
+        } catch (aiError) {
+          console.error('AI generation failed:', aiError);
+
+          // Update with error message
+          const errorData = {
+            type: 'artifact',
+            prompt,
+            title: 'Generation Failed',
+            html: '<div style="padding: 40px; text-align: center;"><h2>⚠️ Generation Failed</h2><p>Could not generate artifact. Please check your AI configuration.</p></div>',
+            css: 'body { font-family: Arial, sans-serif; background: #161b22; color: #e6edf3; min-height: 100vh; display: flex; align-items: center; justify-content: center; }',
+            javascript: '',
+          };
+
+          const updated = await updateBlock(placeholderBlock.id, JSON.stringify(errorData));
+          updateBlockInStore(placeholderBlock.id, updated);
+        }
       } else if (type === 'database') {
-        blockData = {
-          type: 'database',
-          prompt,
-          columns: [
-            { id: nanoid(), name: 'Name', type: 'text' },
-            { id: nanoid(), name: 'Status', type: 'select', options: ['Todo', 'In Progress', 'Done'] },
-          ],
-          rows: [],
-          view: 'table',
-        };
+        // Generate database structure
+        try {
+          const result = await aiService.generateDatabase(prompt);
+
+          blockData = {
+            type: 'database',
+            prompt,
+            title: result.title,
+            columns: result.columns.map((col: any) => ({
+              id: nanoid(),
+              name: col.name,
+              type: col.column_type,
+              options: col.options,
+            })),
+            rows: result.rows,
+            view: result.view,
+          };
+
+          const newBlock = await createBlock({
+            note_id: activeNoteId,
+            type,
+            position: block.position + 1,
+            data: JSON.stringify(blockData),
+          });
+
+          addBlock(newBlock);
+        } catch (aiError) {
+          console.error('Database generation failed:', aiError);
+
+          // Create default database on failure
+          blockData = {
+            type: 'database',
+            prompt,
+            title: 'Database',
+            columns: [
+              { id: nanoid(), name: 'Name', type: 'text' },
+              { id: nanoid(), name: 'Status', type: 'select', options: ['Todo', 'In Progress', 'Done'] },
+            ],
+            rows: [],
+            view: 'table',
+          };
+
+          const newBlock = await createBlock({
+            note_id: activeNoteId,
+            type,
+            position: block.position + 1,
+            data: JSON.stringify(blockData),
+          });
+
+          addBlock(newBlock);
+        }
       }
-
-      const newBlock = await createBlock({
-        note_id: activeNoteId,
-        type,
-        position: block.position + 1,
-        data: JSON.stringify(blockData),
-      });
-
-      addBlock(newBlock);
     } catch (error) {
       console.error('Failed to create AI block:', error);
     }

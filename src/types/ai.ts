@@ -1,5 +1,6 @@
 // AI system types
 import type { Note } from './note';
+import type { DatabaseColumn } from './block';
 
 export interface AIConfig {
   code_generation: ModelConfig;
@@ -11,72 +12,71 @@ export interface AIConfig {
 export interface ModelConfig {
   provider: 'local' | 'openai' | 'anthropic';
   model: string;
-  endpoint?: string; // For local models
-  api_key?: string; // For API providers
-  temperature?: number;
+  endpoint?: string;
+  api_key?: string;
+  temperature: number;
   max_tokens?: number;
   context_length?: number;
 }
 
 export interface WebSearchConfig {
-  provider: 'brave' | 'google' | 'local';
-  api_key?: string;
-  max_results?: number;
+  provider: 'brave' | 'serper';
+  api_key: string;
 }
 
-// AI Conversations
-export interface AIConversation {
-  id: string;
-  note_id: string;
-  created_at: string;
+export interface ArtifactGenerationRequest {
+  prompt: string;
+  type: 'artifact' | 'database';
 }
 
-export interface AIMessage {
-  id: string;
-  conversation_id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  model?: string;
-  created_at: string;
+export interface ArtifactGenerationResponse {
+  html: string;
+  css: string;
+  javascript: string;
+  title?: string;
 }
 
-// AI Tools (Function Calling)
+export interface DatabaseGenerationResponse {
+  title: string;
+  columns: DatabaseColumn[];
+  rows: any[];
+  view: 'table' | 'gallery' | 'calendar';
+}
+
+export interface EmbeddingRequest {
+  text: string;
+}
+
+export interface EmbeddingResponse {
+  embedding: number[];
+  dimension: number;
+}
+
+export interface SemanticSearchRequest {
+  query: string;
+  limit?: number;
+}
+
+export interface SemanticSearchResponse {
+  notes: Note[];
+  scores: number[];
+}
+
+// Function calling tools
 export interface AITool {
   name: string;
   description: string;
-  parameters: {
-    [key: string]: {
-      type: string;
-      description: string;
-      required?: boolean;
-    };
-  };
+  parameters: Record<string, any>;
 }
 
 export interface ToolCall {
   id: string;
   name: string;
-  parameters: any;
+  arguments: Record<string, any>;
 }
 
-export interface ToolResult {
-  tool_call_id: string;
-  result: any;
-  error?: string;
-}
-
-// Embeddings
-export interface Embedding {
-  id: string;
-  note_id: string;
-  content_hash: string;
-  embedding: number[]; // Vector
-  model: string;
-  created_at: string;
-}
-
-export interface SemanticSearchResult {
-  note: Note;
-  similarity: number;
-  snippet?: string;
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  tool_calls?: ToolCall[];
 }
