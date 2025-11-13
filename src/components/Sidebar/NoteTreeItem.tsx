@@ -51,7 +51,7 @@ const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note }) => {
 
       {hasChildren && isExpanded && (
         <div className="sub-notes expanded">
-          {note.children.map((child) => (
+          {note.children?.map((child) => (
             <NoteTreeItem key={child.id} note={child} />
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Block, CreateBlockInput, UpdateBlockInput } from '@/types';
+import { Block } from '@/types';
 
 interface BlocksState {
   blocks: Block[];

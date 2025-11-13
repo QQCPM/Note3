@@ -300,7 +300,6 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
   return (
     <>
       <div className="canvas-block text-block">
-        <div className="block-handle">⋮⋮</div>
         <textarea
           ref={textareaRef}
           value={content}

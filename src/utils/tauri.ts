@@ -23,7 +23,7 @@ export const createNote = async (input: CreateNoteInput): Promise<Note> => {
 
 export const updateNote = async (
   noteId: string,
-  input: UpdateNoteInput
+  input: Omit<UpdateNoteInput, 'id'>
 ): Promise<Note> => {
   return invoke('update_note', { noteId, input });
 };

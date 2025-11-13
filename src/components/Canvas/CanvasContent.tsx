@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { Note, Block } from '@/types';
 import { createBlock, updateBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
@@ -16,8 +16,6 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -48,6 +46,8 @@ const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
     transition,
     isDragging,
   } = useSortable({ id: block.id });
+  const [showMenu, setShowMenu] = React.useState(false);
+  const { deleteBlock: deleteBlockFromStore } = useBlocksStore();
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -55,20 +55,60 @@ const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const handleDelete = async () => {
+    try {
+      await import('@/utils/tauri').then(({ deleteBlock }) => deleteBlock(block.id));
+      deleteBlockFromStore(block.id);
+      setShowMenu(false);
+    } catch (error) {
+      console.error('Failed to delete block:', error);
+    }
+  };
+
   return (
     <div ref={setNodeRef} style={style}>
       <div className="relative group">
         {/* Drag Handle */}
         <div
-          {...attributes}
-          {...listeners}
-          className="absolute left-[-32px] top-2 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute left-[-32px] top-2 opacity-0 group-hover:opacity-100 transition-opacity"
           style={{ width: '24px', height: '24px' }}
         >
-          <div className="text-gray-500 hover:text-gray-300 flex items-center justify-center w-full h-full">
+          <button
+            {...attributes}
+            {...listeners}
+            onClick={(e) => {
+              // Only show menu on quick click (not drag)
+              if (!isDragging) {
+                e.stopPropagation();
+                setShowMenu(!showMenu);
+              }
+            }}
+            className="text-gray-500 hover:text-gray-300 flex items-center justify-center w-full h-full cursor-grab active:cursor-grabbing"
+            title="Click for options, hold and drag to reorder"
+          >
             ⋮⋮
-          </div>
+          </button>
         </div>
+
+        {/* Context Menu */}
+        {showMenu && (
+          <>
+            <div 
+              className="fixed inset-0 z-10" 
+              onClick={() => setShowMenu(false)}
+            />
+            <div className="absolute left-[-32px] top-8 z-20 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl py-1 min-w-[120px]">
+              <button
+                onClick={handleDelete}
+                className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+              >
+                <span>🗑️</span>
+                Delete
+              </button>
+            </div>
+          </>
+        )}
+        
         {children}
       </div>
     </div>
@@ -76,9 +116,8 @@ const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
 };
 
 const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
-  const { addBlock, updateBlock: updateBlockInStore, setBlocks } = useBlocksStore();
+  const { addBlock, setBlocks } = useBlocksStore();
   const creatingInitialBlock = useRef(false);
-  const [activeId, setActiveId] = useState<string | null>(null);
 
   // Configure drag sensors
   const sensors = useSensors(
@@ -116,14 +155,12 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
     }
   }, [note?.id, blocks.length, addBlock]);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
+  const handleDragStart = () => {
+    // Drag start handling (if needed)
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-
-    setActiveId(null);
 
     if (!over || active.id === over.id) {
       return;

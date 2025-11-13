@@ -7,7 +7,7 @@ export interface Block {
   note_id: string;
   type: BlockType;
   position: number;
-  data: BlockData;
+  data: string; // JSON string
   created_at: string;
   updated_at: string;
 }
@@ -37,7 +37,13 @@ export interface DatabaseBlockData {
   type: 'database';
   title: string;
   columns: DatabaseColumn[];
+  rows: DatabaseRowData[];
   view: 'table' | 'gallery' | 'calendar';
+}
+
+export interface DatabaseRowData {
+  id: string;
+  data: Record<string, any>; // Column name -> value
 }
 
 export interface DatabaseColumn {
@@ -106,12 +112,12 @@ export interface CreateBlockInput {
   note_id: string;
   type: BlockType;
   position?: number;
-  data: BlockData;
+  data: string; // JSON string
 }
 
 export interface UpdateBlockInput {
   id: string;
   type?: BlockType;
   position?: number;
-  data?: BlockData;
+  data?: string; // JSON string
 }
