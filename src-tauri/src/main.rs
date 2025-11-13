@@ -6,16 +6,16 @@ mod commands;
 
 use db::initialize_database;
 use commands::*;
+use tauri::Manager;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             // Initialize database
             let app_handle = app.handle().clone();
 
-            tauri::async_runtime::block_on(async move {
+            tauri::async_runtime::spawn(async move {
                 match initialize_database(&app_handle).await {
                     Ok(pool) => {
                         app_handle.manage(pool);

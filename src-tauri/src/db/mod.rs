@@ -1,5 +1,4 @@
 use sqlx::{sqlite::SqlitePool, migrate::MigrateDatabase, Sqlite};
-use std::path::PathBuf;
 use tauri::Manager;
 
 pub async fn initialize_database(app_handle: &tauri::AppHandle) -> Result<SqlitePool, Box<dyn std::error::Error>> {
