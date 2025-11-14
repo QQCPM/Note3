@@ -9,11 +9,17 @@ export interface AIConfig {
   // Local models (privacy, speed, cost-effective)
   embeddings: LocalModelConfig;
 
+  // Optional: local reranking model
+  reranker?: LocalModelConfig;
+
+  // Optional: local code generation model (Qwen3-30B-Coder)
+  local_code_generation?: LocalModelConfig;
+
   // Cloud API models (reasoning, quality)
   agent: APIModelConfig;
 
-  // Optional: separate config for code generation
-  code_generation?: APIModelConfig;
+  // Optional: separate API config for code generation (fallback)
+  api_code_generation?: APIModelConfig;
 }
 
 export interface LocalModelConfig {
@@ -129,6 +135,40 @@ export function createDefaultAIConfig(openaiApiKey: string): AIConfig {
       model: 'qwen3-embedding-0.6b',
       endpoint: 'http://localhost:8081',
       dimension: 1024,
+    },
+    agent: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      api_key: openaiApiKey,
+      temperature: 0.7,
+      max_tokens: 4096,
+    },
+  };
+}
+
+/**
+ * Create Mac M2 Ultra optimized configuration
+ * Full local AI stack with FP16 models
+ */
+export function createMacM2UltraConfig(openaiApiKey: string): AIConfig {
+  return {
+    embeddings: {
+      provider: 'local',
+      model: 'qwen3-embedding-8b',
+      endpoint: 'http://localhost:8081',
+      dimension: 8192,
+    },
+    reranker: {
+      provider: 'local',
+      model: 'qwen3-reranker-8b',
+      endpoint: 'http://localhost:8082',
+      dimension: 8192,
+    },
+    local_code_generation: {
+      provider: 'local',
+      model: 'qwen3-coder-30b',
+      endpoint: 'http://localhost:8080',
+      dimension: 0,
     },
     agent: {
       provider: 'openai',

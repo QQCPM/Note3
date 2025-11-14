@@ -57,6 +57,7 @@ fn main() {
             ai_generate_database,
             ai_chat,
             ai_chat_with_tools,
+            ai_rerank,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

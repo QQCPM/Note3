@@ -1,4 +1,4 @@
-use crate::ai::{AIConfig, AIManager, Message, Tool, ToolCall, ArtifactResult, DatabaseResult};
+use crate::ai::{AIConfig, AIManager, Message, Tool, ToolCall};
 use tauri::State;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -88,33 +88,56 @@ pub async fn ai_generate_embeddings_batch(
     manager.embedding_service.generate_batch(texts).await
 }
 
-/// Generate artifact (HTML/CSS/JS) using GPT
+/// Generate artifact using LOCAL Qwen3-30B-Coder (if available)
+/// Falls back to OpenAI if local model not configured
 #[tauri::command]
 pub async fn ai_generate_artifact(
     prompt: String,
     state: State<'_, AIState>,
-) -> Result<ArtifactResult, String> {
+) -> Result<crate::ai::ArtifactResult, String> {
     let manager_lock = state.manager.read().await;
 
     let manager = manager_lock
         .as_ref()
         .ok_or("AI not initialized")?;
 
-    manager.code_service.generate_artifact(&prompt).await
+    // Try local first if available
+    if let Some(ref service) = manager.local_code_service {
+        match service.generate_artifact(&prompt).await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                eprintln!("Local code generation failed, falling back to API: {}", e);
+            }
+        }
+    }
+
+    // Fallback to OpenAI
+    manager.api_code_service.generate_artifact(&prompt).await
 }
 
-/// Generate database schema using GPT
+/// Generate database schema using LOCAL or API
 #[tauri::command]
 pub async fn ai_generate_database(
     prompt: String,
     state: State<'_, AIState>,
-) -> Result<DatabaseResult, String> {
+) -> Result<crate::ai::DatabaseResult, String> {
     let manager_lock = state.manager.read().await;
 
     let manager = manager_lock
         .as_ref()
         .ok_or("AI not initialized")?;
 
+    // Try local first if available
+    if let Some(ref service) = manager.local_code_service {
+        match service.generate_database(&prompt).await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                eprintln!("Local database generation failed, falling back to API: {}", e);
+            }
+        }
+    }
+
+    // Fallback to OpenAI
     manager.agent_service.generate_database(&prompt).await
 }
 
@@ -160,6 +183,36 @@ pub async fn ai_chat_with_tools(
 pub struct ChatWithToolsResponse {
     pub content: String,
     pub tool_calls: Vec<ToolCall>,
+}
+
+/// Rerank search results using local Qwen3-Reranker-8B
+#[tauri::command]
+pub async fn ai_rerank(
+    query: String,
+    documents: Vec<String>,
+    state: State<'_, AIState>,
+) -> Result<Vec<f32>, String> {
+    let manager_lock = state.manager.read().await;
+
+    let manager = manager_lock
+        .as_ref()
+        .ok_or("AI not initialized")?;
+
+    let reranker = manager.reranker_service.as_ref()
+        .ok_or("Reranker not configured. Enable Qwen3-Reranker-8B in settings.")?;
+
+    // Generate embeddings for query + each document
+    let mut scores = Vec::new();
+
+    for doc in documents {
+        let combined = format!("Query: {}\nDocument: {}", query, doc);
+        let embedding = reranker.generate(&combined).await?;
+
+        // Use first value as relevance score (reranker models output this way)
+        scores.push(embedding.get(0).copied().unwrap_or(0.0));
+    }
+
+    Ok(scores)
 }
 
 // Note: Streaming commands would require a different approach with Tauri events

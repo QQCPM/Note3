@@ -20,8 +20,10 @@ interface DatabaseResult {
 
 interface HealthStatus {
   embedding_service: boolean;
+  reranker_service: boolean;
+  local_code_service: boolean;
   agent_service: boolean;
-  code_service: boolean;
+  api_code_service: boolean;
 }
 
 class AIService {
@@ -65,8 +67,10 @@ class AIService {
       console.error('AI health check failed:', error);
       return {
         embedding_service: false,
+        reranker_service: false,
+        local_code_service: false,
         agent_service: false,
-        code_service: false,
+        api_code_service: false,
       };
     }
   }
@@ -169,6 +173,22 @@ class AIService {
       );
     } catch (error) {
       console.error('Failed to chat with tools:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Rerank search results using local Qwen3-Reranker-8B
+   */
+  async rerank(query: string, documents: string[]): Promise<number[]> {
+    if (!this.initialized) {
+      throw new Error('AI not initialized. Call initialize() first.');
+    }
+
+    try {
+      return await invoke<number[]>('ai_rerank', { query, documents });
+    } catch (error) {
+      console.error('Failed to rerank:', error);
       throw error;
     }
   }
