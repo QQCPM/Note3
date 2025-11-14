@@ -22,8 +22,6 @@ import {
 } from './Database/DatabaseUtils';
 import GalleryView from './Database/GalleryView';
 import CalendarView from './Database/CalendarView';
-import AIAnalysisPanel from './Database/AIAnalysisPanel';
-import AIQueryBar from './Database/AIQueryBar';
 import {
   DndContext,
   closestCenter,
@@ -232,9 +230,6 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
   // Filtering state
   const [filterText, setFilterText] = useState('');
 
-  // AI query filter state
-  const [aiQueryFilter, setAIQueryFilter] = useState<DatabaseRowData[] | null>(null);
-
   // Drag-and-drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -386,12 +381,8 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
     // Filter out invalid rows
     let processedRows = data.rows.filter(row => row && row.data && typeof row.data === 'object');
 
-    // Apply AI query filter first (if active)
-    if (aiQueryFilter !== null) {
-      processedRows = aiQueryFilter;
-    }
-    // Otherwise apply text filter
-    else if (filterText.trim()) {
+    // Apply text filter
+    if (filterText.trim()) {
       const lowerQuery = filterText.toLowerCase();
       processedRows = processedRows.filter(row => {
         return data.columns.some(col => {
@@ -436,7 +427,7 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
     }
 
     return processedRows;
-  }, [data.rows, data.columns, filterText, sortColumn, sortDirection, aiQueryFilter]);
+  }, [data.rows, data.columns, filterText, sortColumn, sortDirection]);
 
   // ========================================
   // TITLE OPERATIONS
@@ -548,16 +539,6 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
             <option value="calendar">📅 Calendar</option>
           </select>
         </div>
-      </div>
-
-      {/* AI Analysis Panel */}
-      <div className="mb-4">
-        <AIAnalysisPanel dbData={data} />
-      </div>
-
-      {/* AI Query Bar */}
-      <div className="mb-4">
-        <AIQueryBar dbData={data} onResultsFilter={setAIQueryFilter} />
       </div>
 
       {/* Filter Bar (Table View Only) */}
