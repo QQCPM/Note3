@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { updateBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
 import type { Block, ArtifactBlockData } from '@/types';
+import BlockLayoutControls from '@/components/Blocks/BlockLayoutControls';
 
 interface ArtifactBlockProps {
   block: Block;
@@ -15,15 +16,15 @@ const ArtifactBlock: React.FC<ArtifactBlockProps> = ({ block }) => {
   // Parse block data
   useEffect(() => {
     const data = block.data as ArtifactBlockData;
-    setWidth(data.width || 800);
-    setHeight(data.height || 400);
+    setWidth(data.customWidth || 800);
+    setHeight(data.customHeight || 400);
   }, [block.data]);
 
   const handleUpdateWidth = async (newWidth: number) => {
     setWidth(newWidth);
     try {
       const data = block.data as ArtifactBlockData;
-      const newData: ArtifactBlockData = { ...data, width: newWidth };
+      const newData: ArtifactBlockData = { ...data, customWidth: newWidth };
       const updated = await updateBlock(block.id, newData);
       updateBlockInStore(block.id, updated);
     } catch (error) {
@@ -35,7 +36,7 @@ const ArtifactBlock: React.FC<ArtifactBlockProps> = ({ block }) => {
     setHeight(newHeight);
     try {
       const data = block.data as ArtifactBlockData;
-      const newData: ArtifactBlockData = { ...data, height: newHeight };
+      const newData: ArtifactBlockData = { ...data, customHeight: newHeight };
       const updated = await updateBlock(block.id, newData);
       updateBlockInStore(block.id, updated);
     } catch (error) {
@@ -129,6 +130,7 @@ body {
           <div className="flex items-center gap-2">
             <button className="px-3 py-1 text-xs bg-white/5 hover:bg-white/10 rounded">Edit Code</button>
             <button className="px-3 py-1 text-xs bg-purple-500/20 text-purple-300 rounded">Ask AI</button>
+            <BlockLayoutControls block={block} />
           </div>
         </div>
         <div className="bg-[#0d1117] rounded-lg border border-[#30363d] overflow-hidden">

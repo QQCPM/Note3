@@ -3,6 +3,7 @@ import { ExternalLink, RefreshCw, Maximize2, X } from 'lucide-react';
 import { updateBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
 import type { Block, WebBlockData } from '@/types';
+import BlockLayoutControls from '@/components/Blocks/BlockLayoutControls';
 
 interface WebBlockProps {
   block: Block;
@@ -25,8 +26,8 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
     const data = block.data as WebBlockData;
     setUrl(data.url || '');
     setTitle(data.title || '');
-    setWidth(data.width || 800);
-    setHeight(data.height || 400);
+    setWidth(data.customWidth || 800);
+    setHeight(data.customHeight || 400);
   }, [block.data]);
 
   const handleLoad = () => {
@@ -58,7 +59,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
     setHeight(newHeight);
     try {
       const data = block.data as WebBlockData;
-      const newData: WebBlockData = { ...data, height: newHeight };
+      const newData: WebBlockData = { ...data, customHeight: newHeight };
       const updated = await updateBlock(block.id, newData);
       updateBlockInStore(block.id, updated);
     } catch (error) {
@@ -70,7 +71,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
     setWidth(newWidth);
     try {
       const data = block.data as WebBlockData;
-      const newData: WebBlockData = { ...data, width: newWidth };
+      const newData: WebBlockData = { ...data, customWidth: newWidth };
       const updated = await updateBlock(block.id, newData);
       updateBlockInStore(block.id, updated);
     } catch (error) {
@@ -160,6 +161,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
               >
                 <ExternalLink className="w-4 h-4" />
               </button>
+              <BlockLayoutControls block={block} />
             </div>
           </div>
 

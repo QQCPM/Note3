@@ -204,7 +204,7 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
           type: 'web',
           url: prompt.trim(),
           title: '',
-          height: 400,
+          customHeight: 400,
         };
 
         const newBlock = await createBlock({

@@ -48,20 +48,42 @@ const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
     isDragging,
   } = useSortable({ id: block.id });
 
+  // Calculate width based on block layout settings
+  const getBlockWidth = () => {
+    const blockData = block.data;
+    if (!blockData.width || blockData.width === 'full') return '100%';
+    if (blockData.width === 'half') return 'calc(50% - 8px)';
+    if (blockData.width === 'third') return 'calc(33.333% - 8px)';
+    if (blockData.width === 'quarter') return 'calc(25% - 8px)';
+    if (typeof blockData.width === 'number') return `${blockData.width}%`;
+    return '100%';
+  };
+
+  // Get alignment justification
+  const getAlignment = () => {
+    const blockData = block.data;
+    if (blockData.alignment === 'center') return 'center';
+    if (blockData.alignment === 'right') return 'flex-end';
+    return 'flex-start'; // left is default
+  };
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    width: getBlockWidth(),
+    display: 'flex',
+    justifyContent: getAlignment(),
   };
 
   return (
-    <div ref={setNodeRef} style={style}>
-      <div className="relative group">
+    <div ref={setNodeRef} style={style} className="block-wrapper">
+      <div className="relative group w-full">
         {/* Drag Handle */}
         <div
           {...attributes}
           {...listeners}
-          className="absolute left-[-32px] top-2 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute left-[-32px] top-2 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10"
           style={{ width: '24px', height: '24px' }}
         >
           <div className="text-gray-500 hover:text-gray-300 flex items-center justify-center w-full h-full">
@@ -194,11 +216,13 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
             items={sortedBlocks.map((b) => b.id)}
             strategy={verticalListSortingStrategy}
           >
-            {sortedBlocks.map((block) => (
-              <SortableBlock key={block.id} block={block}>
-                {renderBlock(block)}
-              </SortableBlock>
-            ))}
+            <div className="flex flex-wrap gap-4">
+              {sortedBlocks.map((block) => (
+                <SortableBlock key={block.id} block={block}>
+                  {renderBlock(block)}
+                </SortableBlock>
+              ))}
+            </div>
           </SortableContext>
         </DndContext>
       </div>

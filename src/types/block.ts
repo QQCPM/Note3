@@ -24,6 +24,12 @@ export interface Block {
   updated_at: string;
 }
 
+// Common layout properties for all blocks
+export interface BlockLayout {
+  width?: 'full' | 'half' | 'third' | 'quarter' | number; // number is percentage 0-100
+  alignment?: 'left' | 'center' | 'right';
+}
+
 export type BlockData =
   | TextBlockData
   | HeadingBlockData
@@ -33,19 +39,19 @@ export type BlockData =
   | WebBlockData;
 
 // Text Block
-export interface TextBlockData {
+export interface TextBlockData extends BlockLayout {
   type: 'text';
   content: string;
 }
 
 // Heading Block
-export interface HeadingBlockData {
+export interface HeadingBlockData extends BlockLayout {
   type: 'heading1' | 'heading2';
   content: string;
 }
 
 // Database Block
-export interface DatabaseBlockData {
+export interface DatabaseBlockData extends BlockLayout {
   type: 'database';
   title: string;
   columns: DatabaseColumn[];
@@ -76,15 +82,15 @@ export interface DatabaseRow {
 }
 
 // Artifact Block
-export interface ArtifactBlockData {
+export interface ArtifactBlockData extends BlockLayout {
   type: 'artifact';
   title: string;
   html: string;
   css: string;
   javascript: string;
   prompt?: string; // Original AI prompt
-  width?: number; // Custom width in pixels
-  height?: number; // Custom height in pixels
+  customWidth?: number; // Custom width in pixels (for resize handle)
+  customHeight?: number; // Custom height in pixels (for resize handle)
 }
 
 export interface Artifact {
@@ -98,7 +104,7 @@ export interface Artifact {
 }
 
 // Task Block
-export interface TaskBlockData {
+export interface TaskBlockData extends BlockLayout {
   type: 'task';
   title: string;
   tasks: Task[];
@@ -113,12 +119,12 @@ export interface Task {
 }
 
 // Web Block
-export interface WebBlockData {
+export interface WebBlockData extends BlockLayout {
   type: 'web';
   url: string;
   title?: string;
-  width?: number; // Custom width in pixels
-  height?: number; // Custom height in pixels
+  customWidth?: number; // Custom width in pixels (for resize handle)
+  customHeight?: number; // Custom height in pixels (for resize handle)
   prompt?: string; // Original prompt if AI-generated
 }
 
