@@ -172,6 +172,48 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
   const { updateBlock: updateBlockInStore } = useBlocksStore();
   const data = block.data as DatabaseBlockData;
 
+  // Validate and fix data structure
+  if (!data) {
+    console.error('DatabaseBlock: block.data is undefined', block);
+    return (
+      <div className="canvas-block p-4 bg-red-500/10 border border-red-500/30 rounded">
+        <p className="text-red-400">Error: Database block data is missing</p>
+      </div>
+    );
+  }
+
+  if (!data.rows) {
+    console.warn('DatabaseBlock: rows array is missing, initializing empty array');
+    data.rows = [];
+  }
+  if (!data.columns) {
+    console.warn('DatabaseBlock: columns array is missing, initializing empty array');
+    data.columns = [];
+  }
+  if (!data.title) {
+    data.title = 'Untitled Database';
+  }
+  if (!data.view) {
+    data.view = 'table';
+  }
+
+  // Ensure all rows have valid data objects
+  data.rows = data.rows.map((row, index) => {
+    if (!row) {
+      console.error(`DatabaseBlock: row at index ${index} is null/undefined`);
+      return { id: `temp-${index}`, data: {} };
+    }
+    if (!row.id) {
+      console.warn(`DatabaseBlock: row at index ${index} missing id, generating one`);
+      row.id = `temp-${Date.now()}-${index}`;
+    }
+    if (!row.data || typeof row.data !== 'object') {
+      console.warn(`DatabaseBlock: row ${row.id} has invalid data, initializing empty object`);
+      return { ...row, data: {} };
+    }
+    return row;
+  });
+
   // Local state for editing
   const [editingCell, setEditingCell] = useState<{ rowId: string; columnId: string } | null>(null);
   const [showColumnMenu, setShowColumnMenu] = useState<string | null>(null);
@@ -230,7 +272,14 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
     const rowIndex = data.rows.findIndex(r => r.id === rowId);
     if (rowIndex === -1) return;
 
-    const updatedRow = updateCellValue(data.rows[rowIndex], columnId, value);
+    const row = data.rows[rowIndex];
+    // Ensure row.data exists
+    if (!row.data || typeof row.data !== 'object') {
+      console.error('Cannot edit cell: invalid row data structure', row);
+      return;
+    }
+
+    const updatedRow = updateCellValue(row, columnId, value);
     const newRows = [...data.rows];
     newRows[rowIndex] = updatedRow;
 
@@ -329,7 +378,8 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
   // ========================================
 
   const filteredAndSortedRows = useMemo(() => {
-    let processedRows = [...data.rows];
+    // Filter out invalid rows
+    let processedRows = data.rows.filter(row => row && row.data && typeof row.data === 'object');
 
     // Apply filter
     if (filterText.trim()) {
@@ -396,6 +446,11 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
 
   const renderCell = (row: DatabaseRowData, column: DatabaseColumn) => {
     const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id;
+    // Defensive check: ensure row.data exists and is an object
+    if (!row.data || typeof row.data !== 'object') {
+      console.error('Invalid row data structure:', row);
+      return <div className="px-3 py-2 text-xs text-red-400">Invalid data</div>;
+    }
     const value = row.data[column.id];
 
     if (isEditing) {

@@ -8,6 +8,7 @@ import DatabaseBlock from '@/components/Blocks/DatabaseBlock';
 import ArtifactBlock from '@/components/Blocks/ArtifactBlock';
 import TaskBlock from '@/components/Blocks/TaskBlock';
 import WebBlock from '@/components/Blocks/WebBlock';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import {
   DndContext,
   closestCenter,
@@ -264,7 +265,9 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
             <div className="flex flex-col">
               {sortedBlocks.map((block) => (
                 <SortableBlock key={block.id} block={block}>
-                  {renderBlock(block)}
+                  <ErrorBoundary>
+                    {renderBlock(block)}
+                  </ErrorBoundary>
                 </SortableBlock>
               ))}
             </div>

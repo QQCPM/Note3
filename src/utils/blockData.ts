@@ -12,7 +12,27 @@ export function serializeBlockData(data: BlockData): string {
  */
 export function deserializeBlockData(dataString: string): BlockData {
   try {
-    return JSON.parse(dataString) as BlockData;
+    const parsed = JSON.parse(dataString) as BlockData;
+    
+    // Special handling for database blocks to ensure data integrity
+    if (parsed.type === 'database') {
+      const dbData = parsed as any;
+      if (!dbData.rows) dbData.rows = [];
+      if (!dbData.columns) dbData.columns = [];
+      if (!dbData.title) dbData.title = 'Untitled Database';
+      if (!dbData.view) dbData.view = 'table';
+      
+      // Ensure all rows have valid data objects
+      dbData.rows = dbData.rows.map((row: any) => {
+        if (!row.id) row.id = Math.random().toString(36).substring(7);
+        if (!row.data || typeof row.data !== 'object') {
+          row.data = {};
+        }
+        return row;
+      });
+    }
+    
+    return parsed;
   } catch (error) {
     console.error('Failed to parse block data:', error);
     return { type: 'text', content: '' };
