@@ -7,6 +7,8 @@ import {
   type QueryResult,
   type AnalysisResult,
 } from '@/components/Blocks/Database/DatabaseAITools';
+import { aiProvider } from './aiProvider';
+import { embeddingsService } from './embeddingsService';
 
 /**
  * Unified AI Service
@@ -79,7 +81,7 @@ class UnifiedAIService {
 
     // Semantic search across notes
     if (this.isSemanticSearchQuery(lowerMessage)) {
-      return this.handleSemanticSearch(message, request.notes || []);
+      return this.handleSemanticSearch(message, request.notes || [], request.blocks || []);
     }
 
     // Web search
@@ -89,11 +91,11 @@ class UnifiedAIService {
 
     // General question about notes/content
     if (context.noteId && request.notes) {
-      return this.handleNoteQuery(message, context.noteId, request.notes);
+      return this.handleNoteQuery(message, context.noteId, request.notes, request.blocks || []);
     }
 
     // Default: general AI response
-    return this.handleGeneralQuery(message, context);
+    return this.handleGeneralQuery(message, context, request.notes || [], request.blocks || []);
   }
 
   /**
@@ -320,16 +322,60 @@ class UnifiedAIService {
     return searchKeywords.some(keyword => message.includes(keyword));
   }
 
-  private async handleSemanticSearch(message: string, notes: Note[]): Promise<AIResponse> {
-    // TODO: Implement actual semantic search with embeddings
-    // For now, simple keyword search
-
+  private async handleSemanticSearch(message: string, notes: Note[], blocks: Block[] = []): Promise<AIResponse> {
     const query = this.extractSearchQuery(message);
+
+    try {
+      // Use embeddings service for semantic search
+      const results = await embeddingsService.semanticSearch(query, notes, blocks, 5);
+
+      let content = `**Semantic Search Results for "${query}"**\n\n`;
+
+      if (results.length === 0) {
+        content += 'No relevant notes found. Try:\n';
+        content += '• Rephrasing your query\n';
+        content += '• Using different keywords\n';
+        content += '• Searching for broader topics\n';
+      } else {
+        content += `Found ${results.length} relevant note(s):\n\n`;
+        results.forEach((result, idx) => {
+          content += `${idx + 1}. **${result.note.title}** (${(result.similarity * 100).toFixed(0)}% match)\n`;
+          if (result.snippet) {
+            content += `   ${result.snippet}\n`;
+          }
+          content += `   Created: ${new Date(result.note.created_at).toLocaleDateString()}\n\n`;
+        });
+      }
+
+      return {
+        content,
+        metadata: {
+          type: 'semantic_search',
+          results: results.map(r => ({ id: r.note.id, title: r.note.title, similarity: r.similarity })),
+          suggestedFollowUps: results.length > 0 ? [
+            'Tell me more about the first result',
+            'Search for something else',
+            'Summarize these notes',
+          ] : [],
+        },
+      };
+    } catch (error) {
+      console.error('Semantic search error:', error);
+      // Fallback to keyword search
+      return this.handleKeywordSearch(query, notes);
+    }
+  }
+
+  /**
+   * Fallback keyword search if embeddings fail
+   */
+  private async handleKeywordSearch(query: string, notes: Note[]): Promise<AIResponse> {
     const results = notes.filter(note =>
       note.title.toLowerCase().includes(query.toLowerCase())
     );
 
     let content = `**Search Results for "${query}"**\n\n`;
+    content += `_Note: Using keyword search. Configure AI for semantic search._\n\n`;
 
     if (results.length === 0) {
       content += 'No notes found matching your query.\n';
@@ -337,13 +383,8 @@ class UnifiedAIService {
       content += `Found ${results.length} note(s):\n\n`;
       results.slice(0, 5).forEach(note => {
         content += `📄 **${note.title}**\n`;
-        content += `   Created: ${new Date(note.created_at).toLocaleDateString()}\n`;
-        content += '\n';
+        content += `   Created: ${new Date(note.created_at).toLocaleDateString()}\n\n`;
       });
-
-      if (results.length > 5) {
-        content += `... and ${results.length - 5} more\n`;
-      }
     }
 
     return {
@@ -351,11 +392,6 @@ class UnifiedAIService {
       metadata: {
         type: 'semantic_search',
         results: results.map(n => ({ id: n.id, title: n.title })),
-        suggestedFollowUps: results.length > 0 ? [
-          'Show me the first note',
-          'Search for something else',
-          'Organize these notes',
-        ] : [],
       },
     };
   }
@@ -388,9 +424,10 @@ class UnifiedAIService {
   // ========================================
 
   private async handleNoteQuery(
-    _message: string,
+    message: string,
     noteId: string,
-    notes: Note[]
+    notes: Note[],
+    blocks: Block[] = []
   ): Promise<AIResponse> {
     const note = notes.find(n => n.id === noteId);
 
@@ -401,57 +438,113 @@ class UnifiedAIService {
       };
     }
 
-    let content = `**About: ${note.title}**\n\n`;
-    content += `I'm analyzing this note to answer your question...\n\n`;
-    content += `*Note: Full semantic understanding and RAG capabilities coming soon!*`;
+    try {
+      // Use RAG to get relevant context
+      const { contextText } = await embeddingsService.getRelevantContext(message, notes, blocks, 3);
 
-    return {
-      content,
-      metadata: {
-        type: 'general',
-        suggestedFollowUps: [
-          'Summarize this note',
-          'Find related notes',
-          'Organize this note',
-        ],
-      },
-    };
+      // Generate AI response with context
+      const aiResponse = await aiProvider.generateCompletion([
+        {
+          role: 'system',
+          content: `You are a helpful assistant analyzing notes. Answer the user's question using the provided context from their notes. Be concise and helpful.`,
+        },
+        {
+          role: 'user',
+          content: `${contextText}\n\nUser question: ${message}`,
+        },
+      ]);
+
+      return {
+        content: aiResponse.content,
+        metadata: {
+          type: 'general',
+          suggestedFollowUps: [
+            'Tell me more',
+            'Find related notes',
+            'Summarize this',
+          ],
+        },
+      };
+    } catch (error) {
+      console.error('Note query error:', error);
+      return {
+        content: `**About: ${note.title}**\n\nI couldn't generate an AI response. ${error instanceof Error ? error.message : 'Please configure your AI provider in settings.'}\n\n*Tip: Set up OpenAI or Anthropic API key in settings for AI-powered responses.*`,
+        metadata: { type: 'general' },
+      };
+    }
   }
 
   // ========================================
   // ASK MODE: GENERAL QUERIES
   // ========================================
 
-  private async handleGeneralQuery(message: string, context: AIContext): Promise<AIResponse> {
-    let content = `I understand you're asking: "${message}"\n\n`;
-
-    if (!context.noteId && !context.blockId) {
-      content += `**Tip:** Select a note or block to give me context, then I can:\n`;
+  private async handleGeneralQuery(
+    message: string,
+    context: AIContext,
+    notes: Note[] = [],
+    blocks: Block[] = []
+  ): Promise<AIResponse> {
+    // If no context and AI not configured, show tips
+    if (!context.noteId && !context.blockId && !aiProvider.isConfigured()) {
+      let content = `I understand you're asking: "${message}"\n\n`;
+      content += `**Tip:** Select a note or block to give me context, or configure AI in settings.\n\n`;
+      content += `I can help you with:\n`;
       content += `• Answer questions about your data\n`;
       content += `• Search within specific notes\n`;
       content += `• Analyze database content\n`;
       content += `• Help organize your information\n`;
-    } else {
-      content += `I'm here to help! I can:\n`;
-      if (context.databaseData) {
-        content += `• Query your database\n`;
-        content += `• Analyze data patterns\n`;
-      }
-      content += `• Search across your notes\n`;
-      content += `• Answer questions about your content\n`;
+
+      return {
+        content,
+        metadata: { type: 'general' },
+      };
     }
 
-    return {
-      content,
-      metadata: {
-        type: 'general',
-        suggestedFollowUps: [
-          'Analyze my data',
-          'Search my notes',
-          'Show me statistics',
-        ],
-      },
-    };
+    try {
+      // Use RAG to get relevant context from all notes
+      const { contextText, notes: relevantNotes } = await embeddingsService.getRelevantContext(
+        message,
+        notes,
+        blocks,
+        3
+      );
+
+      // Build system prompt based on context
+      let systemPrompt = `You are a helpful AI assistant. Answer the user's question clearly and concisely.`;
+
+      if (relevantNotes.length > 0) {
+        systemPrompt += ` Use the provided context from the user's notes to give informed answers.`;
+      }
+
+      // Generate AI response
+      const aiResponse = await aiProvider.generateCompletion([
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: relevantNotes.length > 0
+            ? `${contextText}\n\nQuestion: ${message}`
+            : message,
+        },
+      ]);
+
+      return {
+        content: aiResponse.content,
+        metadata: {
+          type: 'general',
+          suggestedFollowUps: [
+            'Tell me more',
+            'Search my notes',
+            'Related topics',
+          ],
+        },
+      };
+    } catch (error) {
+      console.error('General query error:', error);
+      return {
+        content: `I couldn't generate an AI response: ${error instanceof Error ? error.message : 'Unknown error'}\n\n**Tip:** Configure your AI provider (OpenAI or Anthropic) in settings to enable AI-powered conversations.`,
+        metadata: { type: 'general' },
+      };
+    }
   }
 
   // ========================================
@@ -474,20 +567,66 @@ class UnifiedAIService {
   }
 
   private async handleDatabaseEdit(
-    _message: string,
+    message: string,
     context: AIContext
   ): Promise<AIResponse> {
-    return {
-      content: `**Database Edit Mode**\n\nI can help edit your database, but I need your confirmation first.\n\nWhat would you like me to do?\n• Add missing columns\n• Fill empty cells\n• Remove duplicates\n• Clean data\n\n*Note: Automatic editing coming soon!*`,
-      metadata: {
-        type: 'edit_operation',
-        blocksAffected: context.blockId ? [context.blockId] : [],
-      },
-    };
+    if (!context.databaseData) {
+      return {
+        content: 'No database context found. Please select a database block first.',
+        metadata: { type: 'edit_operation' },
+      };
+    }
+
+    try {
+      const dbData = context.databaseData;
+
+      // Build database context for AI
+      let dbContext = `Database: ${dbData.title}\n`;
+      dbContext += `Columns: ${dbData.columns.map(c => `${c.name} (${c.type})`).join(', ')}\n`;
+      dbContext += `Total rows: ${dbData.rows.length}\n\n`;
+
+      // Sample some rows for context
+      const sampleRows = dbData.rows.slice(0, 3);
+      dbContext += `Sample data:\n${JSON.stringify(sampleRows, null, 2)}\n`;
+
+      // Generate AI suggestions
+      const aiResponse = await aiProvider.generateCompletion([
+        {
+          role: 'system',
+          content: `You are a data organization expert. Given a database structure and user request, provide specific, actionable suggestions for improving the database. Be concise and practical.`,
+        },
+        {
+          role: 'user',
+          content: `${dbContext}\n\nUser request: ${message}\n\nProvide specific suggestions for how to improve this database based on the request.`,
+        },
+      ]);
+
+      return {
+        content: `**Database Edit Suggestions**\n\n${aiResponse.content}\n\n*Note: Review these suggestions carefully before applying changes.*`,
+        metadata: {
+          type: 'edit_operation',
+          blocksAffected: context.blockId ? [context.blockId] : [],
+          suggestedFollowUps: [
+            'Apply these changes',
+            'Show me more details',
+            'Analyze data quality',
+          ],
+        },
+      };
+    } catch (error) {
+      console.error('Database edit error:', error);
+      return {
+        content: `I couldn't generate edit suggestions. ${error instanceof Error ? error.message : 'Please configure your AI provider in settings.'}\n\n**Manual options:**\n• Add missing columns\n• Fill empty cells\n• Remove duplicates\n• Clean data`,
+        metadata: {
+          type: 'edit_operation',
+          blocksAffected: context.blockId ? [context.blockId] : [],
+        },
+      };
+    }
   }
 
   private async handleBlockEdit(
-    _message: string,
+    message: string,
     context: AIContext,
     blocks: Block[]
   ): Promise<AIResponse> {
@@ -500,39 +639,193 @@ class UnifiedAIService {
       };
     }
 
-    return {
-      content: `**Edit Mode: ${block.type} block**\n\nI can help edit this block. What would you like me to change?\n\n*Note: Automatic block editing coming soon!*`,
-      metadata: {
-        type: 'edit_operation',
-        blocksAffected: [block.id],
-      },
-    };
+    try {
+      // Extract block content
+      let blockContent = '';
+      if (block.type === 'text') {
+        const textData = block.data as import('@/types/block').TextBlockData;
+        blockContent = textData.content || '';
+      } else if (block.type === 'heading1' || block.type === 'heading2') {
+        const headingData = block.data as import('@/types/block').HeadingBlockData;
+        blockContent = headingData.content || '';
+      } else if (block.type === 'task') {
+        const taskData = block.data as import('@/types/block').TaskBlockData;
+        blockContent = `${taskData.title}\nTasks:\n${taskData.tasks.map(t => `- [${t.completed ? 'x' : ' '}] ${t.text}`).join('\n')}`;
+      } else if (block.type === 'artifact') {
+        const artifactData = block.data as import('@/types/block').ArtifactBlockData;
+        blockContent = `Artifact: ${artifactData.title}`;
+      } else if (block.type === 'database') {
+        const dbData = block.data as import('@/types/block').DatabaseBlockData;
+        blockContent = `Database: ${dbData.title}`;
+      } else {
+        blockContent = `${block.type} block`;
+      }
+
+      // Generate AI edit suggestions
+      const aiResponse = await aiProvider.generateCompletion([
+        {
+          role: 'system',
+          content: `You are a helpful editor. Given a block of content and the user's request, provide specific suggestions for how to improve or edit the content. Be concise and actionable.`,
+        },
+        {
+          role: 'user',
+          content: `Current content:\n${blockContent}\n\nUser request: ${message}\n\nProvide specific suggestions for improving this content.`,
+        },
+      ]);
+
+      return {
+        content: `**Edit Suggestions for ${block.type} block**\n\n${aiResponse.content}\n\n*Note: Review suggestions before applying.*`,
+        metadata: {
+          type: 'edit_operation',
+          blocksAffected: [block.id],
+          suggestedFollowUps: [
+            'Apply these changes',
+            'Suggest alternative edits',
+            'Show original content',
+          ],
+        },
+      };
+    } catch (error) {
+      console.error('Block edit error:', error);
+      return {
+        content: `I couldn't generate edit suggestions. ${error instanceof Error ? error.message : 'Please configure your AI provider in settings.'}\n\n**Current block type:** ${block.type}\n\nTell me what you'd like to change about this block.`,
+        metadata: {
+          type: 'edit_operation',
+          blocksAffected: [block.id],
+        },
+      };
+    }
   }
 
   private async handleNoteOrganization(
-    _message: string,
+    message: string,
     context: AIContext,
     blocks: Block[]
   ): Promise<AIResponse> {
     const noteBlocks = blocks.filter(b => b.note_id === context.noteId);
 
-    return {
-      content: `**Note Organization**\n\nI can help organize your note with ${noteBlocks.length} blocks.\n\nPossible organizations:\n• Group by type\n• Sort by priority\n• Add structure headings\n• Remove duplicates\n\n*Note: Automatic organization coming soon!*`,
-      metadata: {
-        type: 'edit_operation',
-        blocksAffected: noteBlocks.map(b => b.id),
-      },
-    };
+    if (noteBlocks.length === 0) {
+      return {
+        content: 'No blocks found in this note.',
+        metadata: { type: 'edit_operation' },
+      };
+    }
+
+    try {
+      // Build note structure overview
+      let noteStructure = `Note has ${noteBlocks.length} blocks:\n\n`;
+
+      const blocksByType = noteBlocks.reduce((acc, block) => {
+        acc[block.type] = (acc[block.type] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      Object.entries(blocksByType).forEach(([type, count]) => {
+        noteStructure += `• ${count} ${type} block(s)\n`;
+      });
+
+      noteStructure += `\nBlock preview:\n`;
+      noteBlocks.slice(0, 5).forEach((block, idx) => {
+        let preview = '';
+        if (block.type === 'text') {
+          const textData = block.data as import('@/types/block').TextBlockData;
+          preview = textData.content?.substring(0, 50) + '...';
+        } else if (block.type === 'heading1' || block.type === 'heading2') {
+          const headingData = block.data as import('@/types/block').HeadingBlockData;
+          preview = headingData.content?.substring(0, 50) + '...';
+        } else {
+          preview = `${block.type} block`;
+        }
+        noteStructure += `${idx + 1}. [${block.type}] ${preview}\n`;
+      });
+
+      // Generate AI organization suggestions
+      const aiResponse = await aiProvider.generateCompletion([
+        {
+          role: 'system',
+          content: `You are a content organization expert. Given a note's structure and user request, provide specific suggestions for organizing and improving the note structure. Be practical and actionable.`,
+        },
+        {
+          role: 'user',
+          content: `${noteStructure}\n\nUser request: ${message}\n\nProvide specific suggestions for organizing this note.`,
+        },
+      ]);
+
+      return {
+        content: `**Note Organization Suggestions**\n\n${aiResponse.content}\n\n*Note: Review suggestions before reorganizing.*`,
+        metadata: {
+          type: 'edit_operation',
+          blocksAffected: noteBlocks.map(b => b.id),
+          suggestedFollowUps: [
+            'Apply this organization',
+            'Show alternative structures',
+            'Add section headings',
+          ],
+        },
+      };
+    } catch (error) {
+      console.error('Note organization error:', error);
+      return {
+        content: `I couldn't generate organization suggestions. ${error instanceof Error ? error.message : 'Please configure your AI provider in settings.'}\n\n**Manual options:**\n• Group by type (${noteBlocks.length} blocks)\n• Sort by priority\n• Add structure headings\n• Remove duplicates`,
+        metadata: {
+          type: 'edit_operation',
+          blocksAffected: noteBlocks.map(b => b.id),
+        },
+      };
+    }
   }
 
   private async handleEditSuggestions(
-    _message: string,
-    _context: AIContext
+    message: string,
+    context: AIContext
   ): Promise<AIResponse> {
-    return {
-      content: `**Edit Mode**\n\nI'm ready to help you edit! To get started:\n• Select a block to edit it\n• Tell me what changes you want to make\n• I can organize, clean, and improve your content\n\n*Note: Full editing capabilities coming soon!*`,
-      metadata: { type: 'edit_operation' },
-    };
+    // If AI not configured, provide manual guidance
+    if (!aiProvider.isConfigured()) {
+      return {
+        content: `**Edit Mode**\n\nI'm ready to help you edit! To get started:\n• Select a block to edit it\n• Tell me what changes you want to make\n• I can organize, clean, and improve your content\n\n*Tip: Configure AI in settings for intelligent editing.*`,
+        metadata: { type: 'edit_operation' },
+      };
+    }
+
+    try {
+      // Build context description
+      let contextDesc = 'General editing request';
+      if (context.blockId) {
+        contextDesc = `Editing a ${context.blockType || 'block'}`;
+      } else if (context.noteId) {
+        contextDesc = 'Editing a note';
+      }
+
+      // Generate AI suggestions
+      const aiResponse = await aiProvider.generateCompletion([
+        {
+          role: 'system',
+          content: `You are a helpful editing assistant. Provide practical suggestions for editing content based on the user's request. Be concise and actionable.`,
+        },
+        {
+          role: 'user',
+          content: `Context: ${contextDesc}\nUser request: ${message}\n\nProvide helpful suggestions for making these edits.`,
+        },
+      ]);
+
+      return {
+        content: `**Edit Suggestions**\n\n${aiResponse.content}`,
+        metadata: {
+          type: 'edit_operation',
+          suggestedFollowUps: [
+            'Show me how to apply this',
+            'Alternative approach',
+            'More details',
+          ],
+        },
+      };
+    } catch (error) {
+      console.error('Edit suggestions error:', error);
+      return {
+        content: `**Edit Mode**\n\nI'm ready to help with: "${message}"\n\n• Select a block or note to edit\n• Tell me specific changes you want\n• I can help organize and improve content\n\n*Tip: ${error instanceof Error ? error.message : 'Configure AI in settings for better suggestions.'}*`,
+        metadata: { type: 'edit_operation' },
+      };
+    }
   }
 
   // ========================================
