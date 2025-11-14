@@ -1,7 +1,8 @@
+import { invoke } from '@tauri-apps/api/core';
 import type { AIConfig } from '@/types';
 
 interface ArtifactResult {
-  title?: string;
+  title: string;
   html: string;
   css: string;
   javascript: string;
@@ -11,82 +12,172 @@ interface DatabaseResult {
   title: string;
   columns: Array<{
     name: string;
-    column_type: string;
-    options?: any;
+    type: string;
+    options?: string[];
   }>;
   rows: any[];
-  view: any;
+}
+
+interface HealthStatus {
+  embedding_service: boolean;
+  agent_service: boolean;
+  code_service: boolean;
 }
 
 class AIService {
-  private config: AIConfig | null = null;
+  private initialized: boolean = false;
 
+  /**
+   * Initialize the AI system with configuration
+   * Must be called before using any AI features
+   */
   async initialize(config: AIConfig): Promise<void> {
-    this.config = config;
+    try {
+      await invoke('ai_initialize', { config });
+      this.initialized = true;
+      console.log('AI system initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize AI:', error);
+      throw error;
+    }
   }
 
+  /**
+   * Get current AI configuration
+   */
+  async getConfig(): Promise<AIConfig | null> {
+    try {
+      const config = await invoke<AIConfig | null>('ai_get_config');
+      return config;
+    } catch (error) {
+      console.error('Failed to get AI config:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check health status of all AI services
+   */
+  async healthCheck(): Promise<HealthStatus> {
+    try {
+      return await invoke<HealthStatus>('ai_health_check');
+    } catch (error) {
+      console.error('AI health check failed:', error);
+      return {
+        embedding_service: false,
+        agent_service: false,
+        code_service: false,
+      };
+    }
+  }
+
+  /**
+   * Generate embedding for a single text (local model)
+   */
+  async generateEmbedding(text: string): Promise<number[]> {
+    if (!this.initialized) {
+      throw new Error('AI not initialized. Call initialize() first.');
+    }
+
+    try {
+      return await invoke<number[]>('ai_generate_embedding', { text });
+    } catch (error) {
+      console.error('Failed to generate embedding:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate embeddings for multiple texts (batched, local model)
+   */
+  async generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
+    if (!this.initialized) {
+      throw new Error('AI not initialized. Call initialize() first.');
+    }
+
+    try {
+      return await invoke<number[][]>('ai_generate_embeddings_batch', { texts });
+    } catch (error) {
+      console.error('Failed to generate embeddings batch:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate an artifact (HTML/CSS/JS) from a prompt using GPT
+   */
   async generateArtifact(prompt: string): Promise<ArtifactResult> {
-    // Mock implementation - replace with actual AI API call
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          title: 'AI Generated Artifact',
-          html: `<div style="padding: 20px;">
-            <h2>Generated from: "${prompt}"</h2>
-            <p>This is a mock AI-generated artifact. Replace with actual AI implementation.</p>
-          </div>`,
-          css: `body { 
-            font-family: Arial, sans-serif; 
-            background: #161b22; 
-            color: #e6edf3; 
-            min-height: 100vh; 
-            padding: 20px;
-          }`,
-          javascript: `console.log('AI Generated Artifact loaded');`
-        });
-      }, 1000);
-    });
+    if (!this.initialized) {
+      throw new Error('AI not initialized. Call initialize() first.');
+    }
+
+    try {
+      return await invoke<ArtifactResult>('ai_generate_artifact', { prompt });
+    } catch (error) {
+      console.error('Failed to generate artifact:', error);
+      throw error;
+    }
   }
 
-  async generateDatabase(_prompt: string): Promise<DatabaseResult> {
-    // Mock implementation - replace with actual AI API call
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          title: 'AI Generated Database',
-          columns: [
-            { name: 'Name', column_type: 'text' },
-            { name: 'Status', column_type: 'select', options: ['Active', 'Inactive'] },
-            { name: 'Created', column_type: 'date' }
-          ],
-          rows: [
-            { Name: 'Sample Item', Status: 'Active', Created: new Date().toISOString() }
-          ],
-          view: { type: 'table' }
-        });
-      }, 1000);
-    });
+  /**
+   * Generate a database schema from a prompt using GPT
+   */
+  async generateDatabase(prompt: string): Promise<DatabaseResult> {
+    if (!this.initialized) {
+      throw new Error('AI not initialized. Call initialize() first.');
+    }
+
+    try {
+      return await invoke<DatabaseResult>('ai_generate_database', { prompt });
+    } catch (error) {
+      console.error('Failed to generate database:', error);
+      throw error;
+    }
   }
 
-  async generateWebContent(prompt: string): Promise<any> {
-    // Mock implementation for web content generation
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          title: 'AI Generated Web Content',
-          content: `Generated web content for: "${prompt}"`,
-          url: 'https://example.com'
-        });
-      }, 1000);
-    });
+  /**
+   * Chat with AI agent using GPT
+   */
+  async chat(messages: Array<{ role: string; content: string }>): Promise<string> {
+    if (!this.initialized) {
+      throw new Error('AI not initialized. Call initialize() first.');
+    }
+
+    try {
+      return await invoke<string>('ai_chat', { messages });
+    } catch (error) {
+      console.error('Failed to chat with AI:', error);
+      throw error;
+    }
   }
 
+  /**
+   * Chat with AI agent with tool/function calling support
+   */
+  async chatWithTools(
+    messages: Array<{ role: string; content: string }>,
+    tools: Array<any>
+  ): Promise<{ content: string; tool_calls: any[] }> {
+    if (!this.initialized) {
+      throw new Error('AI not initialized. Call initialize() first.');
+    }
+
+    try {
+      return await invoke<{ content: string; tool_calls: any[] }>(
+        'ai_chat_with_tools',
+        { messages, tools }
+      );
+    } catch (error) {
+      console.error('Failed to chat with tools:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper: Check if AI is initialized
+   */
   isInitialized(): boolean {
-    return this.config !== null;
-  }
-
-  getConfig(): AIConfig | null {
-    return this.config;
+    return this.initialized;
   }
 }
 

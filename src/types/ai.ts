@@ -1,13 +1,37 @@
-// AI system types
+// AI system types for hybrid architecture
 import type { Note } from './note';
 
+// ============================================================================
+// HYBRID AI CONFIGURATION
+// ============================================================================
+
 export interface AIConfig {
-  code_generation: ModelConfig;
-  note_understanding: ModelConfig;
-  embeddings: ModelConfig;
-  web_search?: WebSearchConfig;
+  // Local models (privacy, speed, cost-effective)
+  embeddings: LocalModelConfig;
+
+  // Cloud API models (reasoning, quality)
+  agent: APIModelConfig;
+
+  // Optional: separate config for code generation
+  code_generation?: APIModelConfig;
 }
 
+export interface LocalModelConfig {
+  provider: 'local';
+  model: string; // e.g., 'qwen3-embedding-0.6b'
+  endpoint: string; // e.g., 'http://localhost:8081'
+  dimension?: number; // Embedding dimension (e.g., 1024)
+}
+
+export interface APIModelConfig {
+  provider: 'openai' | 'anthropic';
+  model: string; // e.g., 'gpt-4o', 'gpt-4o-mini', 'claude-sonnet-4'
+  api_key: string;
+  temperature?: number;
+  max_tokens?: number;
+}
+
+// Legacy interface for backward compatibility
 export interface ModelConfig {
   provider: 'local' | 'openai' | 'anthropic';
   model: string;
@@ -24,7 +48,10 @@ export interface WebSearchConfig {
   max_results?: number;
 }
 
-// AI Conversations
+// ============================================================================
+// AI CONVERSATIONS
+// ============================================================================
+
 export interface AIConversation {
   id: string;
   note_id: string;
@@ -34,13 +61,16 @@ export interface AIConversation {
 export interface AIMessage {
   id: string;
   conversation_id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   model?: string;
   created_at: string;
 }
 
-// AI Tools (Function Calling)
+// ============================================================================
+// AI TOOLS (Function Calling)
+// ============================================================================
+
 export interface AITool {
   name: string;
   description: string;
@@ -65,7 +95,10 @@ export interface ToolResult {
   error?: string;
 }
 
-// Embeddings
+// ============================================================================
+// EMBEDDINGS (Local Model)
+// ============================================================================
+
 export interface Embedding {
   id: string;
   note_id: string;
@@ -79,4 +112,84 @@ export interface SemanticSearchResult {
   note: Note;
   similarity: number;
   snippet?: string;
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Create a default AI configuration
+ * User must provide OpenAI API key
+ */
+export function createDefaultAIConfig(openaiApiKey: string): AIConfig {
+  return {
+    embeddings: {
+      provider: 'local',
+      model: 'qwen3-embedding-0.6b',
+      endpoint: 'http://localhost:8081',
+      dimension: 1024,
+    },
+    agent: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      api_key: openaiApiKey,
+      temperature: 0.7,
+      max_tokens: 4096,
+    },
+  };
+}
+
+/**
+ * Create an API-only configuration (no local models)
+ * Useful for users who don't want to run local models
+ */
+export function createAPIOnlyConfig(openaiApiKey: string): AIConfig {
+  return {
+    embeddings: {
+      provider: 'local',
+      model: 'text-embedding-3-large',
+      endpoint: 'https://api.openai.com/v1',
+      dimension: 3072,
+    },
+    agent: {
+      provider: 'openai',
+      model: 'gpt-4o',
+      api_key: openaiApiKey,
+      temperature: 0.7,
+      max_tokens: 4096,
+    },
+  };
+}
+
+/**
+ * Validate AI configuration
+ */
+export function validateAIConfig(config: AIConfig): string[] {
+  const errors: string[] = [];
+
+  // Check embeddings config
+  if (!config.embeddings.endpoint) {
+    errors.push('Embeddings endpoint is required');
+  }
+  if (!config.embeddings.model) {
+    errors.push('Embeddings model is required');
+  }
+
+  // Check agent config
+  if (!config.agent.api_key) {
+    errors.push('Agent API key is required');
+  }
+  if (!config.agent.model) {
+    errors.push('Agent model is required');
+  }
+
+  // Validate temperature
+  if (config.agent.temperature !== undefined) {
+    if (config.agent.temperature < 0 || config.agent.temperature > 2) {
+      errors.push('Agent temperature must be between 0 and 2');
+    }
+  }
+
+  return errors;
 }
