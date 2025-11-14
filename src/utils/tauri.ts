@@ -6,7 +6,9 @@ import type {
   UpdateNoteInput,
   Block,
   CreateBlockInput,
+  BlockData,
 } from '@/types';
+import { parseBlock, serializeBlockData } from './blockData';
 
 // Note commands
 export const getAllNotes = async (): Promise<Note[]> => {
@@ -23,7 +25,7 @@ export const createNote = async (input: CreateNoteInput): Promise<Note> => {
 
 export const updateNote = async (
   noteId: string,
-  input: Omit<UpdateNoteInput, 'id'>
+  input: Partial<Omit<Note, 'id' | 'created_at' | 'updated_at' | 'children'>>
 ): Promise<Note> => {
   return invoke('update_note', { noteId, input });
 };
@@ -38,18 +40,26 @@ export const getChildNotes = async (parentId: string | null): Promise<Note[]> =>
 
 // Block commands
 export const getBlocksByNote = async (noteId: string): Promise<Block[]> => {
-  return invoke('get_blocks_by_note', { noteId });
+  const tauriBlocks = await invoke<any[]>('get_blocks_by_note', { noteId });
+  return tauriBlocks.map(parseBlock);
 };
 
 export const createBlock = async (input: CreateBlockInput): Promise<Block> => {
-  return invoke('create_block', { input });
+  const tauriInput = {
+    ...input,
+    data: serializeBlockData(input.data),
+  };
+  const tauriBlock = await invoke<any>('create_block', { input: tauriInput });
+  return parseBlock(tauriBlock);
 };
 
 export const updateBlock = async (
   blockId: string,
-  data: string
+  data: BlockData
 ): Promise<Block> => {
-  return invoke('update_block', { blockId, data });
+  const dataString = serializeBlockData(data);
+  const tauriBlock = await invoke<any>('update_block', { blockId, data: dataString });
+  return parseBlock(tauriBlock);
 };
 
 export const deleteBlock = async (blockId: string): Promise<void> => {

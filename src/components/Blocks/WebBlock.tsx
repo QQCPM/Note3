@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ExternalLink, RefreshCw, Maximize2, X } from 'lucide-react';
 import { updateBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
-import type { Block } from '@/types';
+import type { Block, WebBlockData } from '@/types';
 
 interface WebBlockProps {
   block: Block;
@@ -15,58 +15,17 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
   const [height, setHeight] = useState(400);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState<'iframe' | 'preview'>('iframe');
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Parse block data
   useEffect(() => {
-    try {
-      const data = JSON.parse(block.data);
-      const parsedUrl = data.url || '';
-      setUrl(parsedUrl);
-      setTitle(data.title || '');
-      setHeight(data.height || 400);
-      
-      // Pre-detect known non-embeddable sites
-      if (parsedUrl && isKnownNonEmbeddable(parsedUrl)) {
-        setViewMode('preview');
-        setHasError(true);
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error('Failed to parse block data:', error);
-    }
+    const data = block.data as WebBlockData;
+    setUrl(data.url || '');
+    setTitle(data.title || '');
+    setHeight(data.height || 400);
   }, [block.data]);
-
-  // Check if URL is from a site known to block embedding
-  const isKnownNonEmbeddable = (urlString: string): boolean => {
-    try {
-      const parsedUrl = new URL(urlString);
-      const hostname = parsedUrl.hostname.toLowerCase();
-      
-      // Known sites that block embedding with X-Frame-Options or CSP
-      const blockedDomains = [
-        'facebook.com',
-        'medium.com',
-        'geeksforgeeks.org', // Blocks embedding on blog posts
-        'twitter.com',
-        'x.com',
-        'instagram.com',
-        'linkedin.com',
-        'tiktok.com',
-        'reddit.com',
-        'netflix.com',
-        'amazon.com',
-        'apple.com',
-        'microsoft.com',
-      ];
-      
-      return blockedDomains.some(domain => hostname.includes(domain));
-    } catch {
-      return false;
-    }
-  };
 
   const handleLoad = () => {
     setIsLoading(false);
@@ -76,34 +35,28 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
   const handleError = () => {
     setIsLoading(false);
     setHasError(true);
-    setViewMode('preview'); // Switch to preview mode on error
+    setErrorMessage(
+      'This website cannot be embedded. It may have security restrictions (X-Frame-Options).'
+    );
   };
 
   const handleRefresh = () => {
     setIsLoading(true);
     setHasError(false);
     if (iframeRef.current) {
-      iframeRef.current.src = getEmbeddableUrl(url);
+      iframeRef.current.src = url;
     }
   };
 
-  const handleOpenExternal = async () => {
-    try {
-      // Use Tauri's shell plugin to open URL in system browser
-      const { open } = await import('@tauri-apps/plugin-shell');
-      await open(url);
-    } catch (error) {
-      // Fallback to window.open if Tauri API is not available
-      console.warn('Tauri shell API not available, using fallback:', error);
-      window.open(url, '_blank');
-    }
+  const handleOpenExternal = () => {
+    window.open(url, '_blank');
   };
 
   const handleUpdateHeight = async (newHeight: number) => {
     setHeight(newHeight);
     try {
-      const data = JSON.parse(block.data);
-      const newData = JSON.stringify({ ...data, height: newHeight });
+      const data = block.data as WebBlockData;
+      const newData: WebBlockData = { ...data, height: newHeight };
       const updated = await updateBlock(block.id, newData);
       updateBlockInStore(block.id, updated);
     } catch (error) {
@@ -114,8 +67,8 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
   const handleUpdateTitle = async (newTitle: string) => {
     setTitle(newTitle);
     try {
-      const data = JSON.parse(block.data);
-      const newData = JSON.stringify({ ...data, title: newTitle });
+      const data = block.data as WebBlockData;
+      const newData: WebBlockData = { ...data, title: newTitle };
       const updated = await updateBlock(block.id, newData);
       updateBlockInStore(block.id, updated);
     } catch (error) {
@@ -132,110 +85,10 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
     }
   };
 
-  // Convert URLs to embeddable format
-  const getEmbeddableUrl = (urlString: string): string => {
-    try {
-      const parsedUrl = new URL(urlString);
-      
-      // YouTube video URLs
-      if (parsedUrl.hostname.includes('youtube.com') || parsedUrl.hostname.includes('youtu.be')) {
-        let videoId = '';
-        
-        // Handle youtube.com/watch?v=VIDEO_ID
-        if (parsedUrl.hostname.includes('youtube.com') && parsedUrl.pathname === '/watch') {
-          videoId = parsedUrl.searchParams.get('v') || '';
-        }
-        // Handle youtu.be/VIDEO_ID
-        else if (parsedUrl.hostname.includes('youtu.be')) {
-          videoId = parsedUrl.pathname.slice(1);
-        }
-        // Handle youtube.com/embed/VIDEO_ID (already embeddable)
-        else if (parsedUrl.pathname.startsWith('/embed/')) {
-          return urlString;
-        }
-        
-        if (videoId) {
-          // Preserve timestamp if present
-          const timestamp = parsedUrl.searchParams.get('t');
-          const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-          return timestamp ? `${embedUrl}?start=${timestamp}` : embedUrl;
-        }
-      }
-      
-      // Vimeo URLs
-      if (parsedUrl.hostname.includes('vimeo.com')) {
-        const videoId = parsedUrl.pathname.split('/').filter(Boolean)[0];
-        if (videoId && !parsedUrl.pathname.includes('/video/')) {
-          return `https://player.vimeo.com/video/${videoId}`;
-        }
-      }
-      
-      // Twitter/X URLs
-      if (parsedUrl.hostname.includes('twitter.com') || parsedUrl.hostname.includes('x.com')) {
-        // Twitter embeds work better with their widget
-        return urlString;
-      }
-      
-      // Default: return original URL
-      return urlString;
-    } catch {
-      return urlString;
-    }
-  };
-
-  // Detect embed type for display
-  const getEmbedType = (urlString: string): string => {
-    try {
-      const parsedUrl = new URL(urlString);
-      const hostname = parsedUrl.hostname.toLowerCase();
-      
-      // Video platforms
-      if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
-        return '📺 YouTube';
-      }
-      if (hostname.includes('vimeo.com')) {
-        return '🎬 Vimeo';
-      }
-      
-      // Social media
-      if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
-        return '🐦 Twitter/X';
-      }
-      
-      // Educational/Technical sites
-      if (hostname.includes('geeksforgeeks.org')) {
-        return '📚 GeeksforGeeks';
-      }
-      if (hostname.includes('stackoverflow.com') || hostname.includes('stackexchange.com')) {
-        return '💡 StackOverflow';
-      }
-      if (hostname.includes('github.com')) {
-        return '⚡ GitHub';
-      }
-      if (hostname.includes('wikipedia.org')) {
-        return '📖 Wikipedia';
-      }
-      if (hostname.includes('medium.com')) {
-        return '✍️ Medium';
-      }
-      if (hostname.includes('dev.to')) {
-        return '👨‍💻 Dev.to';
-      }
-      
-      // Documentation sites
-      if (hostname.includes('docs.') || hostname.includes('documentation.')) {
-        return '📄 Docs';
-      }
-      
-      return '🌐 Web';
-    } catch {
-      return '🌐 Web';
-    }
-  };
-
   if (!isValidUrl(url)) {
     return (
       <div className="canvas-block">
+        <div className="block-handle">⋮⋮</div>
         <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center">
           <div className="text-red-400 mb-2">⚠️ Invalid URL</div>
           <div className="text-sm text-gray-400">
@@ -252,6 +105,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
   return (
     <>
       <div className="canvas-block">
+        <div className="block-handle">⋮⋮</div>
         <div
           className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl p-4"
           style={{ marginTop: '16px', marginBottom: '16px' }}
@@ -267,7 +121,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
                 placeholder="Enter title..."
               />
               <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">
-                {getEmbedType(url)}
+                Web
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -315,35 +169,38 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
               </div>
             )}
 
-            {hasError && viewMode === 'preview' && (
-              <div className="flex items-center justify-between bg-[#161b22] border border-yellow-500/20 rounded px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">🔒</span>
-                  <span className="text-xs text-gray-400">Cannot embed this site</span>
+            {hasError && (
+              <div
+                className="flex flex-col items-center justify-center bg-[#0d1117] p-8"
+                style={{ height: `${height}px` }}
+              >
+                <div className="text-red-400 text-4xl mb-4">⚠️</div>
+                <div className="text-sm font-semibold text-white mb-2">
+                  Cannot Display Website
+                </div>
+                <div className="text-xs text-gray-400 text-center max-w-md mb-4">
+                  {errorMessage}
                 </div>
                 <button
                   onClick={handleOpenExternal}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-all inline-flex items-center gap-1.5"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-all flex items-center gap-2"
                 >
-                  <ExternalLink className="w-3 h-3" />
-                  Open
+                  <ExternalLink className="w-4 h-4" />
+                  Open in External Browser
                 </button>
               </div>
             )}
 
-            {/* Only render iframe if not in preview mode */}
-            {viewMode === 'iframe' && !isKnownNonEmbeddable(url) && (
-              <iframe
-                ref={iframeRef}
-                src={getEmbeddableUrl(url)}
-                className="w-full border-0"
-                style={{ height: `${height}px`, display: hasError ? 'none' : 'block' }}
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox"
-                onLoad={handleLoad}
-                onError={handleError}
-                title={title || 'Web View'}
-              />
-            )}
+            <iframe
+              ref={iframeRef}
+              src={url}
+              className="w-full border-0"
+              style={{ height: `${height}px`, display: hasError ? 'none' : 'block' }}
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox"
+              onLoad={handleLoad}
+              onError={handleError}
+              title={title || 'Web View'}
+            />
           </div>
 
           {/* Height Control */}
@@ -386,7 +243,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
             </button>
           </div>
           <iframe
-            src={getEmbeddableUrl(url)}
+            src={url}
             className="flex-1 w-full border-0"
             sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox"
             title={title || 'Web View'}

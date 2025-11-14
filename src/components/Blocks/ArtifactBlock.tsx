@@ -5,7 +5,7 @@ interface ArtifactBlockProps {
   block: Block;
 }
 
-const ArtifactBlock: React.FC<ArtifactBlockProps> = ({ block: _block }) => {
+const ArtifactBlock: React.FC<ArtifactBlockProps> = ({ block }) => {
   const iframeSrcDoc = `<!DOCTYPE html>
 <html>
 <head>
@@ -82,6 +82,7 @@ body {
 
   return (
     <div className="canvas-block artifact-block">
+      <div className="block-handle">⋮⋮</div>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-white">Live Artifact</span>

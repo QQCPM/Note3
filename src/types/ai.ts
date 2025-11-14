@@ -1,4 +1,5 @@
 // AI system types
+import type { Note } from './note';
 
 import type { Note } from './note';
 

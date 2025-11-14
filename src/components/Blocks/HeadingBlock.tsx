@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { updateBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
-import type { Block } from '@/types';
+import type { Block, HeadingBlockData } from '@/types';
 
 interface HeadingBlockProps {
   block: Block;
@@ -9,18 +9,14 @@ interface HeadingBlockProps {
 
 const HeadingBlock: React.FC<HeadingBlockProps> = ({ block }) => {
   const { updateBlock: updateBlockInStore } = useBlocksStore();
-  const [content, setContent] = useState('');
+  const data = block.data as HeadingBlockData;
+  const [content, setContent] = useState(data.content || '');
   const isH1 = block.type === 'heading1';
 
-  // Parse block data
+  // Sync content with block data
   useEffect(() => {
-    try {
-      const data = JSON.parse(block.data);
-      setContent(data.content || '');
-    } catch (error) {
-      console.error('Failed to parse block data:', error);
-      setContent('');
-    }
+    const blockData = block.data as HeadingBlockData;
+    setContent(blockData.content || '');
   }, [block.data]);
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,10 +25,10 @@ const HeadingBlock: React.FC<HeadingBlockProps> = ({ block }) => {
 
     // Save to database
     try {
-      const newData = JSON.stringify({
-        type: block.type,
+      const newData: HeadingBlockData = {
+        type: block.type as 'heading1' | 'heading2',
         content: newContent
-      });
+      };
       const updated = await updateBlock(block.id, newData);
       updateBlockInStore(block.id, updated);
     } catch (error) {
