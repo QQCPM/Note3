@@ -2,12 +2,24 @@
 
 export type BlockType = 'text' | 'heading1' | 'heading2' | 'database' | 'artifact' | 'task' | 'web';
 
+// Tauri boundary type - has string data from Rust
+export interface TauriBlock {
+  id: string;
+  note_id: string;
+  type: BlockType;
+  position: number;
+  data: string; // JSON string from Rust
+  created_at: string;
+  updated_at: string;
+}
+
+// Frontend type - has typed data
 export interface Block {
   id: string;
   note_id: string;
   type: BlockType;
   position: number;
-  data: string; // JSON string
+  data: BlockData; // Typed data for frontend use
   created_at: string;
   updated_at: string;
 }
@@ -71,6 +83,8 @@ export interface ArtifactBlockData {
   css: string;
   javascript: string;
   prompt?: string; // Original AI prompt
+  width?: number; // Custom width in pixels
+  height?: number; // Custom height in pixels
 }
 
 export interface Artifact {
@@ -103,16 +117,17 @@ export interface WebBlockData {
   type: 'web';
   url: string;
   title?: string;
+  width?: number; // Custom width in pixels
   height?: number; // Custom height in pixels
   prompt?: string; // Original prompt if AI-generated
 }
 
-// Block creation inputs
+// Block creation inputs (for Tauri)
 export interface CreateBlockInput {
   note_id: string;
   type: BlockType;
   position?: number;
-  data: string; // JSON string
+  data: BlockData; // Will be serialized to JSON string in tauri.ts
 }
 
 export interface UpdateBlockInput {

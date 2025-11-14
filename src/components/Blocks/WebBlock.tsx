@@ -12,6 +12,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
   const { updateBlock: updateBlockInStore } = useBlocksStore();
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
+  const [width, setWidth] = useState(800);
   const [height, setHeight] = useState(400);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -24,6 +25,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
     const data = block.data as WebBlockData;
     setUrl(data.url || '');
     setTitle(data.title || '');
+    setWidth(data.width || 800);
     setHeight(data.height || 400);
   }, [block.data]);
 
@@ -61,6 +63,18 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
       updateBlockInStore(block.id, updated);
     } catch (error) {
       console.error('Failed to update block height:', error);
+    }
+  };
+
+  const handleUpdateWidth = async (newWidth: number) => {
+    setWidth(newWidth);
+    try {
+      const data = block.data as WebBlockData;
+      const newData: WebBlockData = { ...data, width: newWidth };
+      const updated = await updateBlock(block.id, newData);
+      updateBlockInStore(block.id, updated);
+    } catch (error) {
+      console.error('Failed to update block width:', error);
     }
   };
 
@@ -104,7 +118,7 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
 
   return (
     <>
-      <div className="canvas-block">
+      <div className="canvas-block" style={{ maxWidth: `${width}px` }}>
         <div className="block-handle">⋮⋮</div>
         <div
           className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl p-4"
@@ -203,21 +217,38 @@ const WebBlock: React.FC<WebBlockProps> = ({ block }) => {
             />
           </div>
 
-          {/* Height Control */}
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-xs text-gray-500">Height:</span>
-            <input
-              type="range"
-              min="200"
-              max="800"
-              step="50"
-              value={height}
-              onChange={(e) => handleUpdateHeight(parseInt(e.target.value))}
-              className="flex-1"
-            />
-            <span className="text-xs text-gray-400 font-mono w-16">
-              {height}px
-            </span>
+          {/* Size Controls */}
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 w-12">Width:</span>
+              <input
+                type="range"
+                min="400"
+                max="1200"
+                step="50"
+                value={width}
+                onChange={(e) => handleUpdateWidth(parseInt(e.target.value))}
+                className="flex-1"
+              />
+              <span className="text-xs text-gray-400 font-mono w-16">
+                {width}px
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 w-12">Height:</span>
+              <input
+                type="range"
+                min="200"
+                max="800"
+                step="50"
+                value={height}
+                onChange={(e) => handleUpdateHeight(parseInt(e.target.value))}
+                className="flex-1"
+              />
+              <span className="text-xs text-gray-400 font-mono w-16">
+                {height}px
+              </span>
+            </div>
           </div>
         </div>
       </div>

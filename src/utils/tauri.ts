@@ -3,8 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   Note,
   CreateNoteInput,
-  UpdateNoteInput,
   Block,
+  TauriBlock,
   CreateBlockInput,
   BlockData,
 } from '@/types';
@@ -40,7 +40,7 @@ export const getChildNotes = async (parentId: string | null): Promise<Note[]> =>
 
 // Block commands
 export const getBlocksByNote = async (noteId: string): Promise<Block[]> => {
-  const tauriBlocks = await invoke<any[]>('get_blocks_by_note', { noteId });
+  const tauriBlocks = await invoke<TauriBlock[]>('get_blocks_by_note', { noteId });
   return tauriBlocks.map(parseBlock);
 };
 
@@ -49,7 +49,7 @@ export const createBlock = async (input: CreateBlockInput): Promise<Block> => {
     ...input,
     data: serializeBlockData(input.data),
   };
-  const tauriBlock = await invoke<any>('create_block', { input: tauriInput });
+  const tauriBlock = await invoke<TauriBlock>('create_block', { input: tauriInput });
   return parseBlock(tauriBlock);
 };
 
@@ -58,7 +58,7 @@ export const updateBlock = async (
   data: BlockData
 ): Promise<Block> => {
   const dataString = serializeBlockData(data);
-  const tauriBlock = await invoke<any>('update_block', { blockId, data: dataString });
+  const tauriBlock = await invoke<TauriBlock>('update_block', { blockId, data: dataString });
   return parseBlock(tauriBlock);
 };
 

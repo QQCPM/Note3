@@ -1,4 +1,4 @@
-import type { Block, BlockData } from '@/types';
+import type { Block, BlockData, TauriBlock } from '@/types';
 
 /**
  * Serialize BlockData to string for Tauri commands
@@ -22,7 +22,7 @@ export function deserializeBlockData(dataString: string): BlockData {
 /**
  * Convert Tauri Block (with string data) to typed Block
  */
-export function parseBlock(tauriBlock: any): Block {
+export function parseBlock(tauriBlock: TauriBlock): Block {
   return {
     ...tauriBlock,
     data: deserializeBlockData(tauriBlock.data),
@@ -32,7 +32,7 @@ export function parseBlock(tauriBlock: any): Block {
 /**
  * Convert typed Block to Tauri format (with string data)
  */
-export function stringifyBlock(block: Block): any {
+export function stringifyBlock(block: Block): TauriBlock {
   return {
     ...block,
     data: serializeBlockData(block.data),

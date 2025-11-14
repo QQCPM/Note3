@@ -4,6 +4,7 @@ import { useBlocksStore, useNotesStore } from '@/store';
 import type { Block, TextBlockData } from '@/types';
 import SlashCommandMenu from '@/components/Canvas/SlashCommandMenu';
 import AIPromptModal from '@/components/Canvas/AIPromptModal';
+import RichTextRenderer from './RichTextRenderer';
 import { nanoid } from 'nanoid';
 
 interface TextBlockProps {
@@ -16,12 +17,17 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
 
   const data = block.data as TextBlockData;
   const [content, setContent] = useState(data.content || '');
+  const [isEditing, setIsEditing] = useState(false);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashMenuPosition, setSlashMenuPosition] = useState({ x: 0, y: 0 });
   const [slashQuery, setSlashQuery] = useState('');
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiModalType, setAIModalType] = useState<'artifact' | 'database' | 'web' | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+
+  // Check if content has LaTeX formulas
+  const hasLatex = content.includes('$');
 
   // Sync content with block data
   useEffect(() => {
@@ -31,18 +37,28 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
 
   // Auto-resize textarea
   useEffect(() => {
-    if (textareaRef.current) {
+    if (textareaRef.current && isEditing) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
-  }, [content]);
+  }, [content, isEditing]);
 
   // Auto-focus on empty blocks (newly created)
   useEffect(() => {
-    if (textareaRef.current && content === '') {
-      textareaRef.current.focus();
+    if (content === '') {
+      setIsEditing(true);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 0);
     }
   }, []);
+
+  // Focus textarea when entering edit mode
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isEditing]);
 
   const handleChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
@@ -92,11 +108,29 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape' && showSlashMenu) {
-      e.preventDefault();
-      setShowSlashMenu(false);
-      setSlashQuery('');
+    if (e.key === 'Escape') {
+      if (showSlashMenu) {
+        e.preventDefault();
+        setShowSlashMenu(false);
+        setSlashQuery('');
+      } else {
+        // Exit edit mode on Escape
+        setIsEditing(false);
+      }
     }
+  };
+
+  const handleBlur = () => {
+    // Exit edit mode when clicking outside (after a delay to allow slash menu interaction)
+    setTimeout(() => {
+      if (!showSlashMenu) {
+        setIsEditing(false);
+      }
+    }, 150);
+  };
+
+  const handleViewClick = () => {
+    setIsEditing(true);
   };
 
   const handleSelectCommand = async (command: any) => {
@@ -212,6 +246,7 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
             { id: nanoid(), name: 'Name', type: 'text' },
             { id: nanoid(), name: 'Status', type: 'select', options: ['Todo', 'In Progress', 'Done'] },
           ],
+          rows: [], // Start with empty rows
           view: 'table' as const,
         };
 
@@ -232,15 +267,32 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
   return (
     <>
       <div className="canvas-block text-block">
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Type '/' for commands..."
-          rows={1}
-          className="w-full"
-        />
+        {isEditing ? (
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
+            placeholder="Type '/' for commands..."
+            rows={1}
+            className="w-full"
+          />
+        ) : (
+          <div
+            ref={viewRef}
+            onClick={handleViewClick}
+            className="cursor-text min-h-[32px] px-2 py-1 rounded hover:bg-[#161b22] transition-colors"
+          >
+            {content && hasLatex ? (
+              <RichTextRenderer content={content} />
+            ) : (
+              <div className="text-gray-400 whitespace-pre-wrap">
+                {content || "Click to edit..."}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {showSlashMenu && (

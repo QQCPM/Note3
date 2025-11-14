@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { Note, Block } from '@/types';
-import { createBlock, updateBlock } from '@/utils/tauri';
+import { createBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
 import TextBlock from '@/components/Blocks/TextBlock';
 import HeadingBlock from '@/components/Blocks/HeadingBlock';
@@ -77,7 +77,6 @@ const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
 const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
   const { addBlock, setBlocks } = useBlocksStore();
   const creatingInitialBlock = useRef(false);
-  const [activeId, setActiveId] = useState<string | null>(null);
 
   // Configure drag sensors
   const sensors = useSensors(
@@ -115,14 +114,12 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
     }
   }, [note?.id, blocks.length, addBlock]);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
+  const handleDragStart = (_event: DragStartEvent) => {
+    // Could track active drag state here if needed
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-
-    setActiveId(null);
 
     if (!over || active.id === over.id) {
       return;

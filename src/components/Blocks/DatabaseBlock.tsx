@@ -5,7 +5,7 @@ interface DatabaseBlockProps {
   block: Block;
 }
 
-const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
+const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block: _block }) => {
   const switchDatabaseView = (databaseId: string, viewType: string) => {
     const database = document.getElementById(databaseId);
     if (!database) return;

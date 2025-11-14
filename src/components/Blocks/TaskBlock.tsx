@@ -5,7 +5,7 @@ interface TaskBlockProps {
   block: Block;
 }
 
-const TaskBlock: React.FC<TaskBlockProps> = ({ block }) => {
+const TaskBlock: React.FC<TaskBlockProps> = ({ block: _block }) => {
   const handleCheckboxClick = (e: React.MouseEvent<HTMLDivElement>) => {
     e.currentTarget.classList.toggle('checked');
     const text = e.currentTarget.nextElementSibling as HTMLSpanElement;
