@@ -3,21 +3,21 @@
 ## Overview
 
 This guide is specifically for running Weave on **Mac M2 Ultra with 128GB RAM** using:
-- **Qwen3-30B-Coder** (code generation) - FP16
-- **Qwen3-Embedding-8B** (semantic search) - FP16
-- **Qwen3-Reranker-8B** (search reranking) - FP16
+- **Qwen3-30B-Coder** (code generation) - Q8_0 (8-bit)
+- **Qwen3-Embedding-8B** (semantic search) - Q8_0 (8-bit)
+- **Qwen3-Reranker-8B** (search reranking) - Q8_0 (8-bit)
 - **OpenAI API** (chat agent, web search)
 
-**Total Memory Usage**: ~92GB (you have plenty of headroom!)
+**Total Memory Usage**: ~46GB (only 36% of your 128GB!)
 
 ---
 
 ## Why This Setup is Perfect
 
-✅ **128GB RAM**: Can run all 3 models simultaneously in FP16
+✅ **128GB RAM**: Can run all 3 models with tons of headroom
 ✅ **Metal GPU**: M2 Ultra has 76-core GPU for incredible speed
 ✅ **Unified Memory**: CPU and GPU share the same 128GB pool
-✅ **FP16 Precision**: Maximum quality (better than quantized)
+✅ **Q8_0 Precision**: Excellent quality (99% of FP16, 50% memory)
 ✅ **100% Privacy**: Code/embeddings never leave your Mac
 ✅ **Low Cost**: Only pay for OpenAI chat API (~$5-10/month)
 
@@ -27,10 +27,10 @@ This guide is specifically for running Weave on **Mac M2 Ultra with 128GB RAM** 
 
 | Model | Precision | Memory | Purpose |
 |-------|-----------|--------|---------|
-| Qwen3-30B-Coder | FP16 | ~60GB | Artifact generation |
-| Qwen3-Embedding-8B | FP16 | ~16GB | Note embeddings |
-| Qwen3-Reranker-8B | FP16 | ~16GB | Search reranking |
-| **Total** | | **~92GB** | **Within 128GB!** |
+| Qwen3-30B-Coder | Q8_0 (8-bit) | ~30GB | Artifact generation |
+| Qwen3-Embedding-8B | Q8_0 (8-bit) | ~8GB | Note embeddings |
+| Qwen3-Reranker-8B | Q8_0 (8-bit) | ~8GB | Search reranking |
+| **Total** | | **~46GB** | **Only 36% of 128GB!** |
 
 ---
 
@@ -112,26 +112,20 @@ pip install huggingface-hub
 huggingface-cli login
 ```
 
-### 2.2 Download Qwen3-30B-Coder (FP16)
+### 2.2 Download Qwen3-30B-Coder (Q8_0 - 8-bit)
 
 ```bash
 # Create models directory
 mkdir -p ~/AI/models
 
-# Download Qwen3-30B-Coder GGUF (FP16)
-huggingface-cli download \
-  Qwen/Qwen3-Coder-30B-Instruct-GGUF \
-  qwen3-coder-30b-instruct-f16.gguf \
-  --local-dir ~/AI/models/qwen3-coder-30b
-
-# Or download Q8_0 if you want to save memory (~30GB instead of 60GB)
+# Download Qwen3-30B-Coder GGUF (Q8_0 quantized)
 huggingface-cli download \
   Qwen/Qwen3-Coder-30B-Instruct-GGUF \
   qwen3-coder-30b-instruct-q8_0.gguf \
   --local-dir ~/AI/models/qwen3-coder-30b
 ```
 
-**Note**: If FP16 GGUF doesn't exist, download the original and convert:
+**Note**: If Q8_0 GGUF doesn't exist, download the original and convert:
 
 ```bash
 # Download original model
@@ -139,21 +133,21 @@ huggingface-cli download \
   Qwen/Qwen3-Coder-30B-Instruct \
   --local-dir ~/AI/models/qwen3-coder-30b-original
 
-# Convert to GGUF FP16
+# Convert to GGUF Q8_0
 cd ~/AI/llama.cpp
 python convert_hf_to_gguf.py \
   ~/AI/models/qwen3-coder-30b-original \
-  --outfile ~/AI/models/qwen3-coder-30b/qwen3-coder-30b-f16.gguf \
-  --outtype f16
+  --outfile ~/AI/models/qwen3-coder-30b/qwen3-coder-30b-q8_0.gguf \
+  --outtype q8_0
 ```
 
-### 2.3 Download Qwen3-Embedding-8B (FP16)
+### 2.3 Download Qwen3-Embedding-8B (Q8_0 - 8-bit)
 
 ```bash
-# Download Qwen3-Embedding-8B GGUF
+# Download Qwen3-Embedding-8B GGUF (Q8_0)
 huggingface-cli download \
   Qwen/Qwen3-Embedding-8B-GGUF \
-  qwen3-embedding-8b-f16.gguf \
+  qwen3-embedding-8b-q8_0.gguf \
   --local-dir ~/AI/models/qwen3-embedding-8b
 
 # If GGUF doesn't exist, download and convert
@@ -164,17 +158,17 @@ huggingface-cli download \
 cd ~/AI/llama.cpp
 python convert_hf_to_gguf.py \
   ~/AI/models/qwen3-embedding-8b-original \
-  --outfile ~/AI/models/qwen3-embedding-8b/qwen3-embedding-8b-f16.gguf \
-  --outtype f16
+  --outfile ~/AI/models/qwen3-embedding-8b/qwen3-embedding-8b-q8_0.gguf \
+  --outtype q8_0
 ```
 
-### 2.4 Download Qwen3-Reranker-8B (FP16)
+### 2.4 Download Qwen3-Reranker-8B (Q8_0 - 8-bit)
 
 ```bash
-# Download Qwen3-Reranker-8B GGUF
+# Download Qwen3-Reranker-8B GGUF (Q8_0)
 huggingface-cli download \
   Qwen/Qwen3-Reranker-8B-GGUF \
-  qwen3-reranker-8b-f16.gguf \
+  qwen3-reranker-8b-q8_0.gguf \
   --local-dir ~/AI/models/qwen3-reranker-8b
 
 # If GGUF doesn't exist, download and convert
@@ -185,8 +179,8 @@ huggingface-cli download \
 cd ~/AI/llama.cpp
 python convert_hf_to_gguf.py \
   ~/AI/models/qwen3-reranker-8b-original \
-  --outfile ~/AI/models/qwen3-reranker-8b/qwen3-reranker-8b-f16.gguf \
-  --outtype f16
+  --outfile ~/AI/models/qwen3-reranker-8b/qwen3-reranker-8b-q8_0.gguf \
+  --outtype q8_0
 ```
 
 ---
@@ -205,7 +199,7 @@ source ~/AI/venv/bin/activate
 
 # Start Qwen3-30B-Coder server
 python -m llama_cpp.server \
-  --model ~/AI/models/qwen3-coder-30b/qwen3-coder-30b-f16.gguf \
+  --model ~/AI/models/qwen3-coder-30b/qwen3-coder-30b-q8_0.gguf \
   --host 127.0.0.1 \
   --port 8080 \
   --n_ctx 32768 \
@@ -238,7 +232,7 @@ source ~/AI/venv/bin/activate
 
 # Start Qwen3-Embedding-8B server
 python -m llama_cpp.server \
-  --model ~/AI/models/qwen3-embedding-8b/qwen3-embedding-8b-f16.gguf \
+  --model ~/AI/models/qwen3-embedding-8b/qwen3-embedding-8b-q8_0.gguf \
   --host 127.0.0.1 \
   --port 8081 \
   --embedding \
@@ -266,7 +260,7 @@ source ~/AI/venv/bin/activate
 
 # Start Qwen3-Reranker-8B server
 python -m llama_cpp.server \
-  --model ~/AI/models/qwen3-reranker-8b/qwen3-reranker-8b-f16.gguf \
+  --model ~/AI/models/qwen3-reranker-8b/qwen3-reranker-8b-q8_0.gguf \
   --host 127.0.0.1 \
   --port 8082 \
   --embedding \
@@ -314,7 +308,7 @@ echo "   - Coder:     http://localhost:8080 (PID: $CODER_PID)"
 echo "   - Embedding: http://localhost:8081 (PID: $EMBED_PID)"
 echo "   - Reranker:  http://localhost:8082 (PID: $RERANK_PID)"
 echo ""
-echo "📊 Memory usage: ~92GB / 128GB"
+echo "📊 Memory usage: ~46GB / 128GB (36%)"
 echo "🛑 To stop: pkill -f 'llama_cpp.server'"
 echo ""
 echo "Logs: ~/AI/logs/"
@@ -952,13 +946,15 @@ pkill -f 'llama_cpp.server.*8080'
 
 ## Performance Benchmarks
 
-Expected performance on M2 Ultra (128GB):
+Expected performance on M2 Ultra (128GB) with Q8_0:
 
 | Task | Model | Tokens/sec | Latency |
 |------|-------|------------|---------|
-| Code Generation | Qwen3-30B FP16 | ~30-40 | ~3-5s for 500 tokens |
-| Embedding | Qwen3-8B FP16 | ~100-150 | ~50ms per text |
-| Reranking | Qwen3-8B FP16 | ~100-150 | ~50ms per pair |
+| Code Generation | Qwen3-30B Q8_0 | ~35-45 | ~2.5-4s for 500 tokens |
+| Embedding | Qwen3-8B Q8_0 | ~120-180 | ~40ms per text |
+| Reranking | Qwen3-8B Q8_0 | ~120-180 | ~40ms per pair |
+
+**Note**: Q8_0 is actually slightly *faster* than FP16 due to reduced memory bandwidth!
 
 ---
 
@@ -1000,8 +996,8 @@ Your Mac M2 Ultra setup is **perfect** for running the full local AI stack:
 
 ✅ **Privacy**: All code/embeddings stay on your Mac
 ✅ **Speed**: Metal acceleration = 10x faster than CPU
-✅ **Quality**: FP16 = maximum precision
+✅ **Quality**: Q8_0 = 99% of FP16, 50% memory
 ✅ **Cost**: Only pay for OpenAI chat (~$10/month)
-✅ **Capacity**: 92GB / 128GB = plenty of headroom
+✅ **Capacity**: 46GB / 128GB = tons of headroom (64% free!)
 
 This is a **production-grade** setup that rivals cloud services!

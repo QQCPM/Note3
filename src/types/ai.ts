@@ -148,7 +148,7 @@ export function createDefaultAIConfig(openaiApiKey: string): AIConfig {
 
 /**
  * Create Mac M2 Ultra optimized configuration
- * Full local AI stack with FP16 models
+ * Full local AI stack with Q8_0 (8-bit) models - excellent quality, 50% memory
  */
 export function createMacM2UltraConfig(openaiApiKey: string): AIConfig {
   return {
