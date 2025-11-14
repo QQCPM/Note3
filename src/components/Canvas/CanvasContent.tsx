@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Note, Block } from '@/types';
-import { createBlock } from '@/utils/tauri';
+import { createBlock, deleteBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
 import TextBlock from '@/components/Blocks/TextBlock';
 import HeadingBlock from '@/components/Blocks/HeadingBlock';
@@ -39,6 +39,8 @@ interface SortableBlockProps {
 }
 
 const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
+  const { deleteBlock: deleteBlockFromStore } = useBlocksStore();
+  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const {
     attributes,
     listeners,
@@ -47,6 +49,15 @@ const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
     transition,
     isDragging,
   } = useSortable({ id: block.id });
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (showDeleteMenu) {
+      const handleClickOutside = () => setShowDeleteMenu(false);
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showDeleteMenu]);
 
   // Calculate width based on block layout settings
   const getBlockWidth = () => {
@@ -76,19 +87,53 @@ const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
     justifyContent: getAlignment(),
   };
 
+  const handleDelete = async () => {
+    try {
+      await deleteBlock(block.id);
+      deleteBlockFromStore(block.id);
+      setShowDeleteMenu(false);
+    } catch (error) {
+      console.error('Failed to delete block:', error);
+    }
+  };
+
+  const handleDragHandleClick = (e: React.MouseEvent) => {
+    // Only handle click if not dragging
+    if (!isDragging) {
+      e.stopPropagation();
+      setShowDeleteMenu(!showDeleteMenu);
+    }
+  };
+
   return (
-    <div ref={setNodeRef} style={style} className="block-wrapper">
+    <div ref={setNodeRef} style={style} className="block-wrapper mb-4">
       <div className="relative group w-full">
-        {/* Drag Handle */}
-        <div
-          {...attributes}
-          {...listeners}
-          className="absolute left-[-32px] top-2 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10"
-          style={{ width: '24px', height: '24px' }}
-        >
-          <div className="text-gray-500 hover:text-gray-300 flex items-center justify-center w-full h-full">
-            ⋮⋮
+        {/* Drag Handle with Click Menu */}
+        <div className="absolute left-[-28px] top-1 z-20">
+          <div
+            {...attributes}
+            {...listeners}
+            onClick={handleDragHandleClick}
+            className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ width: '20px', height: '20px' }}
+          >
+            <div className="text-gray-500 hover:text-gray-300 flex items-center justify-center w-full h-full text-xs">
+              ⋮⋮
+            </div>
           </div>
+          
+          {/* Delete Menu */}
+          {showDeleteMenu && (
+            <div className="absolute left-0 top-6 bg-[#161b22] border border-[#30363d] rounded shadow-lg py-1 min-w-[120px] z-30">
+              <button
+                onClick={handleDelete}
+                className="w-full px-3 py-1.5 text-left text-sm text-red-400 hover:bg-[#21262d] transition-colors flex items-center gap-2"
+              >
+                <span>🗑️</span>
+                <span>Delete</span>
+              </button>
+            </div>
+          )}
         </div>
         {children}
       </div>
@@ -205,7 +250,7 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto py-12 px-8 pl-16" id="canvas">
+      <div className="max-w-5xl py-12 px-8 pl-20" id="canvas">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -216,7 +261,7 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
             items={sortedBlocks.map((b) => b.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col">
               {sortedBlocks.map((block) => (
                 <SortableBlock key={block.id} block={block}>
                   {renderBlock(block)}

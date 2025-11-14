@@ -17,7 +17,6 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ block: _block }) => {
 
   return (
     <div className="canvas-block task-block">
-      <div className="block-handle">⋮⋮</div>
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-semibold text-white">This Week's Tasks</div>
         <button className="text-xs text-gray-500 hover:text-white">•••</button>

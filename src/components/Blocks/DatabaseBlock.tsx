@@ -21,7 +21,6 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block: _block }) => {
 
   return (
     <div className="canvas-block database-block" id="assignmentDatabase">
-      <div className="block-handle">⋮⋮</div>
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-semibold text-white">CS 101 Assignments</div>
         <div className="flex items-center gap-2">

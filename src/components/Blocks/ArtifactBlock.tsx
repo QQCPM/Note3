@@ -1,48 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { updateBlock } from '@/utils/tauri';
-import { useBlocksStore } from '@/store';
-import type { Block, ArtifactBlockData } from '@/types';
+import React from 'react';
+import type { Block } from '@/types';
 import BlockLayoutControls from '@/components/Blocks/BlockLayoutControls';
+import ResizableBlock from '@/components/Blocks/ResizableBlock';
 
 interface ArtifactBlockProps {
   block: Block;
 }
 
 const ArtifactBlock: React.FC<ArtifactBlockProps> = ({ block }) => {
-  const { updateBlock: updateBlockInStore } = useBlocksStore();
-  const [width, setWidth] = useState(800);
-  const [height, setHeight] = useState(400);
-
-  // Parse block data
-  useEffect(() => {
-    const data = block.data as ArtifactBlockData;
-    setWidth(data.customWidth || 800);
-    setHeight(data.customHeight || 400);
-  }, [block.data]);
-
-  const handleUpdateWidth = async (newWidth: number) => {
-    setWidth(newWidth);
-    try {
-      const data = block.data as ArtifactBlockData;
-      const newData: ArtifactBlockData = { ...data, customWidth: newWidth };
-      const updated = await updateBlock(block.id, newData);
-      updateBlockInStore(block.id, updated);
-    } catch (error) {
-      console.error('Failed to update block width:', error);
-    }
-  };
-
-  const handleUpdateHeight = async (newHeight: number) => {
-    setHeight(newHeight);
-    try {
-      const data = block.data as ArtifactBlockData;
-      const newData: ArtifactBlockData = { ...data, customHeight: newHeight };
-      const updated = await updateBlock(block.id, newData);
-      updateBlockInStore(block.id, updated);
-    } catch (error) {
-      console.error('Failed to update block height:', error);
-    }
-  };
 
   const iframeSrcDoc = `<!DOCTYPE html>
 <html>
@@ -119,63 +84,27 @@ body {
 </html>`;
 
   return (
-    <div className="canvas-block artifact-block" style={{ maxWidth: `${width}px` }}>
-      <div className="block-handle">⋮⋮</div>
-      <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-white">Live Artifact</span>
-            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">Interactive</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 text-xs bg-white/5 hover:bg-white/10 rounded">Edit Code</button>
-            <button className="px-3 py-1 text-xs bg-purple-500/20 text-purple-300 rounded">Ask AI</button>
+    <ResizableBlock block={block}>
+      <div className="relative h-full">
+        {/* Glassmorphic floating control pill - Hidden until hover */}
+        <div className="absolute top-3 right-3 z-10 opacity-0 group-hover/block:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className="flex items-center gap-1 px-3 py-1.5 rounded-full backdrop-blur-sm bg-white/[0.03] border border-white/20 shadow-xl pointer-events-auto">
+            <button className="px-2.5 py-1 text-xs hover:bg-white/20 rounded-full transition-all text-gray-700">Edit</button>
+            <div className="h-4 w-px bg-gray-400 mx-1"></div>
             <BlockLayoutControls block={block} />
           </div>
         </div>
-        <div className="bg-[#0d1117] rounded-lg border border-[#30363d] overflow-hidden">
-          <iframe
-            className="w-full"
-            style={{ height: `${height}px` }}
-            sandbox="allow-scripts"
-            srcDoc={iframeSrcDoc}
-          ></iframe>
-        </div>
-        {/* Size Controls */}
-        <div className="mt-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 w-12">Width:</span>
-            <input
-              type="range"
-              min="400"
-              max="1200"
-              step="50"
-              value={width}
-              onChange={(e) => handleUpdateWidth(parseInt(e.target.value))}
-              className="flex-1"
-            />
-            <span className="text-xs text-gray-400 font-mono w-16">
-              {width}px
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 w-12">Height:</span>
-            <input
-              type="range"
-              min="200"
-              max="800"
-              step="50"
-              value={height}
-              onChange={(e) => handleUpdateHeight(parseInt(e.target.value))}
-              className="flex-1"
-            />
-            <span className="text-xs text-gray-400 font-mono w-16">
-              {height}px
-            </span>
-          </div>
+
+        {/* Artifact Container - Fills full space */}
+        <div className="bg-[#0d1117] rounded overflow-hidden border border-[#21262d] h-full w-full">
+        <iframe
+          className="w-full h-full"
+          sandbox="allow-scripts"
+          srcDoc={iframeSrcDoc}
+        ></iframe>
         </div>
       </div>
-    </div>
+    </ResizableBlock>
   );
 };
 

@@ -12,18 +12,7 @@ const BlockLayoutControls: React.FC<BlockLayoutControlsProps> = ({ block }) => {
   const { updateBlock: updateBlockInStore } = useBlocksStore();
   const [isOpen, setIsOpen] = useState(false);
 
-  const currentWidth = block.data.width || 'full';
   const currentAlignment = block.data.alignment || 'left';
-
-  const handleWidthChange = async (width: BlockLayout['width']) => {
-    try {
-      const newData: BlockData = { ...block.data, width };
-      const updated = await updateBlock(block.id, newData);
-      updateBlockInStore(block.id, updated);
-    } catch (error) {
-      console.error('Failed to update block width:', error);
-    }
-  };
 
   const handleAlignmentChange = async (alignment: BlockLayout['alignment']) => {
     try {
@@ -41,7 +30,7 @@ const BlockLayoutControls: React.FC<BlockLayoutControlsProps> = ({ block }) => {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="p-1.5 text-xs bg-white/5 hover:bg-white/10 rounded transition-all"
-        title="Layout Options"
+        title="Alignment"
       >
         <Maximize2 className="w-4 h-4" />
       </button>
@@ -56,57 +45,10 @@ const BlockLayoutControls: React.FC<BlockLayoutControlsProps> = ({ block }) => {
           />
 
           {/* Menu */}
-          <div className="absolute right-0 top-full mt-2 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl z-50 p-3 min-w-[200px]">
-            {/* Width Options */}
-            <div className="mb-3">
-              <div className="text-xs text-gray-400 mb-2 font-semibold">Width</div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleWidthChange('full')}
-                  className={`px-3 py-2 text-xs rounded transition-all ${
-                    currentWidth === 'full'
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
-                      : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                  }`}
-                >
-                  Full
-                </button>
-                <button
-                  onClick={() => handleWidthChange('half')}
-                  className={`px-3 py-2 text-xs rounded transition-all ${
-                    currentWidth === 'half'
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
-                      : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                  }`}
-                >
-                  1/2
-                </button>
-                <button
-                  onClick={() => handleWidthChange('third')}
-                  className={`px-3 py-2 text-xs rounded transition-all ${
-                    currentWidth === 'third'
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
-                      : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                  }`}
-                >
-                  1/3
-                </button>
-                <button
-                  onClick={() => handleWidthChange('quarter')}
-                  className={`px-3 py-2 text-xs rounded transition-all ${
-                    currentWidth === 'quarter'
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
-                      : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                  }`}
-                >
-                  1/4
-                </button>
-              </div>
-            </div>
-
+          <div className="absolute right-0 top-full mt-2 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl z-50 p-3 min-w-[140px]">
             {/* Alignment Options */}
             <div>
-              <div className="text-xs text-gray-400 mb-2 font-semibold">Alignment</div>
+              <div className="text-xs text-gray-400 mb-2 font-semibold">Position</div>
               <div className="flex gap-2">
                 <button
                   onClick={() => handleAlignmentChange('left')}
@@ -141,6 +83,13 @@ const BlockLayoutControls: React.FC<BlockLayoutControlsProps> = ({ block }) => {
                 >
                   <AlignRight className="w-4 h-4" />
                 </button>
+              </div>
+            </div>
+            
+            {/* Tip */}
+            <div className="mt-3 pt-3 border-t border-[#30363d]">
+              <div className="text-xs text-gray-500">
+                💡 Hover edges to resize
               </div>
             </div>
           </div>
