@@ -1,4 +1,10 @@
 import type { AIConfig } from '@/types';
+import {
+  POMODORO_TIMER,
+  CALCULATOR,
+  detectArtifactType,
+  customizeTimer
+} from '@/utils/artifactTemplates';
 
 interface ArtifactResult {
   title?: string;
@@ -26,25 +32,45 @@ class AIService {
   }
 
   async generateArtifact(prompt: string): Promise<ArtifactResult> {
-    // Mock implementation - replace with actual AI API call
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          title: 'AI Generated Artifact',
-          html: `<div style="padding: 20px;">
-            <h2>Generated from: "${prompt}"</h2>
-            <p>This is a mock AI-generated artifact. Replace with actual AI implementation.</p>
+    // Template-based generation (will be enhanced with real AI later)
+    const artifactType = detectArtifactType(prompt);
+
+    // Extract duration for timers
+    const minutesMatch = prompt.match(/(\d+)\s*min/i);
+    const customMinutes = minutesMatch ? parseInt(minutesMatch[1]) : null;
+
+    let result: ArtifactResult;
+
+    switch (artifactType) {
+      case 'timer':
+        result = customMinutes ? customizeTimer(customMinutes) : POMODORO_TIMER;
+        break;
+      case 'calculator':
+        result = CALCULATOR;
+        break;
+      default:
+        result = {
+          title: 'Custom Artifact',
+          html: `<div style="padding: 40px; text-align: center;">
+            <h2>${prompt}</h2>
+            <p>Template-based artifact. Full AI generation coming soon!</p>
           </div>`,
-          css: `body { 
-            font-family: Arial, sans-serif; 
-            background: #161b22; 
-            color: #e6edf3; 
-            min-height: 100vh; 
-            padding: 20px;
+          css: `body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
           }`,
-          javascript: `console.log('AI Generated Artifact loaded');`
-        });
-      }, 1000);
+          javascript: `console.log('Artifact loaded: ${prompt}');`
+        };
+    }
+
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(result), 500);
     });
   }
 
