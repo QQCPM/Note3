@@ -17,6 +17,28 @@ interface RichTextRendererProps {
  * - Inline math: $formula$
  * - Block math: $$formula$$
  */
+/**
+ * Preprocess LaTeX content to ensure proper spacing and formatting
+ * Fixes issues where block math ($$) is immediately followed by inline math ($)
+ */
+const preprocessLatex = (content: string): string => {
+  let processed = content;
+
+  // Ensure block math has proper line breaks before and after
+  // Pattern: $$....$$ should be on its own line(s)
+  processed = processed.replace(/([^\n])((\$\$[\s\S]+?\$\$))/g, '$1\n\n$2');
+  processed = processed.replace(/((\$\$[\s\S]+?\$\$))([^\n])/g, '$1\n\n$3');
+
+  // Fix the specific issue: $$...$$$ (block math followed immediately by $)
+  // This happens when: $$equation$$$variable$: description
+  processed = processed.replace(/(\$\$[\s\S]+?\$\$)(\$)/g, '$1\n\n$2');
+
+  // Ensure proper spacing after closing $$
+  processed = processed.replace(/\$\$\n([^\n])/g, '$$\n\n$1');
+
+  return processed;
+};
+
 const RichTextRenderer: React.FC<RichTextRendererProps> = ({
   content,
   enableMarkdown = true
@@ -29,6 +51,9 @@ const RichTextRenderer: React.FC<RichTextRendererProps> = ({
       </div>
     );
   }
+
+  // Preprocess content to fix LaTeX spacing issues
+  const processedContent = preprocessLatex(content);
 
   return (
     <div className="rich-text-content markdown-content">
@@ -135,7 +160,7 @@ const RichTextRenderer: React.FC<RichTextRendererProps> = ({
           hr: () => <hr className="my-4 border-gray-700" />,
         }}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
