@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { updateBlock, createBlock } from '@/utils/tauri';
-import { useBlocksStore, useNotesStore } from '@/store';
+import { useBlocksStore, useNotesStore, useAIStore } from '@/store';
 import type { Block, TextBlockData } from '@/types';
 import SlashCommandMenu from '@/components/Canvas/SlashCommandMenu';
 import AIPromptModal from '@/components/Canvas/AIPromptModal';
+import AIEditPanel from '@/components/AI/AIEditPanel';
 import RichTextRenderer from './RichTextRenderer';
 import { nanoid } from 'nanoid';
+import { Sparkles } from 'lucide-react';
 
 interface TextBlockProps {
   block: Block;
@@ -23,8 +25,12 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
   const [slashQuery, setSlashQuery] = useState('');
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiModalType, setAIModalType] = useState<'artifact' | 'database' | 'web' | null>(null);
+  const [showAIEditPanel, setShowAIEditPanel] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
+
+  const { enterEditMode } = useAIStore();
 
   // Check if content has LaTeX formulas
   const hasLatex = content.includes('$');
@@ -131,6 +137,15 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
 
   const handleViewClick = () => {
     setIsEditing(true);
+  };
+
+  const handleOpenAIEdit = () => {
+    enterEditMode(block.id);
+    setShowAIEditPanel(true);
+  };
+
+  const handleCloseAIEdit = () => {
+    setShowAIEditPanel(false);
   };
 
   const handleSelectCommand = async (command: any) => {
@@ -369,7 +384,23 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
 
   return (
     <>
-      <div className="canvas-block text-block">
+      <div
+        className="canvas-block text-block relative group"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {/* AI Edit Button - Appears on hover */}
+        {isHovered && !isEditing && (
+          <button
+            onClick={handleOpenAIEdit}
+            className="absolute -right-2 -top-2 z-10 flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-xs font-medium rounded-full shadow-lg transition-all opacity-0 group-hover:opacity-100"
+            title="Ask AI to Edit"
+          >
+            <Sparkles size={12} />
+            <span>AI Edit</span>
+          </button>
+        )}
+
         {isEditing ? (
           <textarea
             ref={textareaRef}
@@ -419,6 +450,11 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
         }}
         onGenerate={handleAIGenerate}
       />
+
+      {/* AI Edit Panel */}
+      {showAIEditPanel && (
+        <AIEditPanel blockId={block.id} onClose={handleCloseAIEdit} />
+      )}
     </>
   );
 };
