@@ -1,5 +1,5 @@
-use crate::ai::{AIConfig, AIManager, Message, Tool, ToolCall};
-use tauri::State;
+use crate::ai::{AIConfig, AIManager, Message, Tool, ToolCall, PersistedConfig};
+use tauri::{State, AppHandle};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -42,6 +42,66 @@ pub async fn ai_get_config(state: State<'_, AIState>) -> Result<Option<AIConfig>
     let manager_lock = state.manager.read().await;
 
     Ok(manager_lock.as_ref().map(|m| m.config.clone()))
+}
+
+/// Load persisted configuration from disk
+#[tauri::command]
+pub async fn ai_load_persisted_config(app_handle: AppHandle) -> Result<PersistedConfig, String> {
+    use tauri::Manager;
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+
+    PersistedConfig::load(&app_data_dir)
+}
+
+/// Save configuration to disk
+#[tauri::command]
+pub async fn ai_save_config(
+    config: PersistedConfig,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    use tauri::Manager;
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+
+    config.save(&app_data_dir)
+}
+
+/// Update AI configuration and save to disk
+#[tauri::command]
+pub async fn ai_update_and_save_config(
+    config: PersistedConfig,
+    app_handle: AppHandle,
+    state: State<'_, AIState>,
+) -> Result<(), String> {
+    use tauri::Manager;
+    // Save to disk first
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+
+    config.save(&app_data_dir)?;
+
+    // Convert to AIConfig and reinitialize
+    let ai_config = config.to_ai_config();
+    let manager = AIManager::new(ai_config);
+
+    // Health check
+    let health = manager.health_check().await?;
+
+    if !health.embedding_service {
+        eprintln!("Warning: Embedding service is not available after config update.");
+    }
+
+    // Update the running manager
+    *state.manager.write().await = Some(manager);
+
+    Ok(())
 }
 
 /// Check health status of AI services
@@ -382,6 +442,161 @@ pub async fn ai_search_notes(
     }
 
     Ok(search_results)
+}
+
+/// Read a single block's content by block ID
+#[tauri::command]
+pub async fn ai_read_block(
+    block_id: String,
+    db: State<'_, sqlx::SqlitePool>,
+) -> Result<String, String> {
+    // Get block
+    let block: crate::db::Block = sqlx::query_as(
+        "SELECT * FROM blocks WHERE id = ?"
+    )
+    .bind(&block_id)
+    .fetch_one(db.inner())
+    .await
+    .map_err(|e| format!("Block not found: {}", e))?;
+
+    // Parse block data
+    if let Ok(data) = serde_json::from_str::<serde_json::Value>(&block.data) {
+        match block.block_type.as_str() {
+            "text" => {
+                // Try different possible field names
+                let text_content = data.get("text")
+                    .or_else(|| data.get("content"))
+                    .or_else(|| data.get("value"))
+                    .and_then(|v| v.as_str());
+
+                if let Some(text) = text_content {
+                    return Ok(text.to_string());
+                } else {
+                    return Ok(String::from("[Empty text block]"));
+                }
+            }
+            "heading1" => {
+                let text = data.get("text")
+                    .or_else(|| data.get("content"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("[Empty heading]");
+                return Ok(format!("# {}", text));
+            }
+            "heading2" => {
+                let text = data.get("text")
+                    .or_else(|| data.get("content"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("[Empty heading]");
+                return Ok(format!("## {}", text));
+            }
+            "database" => {
+                // Extract database content with full table data
+                let mut output = String::new();
+
+                if let Some(title) = data.get("title").and_then(|v| v.as_str()) {
+                    output.push_str(&format!("## Database: {}\n\n", title));
+                } else {
+                    output.push_str("## Database Table\n\n");
+                }
+
+                // Extract columns
+                if let Some(columns) = data.get("columns").and_then(|v| v.as_array()) {
+                    let col_names: Vec<String> = columns
+                        .iter()
+                        .filter_map(|col| {
+                            col.get("name").and_then(|n| n.as_str()).map(String::from)
+                        })
+                        .collect();
+
+                    if !col_names.is_empty() {
+                        // Create markdown table header
+                        output.push_str("| ");
+                        output.push_str(&col_names.join(" | "));
+                        output.push_str(" |\n");
+                        output.push_str("| ");
+                        output.push_str(&vec!["---"; col_names.len()].join(" | "));
+                        output.push_str(" |\n");
+
+                        // Extract rows
+                        if let Some(rows) = data.get("rows").and_then(|v| v.as_array()) {
+                            for row in rows {
+                                if let Some(row_obj) = row.as_object() {
+                                    output.push_str("| ");
+                                    let row_values: Vec<String> = col_names
+                                        .iter()
+                                        .map(|col_name| {
+                                            row_obj
+                                                .get(col_name)
+                                                .and_then(|v| {
+                                                    if v.is_string() {
+                                                        v.as_str().map(String::from)
+                                                    } else {
+                                                        Some(v.to_string())
+                                                    }
+                                                })
+                                                .unwrap_or_else(|| "-".to_string())
+                                        })
+                                        .collect();
+                                    output.push_str(&row_values.join(" | "));
+                                    output.push_str(" |\n");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return Ok(output);
+            }
+            "artifact" => {
+                // Extract artifact content with code
+                let mut output = String::new();
+
+                if let Some(title) = data.get("title").and_then(|v| v.as_str()) {
+                    output.push_str(&format!("## Code Artifact: {}\n\n", title));
+                } else {
+                    output.push_str("## Code Artifact\n\n");
+                }
+
+                // Extract HTML
+                if let Some(html) = data.get("html").and_then(|v| v.as_str()) {
+                    if !html.is_empty() {
+                        output.push_str("### HTML:\n```html\n");
+                        output.push_str(html);
+                        output.push_str("\n```\n\n");
+                    }
+                }
+
+                // Extract CSS
+                if let Some(css) = data.get("css").and_then(|v| v.as_str()) {
+                    if !css.is_empty() {
+                        output.push_str("### CSS:\n```css\n");
+                        output.push_str(css);
+                        output.push_str("\n```\n\n");
+                    }
+                }
+
+                // Extract JavaScript
+                if let Some(js) = data.get("javascript").and_then(|v| v.as_str()) {
+                    if !js.is_empty() {
+                        output.push_str("### JavaScript:\n```javascript\n");
+                        output.push_str(js);
+                        output.push_str("\n```\n\n");
+                    }
+                }
+
+                if output.ends_with("## Code Artifact\n\n") {
+                    output.push_str("[Empty artifact]\n");
+                }
+
+                return Ok(output);
+            }
+            _ => {
+                return Ok(format!("[Unknown block type: {}]", block.block_type));
+            }
+        }
+    }
+
+    Err(String::from("Failed to parse block data"))
 }
 
 /// Get note context (note + all blocks) formatted for AI

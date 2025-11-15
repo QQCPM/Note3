@@ -50,6 +50,9 @@ fn main() {
             // AI commands
             ai_initialize,
             ai_get_config,
+            ai_load_persisted_config,
+            ai_save_config,
+            ai_update_and_save_config,
             ai_health_check,
             ai_generate_embedding,
             ai_generate_embeddings_batch,
@@ -60,6 +63,7 @@ fn main() {
             ai_rerank,
             ai_store_note_embedding,
             ai_search_notes,
+            ai_read_block,
             ai_get_note_context,
             ai_chat_with_note_context,
         ])

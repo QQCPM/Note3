@@ -1,13 +1,44 @@
 import React, { useState } from 'react';
-import { useNotesStore } from '@/store';
+import { useNotesStore, useBlocksStore } from '@/store';
 import { useAIStore } from '@/store/aiStore';
-import { tauriAI } from '@/services/tauriAI';
+import { streamAIEditChat } from '@/services/aiEditService';
+import { createBlock } from '@/utils/tauri';
 
 const AIInput: React.FC = () => {
   const [message, setMessage] = useState('');
   const { activeNoteId, getNoteById } = useNotesStore();
-  const { addMessage, setLoading } = useAIStore();
+  const { blocks, addBlock } = useBlocksStore();
+  const { addMessage } = useAIStore();
   const activeNote = activeNoteId ? getNoteById(activeNoteId) : null;
+
+  // Get or create target block for Agent mode
+  const getTargetBlock = async () => {
+    if (!activeNoteId) return null;
+
+    // Find first text block in active note
+    const noteBlocks = blocks.filter((b) => b.note_id === activeNoteId);
+    const textBlocks = noteBlocks.filter((b) => b.type === 'text');
+
+    if (textBlocks.length > 0) {
+      // Return last text block (most recent)
+      return textBlocks[textBlocks.length - 1];
+    }
+
+    // No text blocks - create one
+    try {
+      const newBlock = await createBlock({
+        note_id: activeNoteId,
+        type: 'text',
+        position: noteBlocks.length,
+        data: { type: 'text', content: '' },
+      });
+      addBlock(newBlock);
+      return newBlock;
+    } catch (error) {
+      console.error('Failed to create target block:', error);
+      return null;
+    }
+  };
 
   const handleSend = async () => {
     if (!message.trim()) return;
@@ -15,50 +46,47 @@ const AIInput: React.FC = () => {
     const userMessage = message.trim();
     setMessage('');
 
-    // Add user message to conversation
-    addMessage({
-      role: 'user',
-      content: userMessage,
-      noteId: activeNoteId || undefined,
-    });
-
-    try {
-      setLoading(true);
-
-      let response: string;
-
-      // If there's an active note, chat with note context (RAG)
-      if (activeNoteId) {
-        response = await tauriAI.chatWithNoteContext(activeNoteId, userMessage);
-      } else {
-        // Otherwise, just do a general chat
-        response = await tauriAI.chat([
-          { role: 'user', content: userMessage },
-        ]);
-      }
-
-      // Add AI response to conversation
-      addMessage({
-        role: 'assistant',
-        content: response,
-        noteId: activeNoteId || undefined,
-      });
-    } catch (error) {
-      console.error('AI chat failed:', error);
-      addMessage({
-        role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to get AI response'}`,
-        noteId: activeNoteId || undefined,
-      });
-    } finally {
-      setLoading(false);
-    }
+    // Always use Agent mode: AI editing with diffs
+    await handleAgentMode(userMessage);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+  const handleAgentMode = async (userMessage: string) => {
+    // Get or create target block
+    const targetBlock = await getTargetBlock();
+
+    if (!targetBlock) {
+      addMessage({
+        role: 'assistant',
+        content: 'Error: No active note. Please select or create a note first.',
+      });
+      return;
+    }
+
+    // Use AI editing service
+    await streamAIEditChat({
+      blockId: targetBlock.id,
+      userMessage,
+      onComplete: () => {
+        console.log('✅ Agent mode edit complete');
+      },
+      onError: (error) => {
+        console.error('❌ Agent mode error:', error);
+        addMessage({
+          role: 'assistant',
+          content: `Error: ${error.message}`,
+        });
+      },
+    });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter alone: submit
+    // Shift+Enter: new line (default textarea behavior)
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Prevent default new line
       handleSend();
     }
+    // Shift+Enter will naturally create a new line (no special handling needed)
   };
 
   return (
@@ -74,7 +102,7 @@ const AIInput: React.FC = () => {
       {/* Text input */}
       <textarea
         className="input-field"
-        placeholder="Ask me anything about your canvas..."
+        placeholder="what's on ur mind"
         rows={2}
         value={message}
         onChange={(e) => setMessage(e.target.value)}
@@ -83,14 +111,8 @@ const AIInput: React.FC = () => {
 
       {/* Action row */}
       <div className="input-actions">
-        <button className="mode-selector-text">
-          <span>Agent Mode</span>
-          <span className="dropdown-arrow" style={{ color: '#6e7681' }}>▾</span>
-        </button>
         <div className="action-buttons">
-          <button className="action-btn" title="Lock context">◉</button>
-          <button className="action-btn" title="Search web">⚡</button>
-          <button className="send-btn" title="Send message (Cmd+Enter)" onClick={handleSend}>
+          <button className="send-btn" title="Send message (Enter)" onClick={handleSend}>
             ↗
           </button>
         </div>

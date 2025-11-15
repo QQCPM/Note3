@@ -39,6 +39,13 @@ export interface OpenAIConfig {
   max_tokens?: number;
 }
 
+export interface PersistedConfig {
+  openai_api_key: string;
+  openai_model: string;
+  temperature: number;
+  max_tokens?: number;
+}
+
 export interface HealthStatus {
   embedding_service: boolean;
   reranker_service: boolean;
@@ -127,6 +134,45 @@ class TauriAIService {
     } catch (error) {
       console.error('Failed to get AI config:', error);
       return null;
+    }
+  }
+
+  /**
+   * Load persisted configuration from disk
+   */
+  async loadPersistedConfig(): Promise<PersistedConfig | null> {
+    try {
+      return await invoke('ai_load_persisted_config');
+    } catch (error) {
+      console.log('No persisted config found (will use .env defaults)');
+      return null;
+    }
+  }
+
+  /**
+   * Save configuration to disk
+   */
+  async saveConfig(config: PersistedConfig): Promise<void> {
+    try {
+      await invoke('ai_save_config', { config });
+      console.log('✅ Config saved successfully');
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update AI configuration and save to disk
+   */
+  async updateAndSaveConfig(config: PersistedConfig): Promise<void> {
+    try {
+      await invoke('ai_update_and_save_config', { config });
+      this.initialized = true;
+      console.log('✅ Config updated and saved successfully');
+    } catch (error) {
+      console.error('Failed to update and save config:', error);
+      throw error;
     }
   }
 
@@ -289,6 +335,18 @@ class TauriAIService {
   }
 
   /**
+   * Read a single block's content
+   */
+  async readBlock(blockId: string): Promise<string> {
+    try {
+      return await invoke('ai_read_block', { blockId });
+    } catch (error) {
+      console.error('Failed to read block:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get note context (note + all blocks) formatted for AI
    */
   async getNoteContext(noteId: string): Promise<string> {
@@ -345,7 +403,7 @@ export function createDefaultAIConfig(openaiKey: string = ''): AIConfig {
       api_key: openaiKey,
       model: 'gpt-4o',
       temperature: 0.7,
-      max_tokens: 4096,
+      max_tokens: 8192, // Increased for longer responses
     },
   };
 }
@@ -368,14 +426,14 @@ export function createMacM2UltraConfig(openaiKey: string): AIConfig {
     local_code_generation: {
       endpoint: 'http://localhost:8080',
       model: 'qwen3-coder-30b',
-      max_tokens: 4096,
+      max_tokens: 8192, // Increased for longer responses
       temperature: 0.7,
     },
     agent: {
       api_key: openaiKey,
       model: 'gpt-4o',
       temperature: 0.7,
-      max_tokens: 4096,
+      max_tokens: 8192, // Increased for longer responses
     },
   };
 }

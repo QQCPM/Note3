@@ -40,9 +40,22 @@ function App() {
     // Initialize AI system
     const initializeAI = async () => {
       try {
-        // TODO: Get OpenAI API key from settings/env
-        // For now, use placeholder - user should set this in settings
-        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
+        let openaiKey = '';
+
+        // Try to load persisted config first
+        const persistedConfig = await tauriAI.loadPersistedConfig();
+
+        if (persistedConfig && persistedConfig.openai_api_key) {
+          console.log('📂 Loading persisted AI configuration');
+          openaiKey = persistedConfig.openai_api_key;
+        } else {
+          console.log('📝 No persisted config found, using .env defaults');
+          openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
+        }
+
+        if (!openaiKey) {
+          console.warn('⚠️ No OpenAI API key found. Please set it in Settings.');
+        }
 
         // Create Mac M2 Ultra config (all 3 local models)
         const config = createMacM2UltraConfig(openaiKey);

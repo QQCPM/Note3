@@ -865,3 +865,51 @@ body {
     color: #ffffff;
     border-bottom-color: #58a6ff;
 }
+/* Markdown + LaTeX Rendering Styles */
+.markdown-content {
+  line-height: 1.6;
+}
+
+/* KaTeX Math Display Styles */
+.markdown-content .katex-display {
+  margin: 1.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-content .katex {
+  font-size: 1.1em;
+}
+
+/* Inline math should flow with text */
+.markdown-content p .katex {
+  display: inline;
+  margin: 0 0.2em;
+}
+
+/* Block math should be centered and have proper spacing */
+.markdown-content .katex-display > .katex {
+  display: block;
+  text-align: center;
+}
+
+/* Ensure proper spacing after block math */
+.markdown-content .katex-display + p,
+.markdown-content .katex-display + ul,
+.markdown-content .katex-display + ol {
+  margin-top: 0.5em;
+}
+
+/* Ensure list items after inline math look good */
+.markdown-content li .katex {
+  margin: 0 0.15em;
+}
+
+/* Headers with math formulas */
+.markdown-content h1 .katex,
+.markdown-content h2 .katex,
+.markdown-content h3 .katex,
+.markdown-content h4 .katex {
+  font-size: inherit;
+  margin: 0 0.2em;
+}

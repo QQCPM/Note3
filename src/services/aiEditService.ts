@@ -10,8 +10,73 @@ import { tauriAI, type Tool } from './tauriAI';
  * Integrates with tauriAI for real AI backend, with mock implementation for development.
  */
 
+/**
+ * Trim conversation history to prevent context window overflow
+ * Keeps system prompt + recent messages within character limit
+ */
+function trimConversationHistory(history: any[], maxChars: number): any[] {
+  if (history.length === 0) return history;
+
+  const systemPrompt = history[0]?.role === 'system' ? history[0] : null;
+  const messages = systemPrompt ? history.slice(1) : history;
+
+  let totalChars = systemPrompt ? systemPrompt.content.length : 0;
+  const trimmedMessages: any[] = [];
+
+  // Add messages from most recent, working backwards
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    const msgLength = JSON.stringify(msg).length;
+
+    if (totalChars + msgLength > maxChars) {
+      console.log(`⚠️ Conversation history trimmed: kept ${trimmedMessages.length} of ${messages.length} messages`);
+      break;
+    }
+
+    trimmedMessages.unshift(msg);
+    totalChars += msgLength;
+  }
+
+  // Always include system prompt at the beginning
+  return systemPrompt ? [systemPrompt, ...trimmedMessages] : trimmedMessages;
+}
+
 // Tool definitions for AI function calling
 export const AI_EDIT_TOOLS: Tool[] = [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'read_block',
+      description: 'Read the content of ANY block by its ID. Use this to read other blocks (not the current one shown in context).',
+      parameters: {
+        type: 'object',
+        properties: {
+          block_id: {
+            type: 'string',
+            description: 'The ID of the block to read',
+          },
+        },
+        required: ['block_id'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'read_note',
+      description: 'Read the ENTIRE note with ALL blocks (text, headings, databases, artifacts, etc). Use this when you need to understand the full context of a note.',
+      parameters: {
+        type: 'object',
+        properties: {
+          note_id: {
+            type: 'string',
+            description: 'The ID of the note to read',
+          },
+        },
+        required: ['note_id'],
+      },
+    },
+  },
   {
     type: 'function' as const,
     function: {
@@ -74,6 +139,7 @@ export async function streamAIEditChat(options: StreamChatOptions): Promise<void
   const aiStore = useAIStore.getState();
 
   try {
+    console.log('🚀 streamAIEditChat called with:', userMessage);
     aiStore.setLoading(true);
     aiStore.setCurrentRequest(userMessage);
 
@@ -85,18 +151,22 @@ export async function streamAIEditChat(options: StreamChatOptions): Promise<void
 
     // Check if tauriAI is initialized
     const useTauriAI = tauriAI.isInitialized();
+    console.log('🔍 TauriAI initialized:', useTauriAI);
 
     if (useTauriAI) {
       // Use real tauriAI service
+      console.log('✅ Using real TauriAI backend');
       await streamWithTauriAI(options);
     } else {
       // Use mock implementation for development
+      console.log('⚠️ Using mock implementation');
       await streamWithMock(options);
     }
 
+    console.log('✅ Stream completed successfully');
     onComplete?.();
   } catch (error) {
-    console.error('AI edit stream error:', error);
+    console.error('❌ AI edit stream error:', error);
     onError?.(error as Error);
     aiStore.addMessage({
       role: 'assistant',
@@ -116,49 +186,212 @@ async function streamWithTauriAI(options: StreamChatOptions): Promise<void> {
   const aiStore = useAIStore.getState();
   const blocksStore = useBlocksStore.getState();
 
+  console.log('🎯 streamWithTauriAI: blockId =', blockId);
   onStream?.('Using AI backend...\n');
 
-  // TODO: Implement streaming chat with tools
-  // For now, use chatWithTools method
+  // Get current block and its note_id
+  const currentBlock = blocksStore.blocks.find((b) => b.id === blockId);
+  const noteId = currentBlock?.note_id || 'unknown';
+
+  // Get current block content first
+  let currentBlockContent = '[Empty block]';
   try {
-    const result = await tauriAI.chatWithTools(
-      [{ role: 'user', content: userMessage }],
-      AI_EDIT_TOOLS
-    );
+    console.log('📖 Reading current block content:', blockId);
+    currentBlockContent = await tauriAI.readBlock(blockId);
+    console.log('📄 Current block content:', currentBlockContent);
+  } catch (error) {
+    console.error('⚠️ Failed to read current block:', error);
+    // Try to get from store as fallback
+    if (currentBlock && currentBlock.data) {
+      currentBlockContent = (currentBlock.data as any).content || (currentBlock.data as any).text || '[Could not read block content]';
+    }
+  }
 
-    aiStore.addMessage({
-      role: 'assistant',
-      content: result.content,
-      toolCalls: result.tool_calls?.map((tc) => ({
-        id: tc.id,
-        name: tc.name,
-        arguments: tc.arguments,
-      })),
-    });
+  // System prompt that instructs AI to use tools
+  const systemPrompt = `You are an AI agent that helps users edit their notes.
 
-    // Handle tool calls
-    if (result.tool_calls && result.tool_calls.length > 0) {
-      for (const toolCall of result.tool_calls) {
-        onToolCall?.(toolCall.name, toolCall.arguments);
+CURRENT CONTEXT:
+- Current Block ID: ${blockId}
+- Current Note ID: ${noteId}
 
-        if (toolCall.name === 'edit_block') {
-          const block = blocksStore.blocks.find((b) => b.id === blockId);
-          if (block) {
-            aiStore.addPendingEdit({
-              blockId,
-              originalContent: (block.data as any).content || '',
-              proposedContent: toolCall.arguments.new_content,
-              reason: toolCall.arguments.reason || 'AI-generated content',
+CURRENT BLOCK CONTENT:
+\`\`\`
+${currentBlockContent}
+\`\`\`
+
+Available tools:
+- read_block: Read content of ANY block by its block_id (for reading OTHER blocks)
+- read_note: Read the ENTIRE note with ALL blocks (use note_id: ${noteId} to read the full note this block belongs to)
+- edit_block: Propose content changes to a block
+- search_web: Search for current information when needed
+
+IMPORTANT Instructions:
+1. The CURRENT BLOCK CONTENT is shown above - this is what the user is working with
+2. When user asks "what's my note about", you can:
+   - Refer to the CURRENT BLOCK CONTENT shown above, OR
+   - Use read_note with note_id: ${noteId} to see the FULL note with ALL blocks (recommended for complete context)
+3. When user asks to "add more tips" or "improve content":
+   - Analyze the CURRENT BLOCK CONTENT shown above
+   - Use edit_block with block_id: ${blockId} to propose new content
+4. Use read_block if you need to read OTHER specific blocks
+5. Use search_web for current events or research
+6. For edit_block, ALWAYS provide the complete new content (not just additions) and a clear reason
+
+The current block can be: text, heading, database table, or code artifact. All types are readable.`;
+
+  // Multi-turn conversation with tools
+  try {
+    // Initialize conversation history
+    const conversationHistory: any[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage }
+    ];
+
+    let maxTurns = 5; // Prevent infinite loops
+    let currentTurn = 0;
+
+    while (currentTurn < maxTurns) {
+      currentTurn++;
+      console.log(`📞 Turn ${currentTurn}: Calling tauriAI.chatWithTools...`);
+
+      // Trim conversation history if it gets too long
+      // Conservative estimate: 1 char ≈ 0.25 tokens, limit to ~50K tokens
+      const trimmedHistory = trimConversationHistory(conversationHistory, 200000); // 200K chars ≈ 50K tokens
+
+      const result = await tauriAI.chatWithTools(trimmedHistory, AI_EDIT_TOOLS);
+
+      console.log('📥 Got result:', result);
+      console.log('🔧 Tool calls:', result.tool_calls);
+
+      // Add assistant's response to conversation history
+      conversationHistory.push({
+        role: 'assistant',
+        content: result.content,
+      });
+
+      // Show assistant message to user
+      aiStore.addMessage({
+        role: 'assistant',
+        content: result.content,
+        toolCalls: result.tool_calls?.map((tc) => ({
+          id: tc.id,
+          name: tc.name,
+          arguments: tc.arguments,
+        })),
+      });
+
+      // Handle tool calls
+      if (result.tool_calls && result.tool_calls.length > 0) {
+        console.log(`🛠️ Processing ${result.tool_calls.length} tool calls`);
+
+        let shouldContinue = false;
+
+        for (const toolCall of result.tool_calls) {
+          // OpenAI returns: { function: { name: "...", arguments: "..." } }
+          const functionName = (toolCall as any).function?.name || toolCall.name;
+          const functionArgs = (toolCall as any).function?.arguments || toolCall.arguments;
+
+          // Parse arguments if it's a JSON string
+          const parsedArgs = typeof functionArgs === 'string'
+            ? JSON.parse(functionArgs)
+            : functionArgs;
+
+          console.log(`🔨 Tool call: ${functionName}`, parsedArgs);
+          onToolCall?.(functionName, parsedArgs);
+
+          if (functionName === 'read_block') {
+            console.log('📖 Reading block:', parsedArgs.block_id);
+            try {
+              const blockContent = await tauriAI.readBlock(parsedArgs.block_id);
+              console.log('📄 Block content:', blockContent);
+
+              // Add tool result to conversation
+              conversationHistory.push({
+                role: 'user',
+                content: `[Block ${parsedArgs.block_id} content]:\n${blockContent}`,
+              });
+
+              shouldContinue = true;
+              onStream?.(`\n📖 Read block content (${blockContent.length} chars)\n`);
+            } catch (error) {
+              console.error('❌ Failed to read block:', error);
+              conversationHistory.push({
+                role: 'user',
+                content: `[Error reading block]: ${error}`,
+              });
+            }
+          } else if (functionName === 'read_note') {
+            console.log('📚 Reading entire note:', parsedArgs.note_id);
+            try {
+              const noteContent = await tauriAI.getNoteContext(parsedArgs.note_id);
+              console.log('📝 Note content:', noteContent);
+
+              // Add tool result to conversation
+              conversationHistory.push({
+                role: 'user',
+                content: `[Full note content]:\n${noteContent}`,
+              });
+
+              shouldContinue = true;
+              onStream?.(`\n📚 Read full note (${noteContent.length} chars)\n`);
+            } catch (error) {
+              console.error('❌ Failed to read note:', error);
+              conversationHistory.push({
+                role: 'user',
+                content: `[Error reading note]: ${error}`,
+              });
+            }
+          } else if (functionName === 'edit_block') {
+            const block = blocksStore.blocks.find((b) => b.id === blockId);
+            console.log('📝 Found block:', block);
+            if (block) {
+              console.log('✏️ Adding pending edit');
+              aiStore.addPendingEdit({
+                blockId,
+                originalContent: (block.data as any).content || '',
+                proposedContent: parsedArgs.new_content,
+                reason: parsedArgs.reason || 'AI-generated content',
+              });
+            } else {
+              console.error('❌ Block not found:', blockId);
+            }
+          } else if (functionName === 'search_web') {
+            const results = await searchWeb(parsedArgs.query);
+            onStream?.(`\n✅ Found ${results.length} results\n`);
+
+            // Add search results to conversation
+            const searchSummary = results.slice(0, 3).map(r =>
+              `- ${r.title}: ${r.snippet}`
+            ).join('\n');
+
+            conversationHistory.push({
+              role: 'user',
+              content: `[Search results for "${parsedArgs.query}"]: \n${searchSummary}`,
             });
+
+            shouldContinue = true;
           }
-        } else if (toolCall.name === 'search_web') {
-          const results = await searchWeb(toolCall.arguments.query);
-          onStream?.(`\n✅ Found ${results.length} results\n`);
         }
+
+        // If we executed a tool that needs follow-up, continue the conversation
+        if (shouldContinue) {
+          continue;
+        } else {
+          // If edit_block was called, we're done
+          break;
+        }
+      } else {
+        // No tool calls, we're done
+        console.log('✅ No more tool calls, conversation complete');
+        break;
       }
     }
+
+    if (currentTurn >= maxTurns) {
+      console.warn('⚠️ Max turns reached, ending conversation');
+    }
   } catch (error) {
-    console.error('TauriAI error:', error);
+    console.error('❌ TauriAI error:', error);
     throw error;
   }
 }
@@ -250,7 +483,8 @@ async function streamWithMock(options: StreamChatOptions): Promise<void> {
   } else if (
     lowerMessage.includes('add') ||
     lowerMessage.includes('write') ||
-    lowerMessage.includes('create')
+    lowerMessage.includes('create') ||
+    lowerMessage.includes('make')
   ) {
     // Direct edit request
     const content = generateContentFromPrompt(userMessage);

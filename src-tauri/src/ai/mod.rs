@@ -1,10 +1,12 @@
 pub mod embedding;
 pub mod openai;
 pub mod local;
+pub mod config_persistence;
 
 pub use embedding::{EmbeddingConfig, LocalEmbeddingService};
 pub use openai::{OpenAIConfig, OpenAIService, Message, Tool, ToolCall};
 pub use local::{LocalModelConfig, LocalModelService};
+pub use config_persistence::PersistedConfig;
 
 use serde::{Deserialize, Serialize};
 
