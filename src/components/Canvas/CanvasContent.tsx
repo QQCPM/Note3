@@ -158,8 +158,6 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
     })
   );
 
-  if (!note) return null;
-
   // Auto-create first text block if note is empty
   useEffect(() => {
     if (note && blocks.length === 0 && !creatingInitialBlock.current) {
@@ -181,6 +179,9 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
         });
     }
   }, [note?.id, blocks.length, addBlock]);
+
+  // Early return AFTER all hooks
+  if (!note) return null;
 
   const handleDragStart = (_event: DragStartEvent) => {
     // Could track active drag state here if needed

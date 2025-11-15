@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNotesStore, useUIStore } from '@/store';
 import { getAllNotes } from '@/utils/tauri';
 import Sidebar from '@/components/Sidebar/Sidebar';
@@ -7,6 +7,7 @@ import Canvas from '@/components/Canvas/Canvas';
 import AISidebar from '@/components/AISidebar/AISidebar';
 import ContextMenu from '@/components/ContextMenu/ContextMenu';
 import { ChevronLeft } from 'lucide-react';
+import { tauriAI, createMacM2UltraConfig } from '@/services/tauriAI';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -22,6 +23,8 @@ const queryClient = new QueryClient({
 function App() {
   const { setNotes } = useNotesStore();
   const { aiSidebarCollapsed, toggleAISidebar } = useUIStore();
+  const [aiInitialized, setAiInitialized] = useState(false);
+  const [aiHealthy, setAiHealthy] = useState(false);
 
   useEffect(() => {
     // Load notes on mount
@@ -34,12 +37,67 @@ function App() {
       }
     };
 
+    // Initialize AI system
+    const initializeAI = async () => {
+      try {
+        // TODO: Get OpenAI API key from settings/env
+        // For now, use placeholder - user should set this in settings
+        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
+
+        // Create Mac M2 Ultra config (all 3 local models)
+        const config = createMacM2UltraConfig(openaiKey);
+
+        console.log('🚀 Initializing AI system with config:', config);
+        await tauriAI.initialize(config);
+        setAiInitialized(true);
+        console.log('✅ AI system initialized successfully');
+
+        // Check health of all services
+        const health = await tauriAI.healthCheck();
+        console.log('🏥 AI Health Check:', health);
+
+        const allHealthy = health.embedding_service &&
+                          health.local_code_service &&
+                          health.reranker_service;
+        setAiHealthy(allHealthy);
+
+        if (!allHealthy) {
+          console.warn('⚠️ Some AI services are not healthy:', health);
+        }
+      } catch (error) {
+        console.error('❌ Failed to initialize AI:', error);
+        setAiInitialized(false);
+        setAiHealthy(false);
+      }
+    };
+
     loadNotes();
+    initializeAI();
   }, [setNotes]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex h-screen w-full bg-[#0d1117] text-gray-300 antialiased p-2 gap-2">
+        {/* AI Status Indicator - Minimal Green Dot */}
+        <div className="absolute top-4 left-4 z-50">
+          <div
+            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+              aiInitialized && aiHealthy
+                ? 'bg-green-500 shadow-lg shadow-green-500/50'
+                : aiInitialized
+                ? 'bg-yellow-500 shadow-lg shadow-yellow-500/50'
+                : 'bg-gray-600'
+            }`}
+            title={
+              aiInitialized && aiHealthy
+                ? 'AI Ready'
+                : aiInitialized
+                ? 'AI Partial'
+                : 'AI Offline'
+            }
+          />
+        </div>
+
         {/* Left Sidebar - Note Tree */}
         <Sidebar />
 

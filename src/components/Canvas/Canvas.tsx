@@ -39,7 +39,7 @@ const Canvas: React.FC = () => {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="text-6xl mb-4">📝</div>
-            <h2 className="text-xl font-semibold text-white mb-2">Welcome to Weave</h2>
+            <h2 className="text-xl font-semibold text-white mb-2">Welcome</h2>
             <p className="text-text-secondary">
               Select a note from the sidebar or create a new one to get started
             </p>

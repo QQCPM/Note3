@@ -23,8 +23,8 @@ const Sidebar: React.FC = () => {
   return (
     <nav className="w-60 bg-[#010409] flex flex-col flex-shrink-0 rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="p-4 h-16 flex items-center border-b border-[#30363d]">
-        <h1 className="text-lg font-semibold text-white">Weave</h1>
+      <div className="p-4 h-16 flex items-center justify-between border-b border-[#30363d]">
+        <h1 className="text-lg font-semibold text-white">Notes</h1>
       </div>
 
       {/* Note Tree */}

@@ -3,6 +3,7 @@ import { useUIStore } from '@/store';
 import AgentTab from './AgentTab';
 import MCPTab from './MCPTab';
 import SkillsTab from './SkillsTab';
+import SettingsTab from './SettingsTab';
 import AIInput from './AIInput';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 
@@ -94,14 +95,21 @@ const AISidebar: React.FC = () => {
           >
             Skills
           </button>
+          <button
+            className={`tab-button ${aiSidebarTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setAISidebarTab('settings')}
+          >
+            Settings
+          </button>
         </nav>
       </header>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-hidden flex flex-col overflow-y-auto">
         {aiSidebarTab === 'agent' && <AgentTab />}
         {aiSidebarTab === 'mcp' && <MCPTab />}
         {aiSidebarTab === 'skills' && <SkillsTab />}
+        {aiSidebarTab === 'settings' && <SettingsTab />}
       </div>
 
       {/* AI Input */}

@@ -4,9 +4,36 @@ pub mod local;
 
 pub use embedding::{EmbeddingConfig, LocalEmbeddingService};
 pub use openai::{OpenAIConfig, OpenAIService, Message, Tool, ToolCall};
-pub use local::{LocalModelConfig, LocalModelService, ArtifactResult, DatabaseResult};
+pub use local::{LocalModelConfig, LocalModelService};
 
 use serde::{Deserialize, Serialize};
+
+// ============================================================================
+// SHARED TYPES (used by both local and OpenAI services)
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ArtifactResult {
+    pub title: String,
+    pub html: String,
+    pub css: String,
+    pub javascript: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DatabaseResult {
+    pub title: String,
+    pub columns: Vec<DatabaseColumn>,
+    pub rows: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DatabaseColumn {
+    pub name: String,
+    pub r#type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<Vec<String>>,
+}
 
 /// Complete AI configuration for the hybrid system
 #[derive(Debug, Clone, Serialize, Deserialize)]

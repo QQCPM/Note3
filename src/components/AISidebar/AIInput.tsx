@@ -1,16 +1,57 @@
 import React, { useState } from 'react';
 import { useNotesStore } from '@/store';
+import { useAIStore } from '@/store/aiStore';
+import { tauriAI } from '@/services/tauriAI';
 
 const AIInput: React.FC = () => {
   const [message, setMessage] = useState('');
   const { activeNoteId, getNoteById } = useNotesStore();
+  const { addMessage, setLoading } = useAIStore();
   const activeNote = activeNoteId ? getNoteById(activeNoteId) : null;
 
-  const handleSend = () => {
-    if (message.trim()) {
-      console.log('Send message:', message);
-      // TODO: Implement AI message sending
-      setMessage('');
+  const handleSend = async () => {
+    if (!message.trim()) return;
+
+    const userMessage = message.trim();
+    setMessage('');
+
+    // Add user message to conversation
+    addMessage({
+      role: 'user',
+      content: userMessage,
+      noteId: activeNoteId || undefined,
+    });
+
+    try {
+      setLoading(true);
+
+      let response: string;
+
+      // If there's an active note, chat with note context (RAG)
+      if (activeNoteId) {
+        response = await tauriAI.chatWithNoteContext(activeNoteId, userMessage);
+      } else {
+        // Otherwise, just do a general chat
+        response = await tauriAI.chat([
+          { role: 'user', content: userMessage },
+        ]);
+      }
+
+      // Add AI response to conversation
+      addMessage({
+        role: 'assistant',
+        content: response,
+        noteId: activeNoteId || undefined,
+      });
+    } catch (error) {
+      console.error('AI chat failed:', error);
+      addMessage({
+        role: 'assistant',
+        content: `Error: ${error instanceof Error ? error.message : 'Failed to get AI response'}`,
+        noteId: activeNoteId || undefined,
+      });
+    } finally {
+      setLoading(false);
     }
   };
 

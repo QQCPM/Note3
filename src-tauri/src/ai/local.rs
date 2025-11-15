@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
+use super::{ArtifactResult, DatabaseResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalModelConfig {
@@ -248,29 +249,6 @@ Return ONLY the JSON, no explanations."#;
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ArtifactResult {
-    pub title: String,
-    pub html: String,
-    pub css: String,
-    pub javascript: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DatabaseResult {
-    pub title: String,
-    pub columns: Vec<DatabaseColumn>,
-    pub rows: Vec<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DatabaseColumn {
-    pub name: String,
-    pub r#type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub options: Option<Vec<String>>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,7 +268,7 @@ mod tests {
         if let Ok(response) = service.chat(vec![
             Message {
                 role: "user".to_string(),
-                content: "Say 'Hello, Weave!' and nothing else.".to_string(),
+                content: "Say 'Hello!' and nothing else.".to_string(),
             }
         ]).await {
             assert!(response.contains("Hello"));

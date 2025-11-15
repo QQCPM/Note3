@@ -6,7 +6,7 @@ pub async fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Sqlite
     let app_dir = app_handle.path().app_data_dir()?;
     std::fs::create_dir_all(&app_dir)?;
 
-    let db_path = app_dir.join("weave.db");
+    let db_path = app_dir.join("note.db");
     let db_url = format!("sqlite:{}", db_path.display());
 
     // Create database if it doesn't exist

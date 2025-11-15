@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingConfig {
     pub endpoint: String,
     pub model: String,

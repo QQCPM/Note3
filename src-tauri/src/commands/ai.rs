@@ -217,3 +217,401 @@ pub async fn ai_rerank(
 
 // Note: Streaming commands would require a different approach with Tauri events
 // For now, we're using non-streaming commands for simplicity
+
+/// Store embedding for a note
+#[tauri::command]
+pub async fn ai_store_note_embedding(
+    note_id: String,
+    content: String,
+    state: State<'_, AIState>,
+    db: State<'_, sqlx::SqlitePool>,
+) -> Result<(), String> {
+    let manager_lock = state.manager.read().await;
+
+    let manager = manager_lock
+        .as_ref()
+        .ok_or("AI not initialized")?;
+
+    // Generate embedding
+    let embedding = manager.embedding_service.generate(&content).await?;
+
+    // Calculate content hash for cache invalidation
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    let content_hash = format!("{:x}", hasher.finish());
+
+    // Convert Vec<f32> to bytes
+    let embedding_bytes: Vec<u8> = embedding
+        .iter()
+        .flat_map(|f| f.to_le_bytes())
+        .collect();
+
+    // Store in database
+    let id = uuid::Uuid::new_v4().to_string();
+    let model = manager.config.embeddings.model.clone();
+
+    sqlx::query(
+        "INSERT INTO embeddings (id, note_id, content_hash, embedding, model, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(note_id) DO UPDATE SET
+         content_hash = excluded.content_hash,
+         embedding = excluded.embedding,
+         created_at = excluded.created_at"
+    )
+    .bind(&id)
+    .bind(&note_id)
+    .bind(&content_hash)
+    .bind(&embedding_bytes)
+    .bind(&model)
+    .execute(db.inner())
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct SearchResult {
+    pub note_id: String,
+    pub title: String,
+    pub similarity: f32,
+    pub content_preview: String,
+}
+
+/// Search notes semantically using embeddings
+#[tauri::command]
+pub async fn ai_search_notes(
+    query: String,
+    limit: Option<usize>,
+    state: State<'_, AIState>,
+    db: State<'_, sqlx::SqlitePool>,
+) -> Result<Vec<SearchResult>, String> {
+    let manager_lock = state.manager.read().await;
+
+    let manager = manager_lock
+        .as_ref()
+        .ok_or("AI not initialized")?;
+
+    // Generate query embedding
+    let query_embedding = manager.embedding_service.generate(&query).await?;
+
+    // Get all note embeddings from database
+    #[derive(sqlx::FromRow)]
+    struct EmbeddingRow {
+        note_id: String,
+        embedding: Vec<u8>,
+    }
+
+    let rows: Vec<EmbeddingRow> = sqlx::query_as(
+        "SELECT note_id, embedding FROM embeddings"
+    )
+    .fetch_all(db.inner())
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Calculate cosine similarity for each
+    let mut results: Vec<(String, f32)> = Vec::new();
+
+    for row in rows {
+        // Convert bytes back to Vec<f32>
+        let embedding: Vec<f32> = row.embedding
+            .chunks_exact(4)
+            .map(|bytes| f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+            .collect();
+
+        // Calculate cosine similarity
+        let similarity = cosine_similarity(&query_embedding, &embedding);
+        results.push((row.note_id, similarity));
+    }
+
+    // Sort by similarity (descending)
+    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Take top N results
+    let limit = limit.unwrap_or(10);
+    results.truncate(limit);
+
+    // Fetch note details
+    let mut search_results = Vec::new();
+    for (note_id, similarity) in results {
+        // Get note title
+        let note: crate::db::Note = sqlx::query_as(
+            "SELECT * FROM notes WHERE id = ? AND is_deleted = 0"
+        )
+        .bind(&note_id)
+        .fetch_one(db.inner())
+        .await
+        .map_err(|e| e.to_string())?;
+
+        // Get blocks for preview
+        let blocks: Vec<crate::db::Block> = sqlx::query_as(
+            "SELECT * FROM blocks WHERE note_id = ? ORDER BY position ASC LIMIT 3"
+        )
+        .bind(&note_id)
+        .fetch_all(db.inner())
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let content_preview = blocks
+            .iter()
+            .map(|b| {
+                // Parse block data as JSON and extract text content
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&b.data) {
+                    data.get("text")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string()
+                } else {
+                    String::new()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+            .chars()
+            .take(200)
+            .collect::<String>();
+
+        search_results.push(SearchResult {
+            note_id: note.id,
+            title: note.title,
+            similarity,
+            content_preview,
+        });
+    }
+
+    Ok(search_results)
+}
+
+/// Get note context (note + all blocks) formatted for AI
+#[tauri::command]
+pub async fn ai_get_note_context(
+    note_id: String,
+    db: State<'_, sqlx::SqlitePool>,
+) -> Result<String, String> {
+    // Get note
+    let note: crate::db::Note = sqlx::query_as(
+        "SELECT * FROM notes WHERE id = ? AND is_deleted = 0"
+    )
+    .bind(&note_id)
+    .fetch_one(db.inner())
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Get all blocks
+    let blocks: Vec<crate::db::Block> = sqlx::query_as(
+        "SELECT * FROM blocks WHERE note_id = ? ORDER BY position ASC"
+    )
+    .bind(&note_id)
+    .fetch_all(db.inner())
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Debug: Log block count and data
+    eprintln!("DEBUG: Found {} blocks for note '{}'", blocks.len(), note.title);
+
+    // Format as text
+    let mut context = format!("# {}\n\n", note.title);
+
+    for (i, block) in blocks.iter().enumerate() {
+        eprintln!("DEBUG: Block {}: type='{}', data='{}'", i, block.block_type, block.data);
+
+        // Parse block data
+        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&block.data) {
+            match block.block_type.as_str() {
+                "text" => {
+                    // Try different possible field names
+                    let text_content = data.get("text")
+                        .or_else(|| data.get("content"))
+                        .or_else(|| data.get("value"))
+                        .and_then(|v| v.as_str());
+
+                    if let Some(text) = text_content {
+                        eprintln!("DEBUG: Extracted text: '{}'", text);
+                        context.push_str(text);
+                        context.push_str("\n\n");
+                    } else {
+                        eprintln!("DEBUG: No text found in data: {:?}", data);
+                    }
+                }
+                "heading1" => {
+                    let text = data.get("text")
+                        .or_else(|| data.get("content"))
+                        .and_then(|v| v.as_str());
+                    if let Some(text) = text {
+                        context.push_str(&format!("# {}\n\n", text));
+                    }
+                }
+                "heading2" => {
+                    let text = data.get("text")
+                        .or_else(|| data.get("content"))
+                        .and_then(|v| v.as_str());
+                    if let Some(text) = text {
+                        context.push_str(&format!("## {}\n\n", text));
+                    }
+                }
+                "database" => {
+                    // Extract database content
+                    if let Some(title) = data.get("title").and_then(|v| v.as_str()) {
+                        context.push_str(&format!("## Database: {}\n\n", title));
+                    } else {
+                        context.push_str("## Database Table\n\n");
+                    }
+
+                    // Extract columns
+                    if let Some(columns) = data.get("columns").and_then(|v| v.as_array()) {
+                        let col_names: Vec<String> = columns
+                            .iter()
+                            .filter_map(|col| {
+                                col.get("name").and_then(|n| n.as_str()).map(String::from)
+                            })
+                            .collect();
+
+                        if !col_names.is_empty() {
+                            // Create markdown table header
+                            context.push_str("| ");
+                            context.push_str(&col_names.join(" | "));
+                            context.push_str(" |\n");
+                            context.push_str("| ");
+                            context.push_str(&vec!["---"; col_names.len()].join(" | "));
+                            context.push_str(" |\n");
+
+                            // Extract rows
+                            if let Some(rows) = data.get("rows").and_then(|v| v.as_array()) {
+                                for row in rows {
+                                    if let Some(row_obj) = row.as_object() {
+                                        context.push_str("| ");
+                                        let row_values: Vec<String> = col_names
+                                            .iter()
+                                            .map(|col_name| {
+                                                row_obj
+                                                    .get(col_name)
+                                                    .and_then(|v| {
+                                                        if v.is_string() {
+                                                            v.as_str().map(String::from)
+                                                        } else {
+                                                            Some(v.to_string())
+                                                        }
+                                                    })
+                                                    .unwrap_or_else(|| "-".to_string())
+                                            })
+                                            .collect();
+                                        context.push_str(&row_values.join(" | "));
+                                        context.push_str(" |\n");
+                                    }
+                                }
+                            }
+                            context.push_str("\n");
+                        }
+                    }
+                }
+                "artifact" => {
+                    // Extract artifact content
+                    if let Some(title) = data.get("title").and_then(|v| v.as_str()) {
+                        context.push_str(&format!("## Code Artifact: {}\n\n", title));
+                    } else {
+                        context.push_str("## Code Artifact\n\n");
+                    }
+
+                    // Extract code details
+                    if let Some(html) = data.get("html").and_then(|v| v.as_str()) {
+                        if !html.is_empty() {
+                            context.push_str("HTML:\n```html\n");
+                            context.push_str(&html.chars().take(500).collect::<String>());
+                            if html.len() > 500 {
+                                context.push_str("...(truncated)");
+                            }
+                            context.push_str("\n```\n\n");
+                        }
+                    }
+
+                    if let Some(css) = data.get("css").and_then(|v| v.as_str()) {
+                        if !css.is_empty() {
+                            context.push_str("CSS:\n```css\n");
+                            context.push_str(&css.chars().take(300).collect::<String>());
+                            if css.len() > 300 {
+                                context.push_str("...(truncated)");
+                            }
+                            context.push_str("\n```\n\n");
+                        }
+                    }
+
+                    if let Some(js) = data.get("javascript").and_then(|v| v.as_str()) {
+                        if !js.is_empty() {
+                            context.push_str("JavaScript:\n```javascript\n");
+                            context.push_str(&js.chars().take(300).collect::<String>());
+                            if js.len() > 300 {
+                                context.push_str("...(truncated)");
+                            }
+                            context.push_str("\n```\n\n");
+                        }
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            eprintln!("DEBUG: Failed to parse block data as JSON");
+        }
+    }
+
+    eprintln!("DEBUG: Final context length: {} chars", context.len());
+    eprintln!("DEBUG: Final context: '{}'", context);
+
+    Ok(context)
+}
+
+/// Chat with AI about a specific note (RAG pattern)
+#[tauri::command]
+pub async fn ai_chat_with_note_context(
+    note_id: String,
+    user_message: String,
+    state: State<'_, AIState>,
+    db: State<'_, sqlx::SqlitePool>,
+) -> Result<String, String> {
+    let manager_lock = state.manager.read().await;
+
+    let manager = manager_lock
+        .as_ref()
+        .ok_or("AI not initialized")?;
+
+    // Get note context
+    let context = ai_get_note_context(note_id, db).await?;
+
+    // Create system message with context
+    let system_message = Message {
+        role: "system".to_string(),
+        content: format!(
+            "You are an AI assistant helping the user understand their notes. \
+             Here is the content of the note they are asking about:\n\n{}\n\n\
+             Answer their questions based on this content.",
+            context
+        ),
+    };
+
+    let user_msg = Message {
+        role: "user".to_string(),
+        content: user_message,
+    };
+
+    // Chat with agent
+    let (response, _tool_calls) = manager.agent_service.chat(
+        vec![system_message, user_msg],
+        None
+    ).await?;
+
+    Ok(response)
+}
+
+// Helper function for cosine similarity
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let magnitude_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let magnitude_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+    if magnitude_a == 0.0 || magnitude_b == 0.0 {
+        return 0.0;
+    }
+
+    dot_product / (magnitude_a * magnitude_b)
+}

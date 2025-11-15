@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
 use futures_util::StreamExt;
+use super::{ArtifactResult, DatabaseResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAIConfig {
@@ -29,14 +30,14 @@ pub struct FunctionDefinition {
     pub parameters: serde_json::Value,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,
     pub r#type: String,
     pub function: FunctionCall,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: String,
@@ -321,29 +322,6 @@ Return ONLY the JSON, no explanations."#;
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ArtifactResult {
-    pub title: String,
-    pub html: String,
-    pub css: String,
-    pub javascript: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DatabaseResult {
-    pub title: String,
-    pub columns: Vec<DatabaseColumn>,
-    pub rows: Vec<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DatabaseColumn {
-    pub name: String,
-    pub r#type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub options: Option<Vec<String>>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,7 +344,7 @@ mod tests {
 
         let messages = vec![Message {
             role: "user".to_string(),
-            content: "Say 'Hello, Weave!' and nothing else.".to_string(),
+            content: "Say 'Hello!' and nothing else.".to_string(),
         }];
 
         let (response, _) = service.chat(messages, None).await.unwrap();

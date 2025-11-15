@@ -1,8 +1,8 @@
 [package]
-name = "weave"
+name = "note"
 version = "0.1.0"
 description = "AI-native note-taking platform"
-authors = ["Weave Team"]
+authors = ["Note Team"]
 edition = "2021"
 
 [build-dependencies]

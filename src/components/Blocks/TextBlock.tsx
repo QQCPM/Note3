@@ -235,29 +235,132 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
 
         addBlock(placeholderBlock);
 
-        // TODO: Generate actual artifact with AI
-        console.log('AI artifact generation not yet connected');
+        // Generate actual artifact with AI
+        try {
+          const { tauriAI } = await import('@/services/tauriAI');
+          const result = await tauriAI.generateArtifact(prompt);
+
+          // Update block with generated artifact
+          const artifactData: import('@/types').ArtifactBlockData = {
+            type: 'artifact',
+            prompt,
+            title: result.title,
+            html: result.html,
+            css: result.css,
+            javascript: result.javascript,
+          };
+
+          // Update the placeholder block
+          const { updateBlock } = await import('@/utils/tauri');
+          await updateBlock(placeholderBlock.id, artifactData);
+
+          // Update local store
+          const { useBlocksStore } = await import('@/store');
+          useBlocksStore.getState().updateBlock(placeholderBlock.id, { data: artifactData });
+
+          console.log('✅ Artifact generated successfully:', result.title);
+        } catch (error) {
+          console.error('❌ Failed to generate artifact:', error);
+
+          // Update with error message
+          const errorData: import('@/types').ArtifactBlockData = {
+            type: 'artifact',
+            prompt,
+            title: 'Generation Failed',
+            html: `<div style="padding: 40px; text-align: center;">
+                     <h2>❌ Failed to Generate</h2>
+                     <p>${error instanceof Error ? error.message : 'Unknown error'}</p>
+                     <p style="margin-top: 20px; font-size: 14px; opacity: 0.7;">Try again with a different prompt</p>
+                   </div>`,
+            css: 'body { font-family: Arial, sans-serif; background: #2d1b2e; min-height: 100vh; display: flex; align-items: center; justify-content: center; color: white; }',
+            javascript: '',
+          };
+
+          const { updateBlock } = await import('@/utils/tauri');
+          await updateBlock(placeholderBlock.id, errorData);
+
+          const { useBlocksStore } = await import('@/store');
+          useBlocksStore.getState().updateBlock(placeholderBlock.id, { data: errorData });
+        }
       } else if (type === 'database') {
-        // Generate database structure
-        const blockData: import('@/types').DatabaseBlockData = {
+        // First create placeholder block
+        const placeholderData: import('@/types').DatabaseBlockData = {
           type: 'database',
-          title: 'Database',
+          title: 'Generating...',
           columns: [
-            { id: nanoid(), name: 'Name', type: 'text' },
-            { id: nanoid(), name: 'Status', type: 'select', options: ['Todo', 'In Progress', 'Done'] },
+            { id: nanoid(), name: 'Loading', type: 'text' },
           ],
-          rows: [], // Start with empty rows
+          rows: [],
           view: 'table' as const,
         };
 
-        const newBlock = await createBlock({
+        const placeholderBlock = await createBlock({
           note_id: activeNoteId,
           type: 'database',
           position: block.position + 1,
-          data: blockData,
+          data: placeholderData,
         });
 
-        addBlock(newBlock);
+        addBlock(placeholderBlock);
+
+        // Generate actual database with AI
+        try {
+          const { tauriAI } = await import('@/services/tauriAI');
+          const result = await tauriAI.generateDatabase(prompt);
+
+          // Convert AI result to our format with IDs
+          const columns = result.columns.map(col => ({
+            id: nanoid(),
+            name: col.name,
+            type: col.column_type as any,
+            options: col.options,
+          }));
+
+          const databaseData: import('@/types').DatabaseBlockData = {
+            type: 'database',
+            title: result.title,
+            columns,
+            rows: result.rows || [],
+            view: 'table' as const,
+          };
+
+          // Update the placeholder block
+          const { updateBlock } = await import('@/utils/tauri');
+          await updateBlock(placeholderBlock.id, databaseData);
+
+          // Update local store
+          const { useBlocksStore } = await import('@/store');
+          useBlocksStore.getState().updateBlock(placeholderBlock.id, { data: databaseData });
+
+          console.log('✅ Database generated successfully:', result.title);
+        } catch (error) {
+          console.error('❌ Failed to generate database:', error);
+
+          // Update with error message
+          const errorColId = nanoid();
+          const errorData: import('@/types').DatabaseBlockData = {
+            type: 'database',
+            title: 'Generation Failed',
+            columns: [
+              { id: errorColId, name: 'Error', type: 'text' },
+            ],
+            rows: [
+              {
+                id: nanoid(),
+                data: {
+                  [errorColId]: error instanceof Error ? error.message : 'Unknown error'
+                }
+              },
+            ],
+            view: 'table' as const,
+          };
+
+          const { updateBlock } = await import('@/utils/tauri');
+          await updateBlock(placeholderBlock.id, errorData);
+
+          const { useBlocksStore } = await import('@/store');
+          useBlocksStore.getState().updateBlock(placeholderBlock.id, { data: errorData });
+        }
       }
     } catch (error) {
       console.error('Failed to create AI block:', error);

@@ -58,6 +58,10 @@ fn main() {
             ai_chat,
             ai_chat_with_tools,
             ai_rerank,
+            ai_store_note_embedding,
+            ai_search_notes,
+            ai_get_note_context,
+            ai_chat_with_note_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
