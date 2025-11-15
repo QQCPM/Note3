@@ -43,6 +43,8 @@ fn main() {
             create_block,
             update_block,
             delete_block,
+            // AI commands
+            get_note_with_blocks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

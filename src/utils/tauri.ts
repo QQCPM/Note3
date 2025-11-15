@@ -65,3 +65,17 @@ export const updateBlock = async (
 export const deleteBlock = async (blockId: string): Promise<void> => {
   return invoke('delete_block', { blockId });
 };
+
+// AI commands
+export interface NoteWithBlocks {
+  note: Note;
+  blocks: Block[];
+}
+
+export const getNoteWithBlocks = async (noteId: string): Promise<NoteWithBlocks> => {
+  const result = await invoke<{ note: Note; blocks: TauriBlock[] }>('get_note_with_blocks', { noteId });
+  return {
+    note: result.note,
+    blocks: result.blocks.map(parseBlock),
+  };
+};
