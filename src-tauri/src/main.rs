@@ -3,6 +3,7 @@
 
 mod db;
 mod commands;
+mod ai;
 
 use db::initialize_database;
 use commands::*;
@@ -28,6 +29,9 @@ fn main() {
                 }
             });
 
+            // Initialize AI state
+            app.manage(commands::ai::AIState::new());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -44,7 +48,31 @@ fn main() {
             update_block,
             delete_block,
             // AI commands
-            get_note_with_blocks,
+            ai_initialize,
+            ai_get_config,
+            ai_load_persisted_config,
+            ai_save_config,
+            ai_update_and_save_config,
+            ai_health_check,
+            ai_generate_embedding,
+            ai_generate_embeddings_batch,
+            ai_generate_artifact,
+            ai_generate_database,
+            ai_chat,
+            ai_chat_with_tools,
+            ai_rerank,
+            ai_store_note_embedding,
+            ai_search_notes,
+            ai_read_block,
+            ai_get_note_context,
+            ai_chat_with_note_context,
+            // Advanced AI tools (Phase 1 & 2)
+            ai_get_tools,
+            ai_get_database_tools,
+            ai_get_artifact_tools,
+            ai_execute_database_tool,
+            ai_execute_artifact_tool,
+            ai_chat_with_auto_tools,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
