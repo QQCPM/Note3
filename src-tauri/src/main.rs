@@ -4,6 +4,7 @@
 mod db;
 mod commands;
 mod ai;
+mod orchestration;
 
 use db::initialize_database;
 use commands::*;
@@ -73,6 +74,13 @@ fn main() {
             ai_execute_database_tool,
             ai_execute_artifact_tool,
             ai_chat_with_auto_tools,
+            // Orchestration (Phase 3)
+            get_workflow_templates,
+            get_workflow_template,
+            orchestrate_workflow,
+            create_custom_workflow,
+            cancel_workflow,
+            get_workflow_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
