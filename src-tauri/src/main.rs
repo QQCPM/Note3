@@ -5,6 +5,7 @@ mod db;
 mod commands;
 mod ai;
 mod orchestration;
+mod agentic;
 
 use db::initialize_database;
 use commands::*;
@@ -81,6 +82,12 @@ fn main() {
             create_custom_workflow,
             cancel_workflow,
             get_workflow_status,
+            // Agentic AI (Phase 4)
+            agentic_execute_task,
+            agentic_plan_task,
+            agentic_research,
+            agentic_research_and_extract,
+            agentic_verify_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
