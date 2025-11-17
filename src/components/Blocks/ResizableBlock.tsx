@@ -82,9 +82,9 @@ const ResizableBlock: React.FC<ResizableBlockProps> = ({
           break;
       }
 
-      // Apply constraints
-      const maxWidth = Math.min(1400, window.innerWidth - 200); // Max 1400px or window width - 200px
-      const maxHeight = 1200; // Max 1200px
+      // Apply constraints - allow blocks to expand wider for full-screen viewing
+      const maxWidth = window.innerWidth - 150; // Dynamic max based on window, with small margin
+      const maxHeight = 1600; // Increased max height
       newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
       newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
 

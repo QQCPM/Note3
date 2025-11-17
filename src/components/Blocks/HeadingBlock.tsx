@@ -7,7 +7,7 @@ interface HeadingBlockProps {
   block: Block;
 }
 
-const HeadingBlock: React.FC<HeadingBlockProps> = ({ block }) => {
+const HeadingBlock: React.FC<HeadingBlockProps> = React.memo(({ block }) => {
   const { updateBlock: updateBlockInStore } = useBlocksStore();
   const data = block.data as HeadingBlockData;
   const [content, setContent] = useState(data.content || '');
@@ -46,6 +46,9 @@ const HeadingBlock: React.FC<HeadingBlockProps> = ({ block }) => {
       />
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  return prevProps.block.id === nextProps.block.id &&
+         prevProps.block.data === nextProps.block.data;
+});
 
 export default HeadingBlock;

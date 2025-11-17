@@ -51,21 +51,19 @@ const ConnectionLayer: React.FC = () => {
         height: '100%',
         pointerEvents: 'none',
         zIndex: 1,
-        transformOrigin: '0 0',
-        transform: `scale(${zoom})`,
       }}
     >
-      {/* Arrowhead marker definition */}
+      {/* Arrowhead marker definition - scales with zoom */}
       <defs>
         <marker
           id="arrowhead"
-          markerWidth="10"
-          markerHeight="10"
-          refX="9"
-          refY="3"
+          markerWidth={10 * zoom}
+          markerHeight={10 * zoom}
+          refX={9 * zoom}
+          refY={3 * zoom}
           orient="auto"
         >
-          <polygon points="0 0, 10 3, 0 6" fill="#58a6ff" />
+          <polygon points={`0 0, ${10 * zoom} ${3 * zoom}, 0 ${6 * zoom}`} fill="#58a6ff" />
         </marker>
       </defs>
 
@@ -89,12 +87,12 @@ const ConnectionLayer: React.FC = () => {
         return (
           <line
             key={`${conn.from}-${conn.to}-${index}`}
-            x1={fromEdge.x}
-            y1={fromEdge.y}
-            x2={toEdge.x}
-            y2={toEdge.y}
+            x1={fromEdge.x * zoom}
+            y1={fromEdge.y * zoom}
+            x2={toEdge.x * zoom}
+            y2={toEdge.y * zoom}
             stroke="#58a6ff"
-            strokeWidth="2"
+            strokeWidth={2 * zoom}
             markerEnd="url(#arrowhead)"
           />
         );

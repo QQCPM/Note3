@@ -1,14 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import type { Note, Block } from '@/types';
 import { createBlock, deleteBlock } from '@/utils/tauri';
 import { useBlocksStore } from '@/store';
 import TextBlock from '@/components/Blocks/TextBlock';
 import HeadingBlock from '@/components/Blocks/HeadingBlock';
-import DatabaseBlock from '@/components/Blocks/DatabaseBlock';
-import ArtifactBlock from '@/components/Blocks/ArtifactBlock';
 import TaskBlock from '@/components/Blocks/TaskBlock';
 import WebBlock from '@/components/Blocks/WebBlock';
 import ErrorBoundary from '@/components/ErrorBoundary';
+
+// Lazy load heavy components to improve initial render performance
+const DatabaseBlock = lazy(() => import('@/components/Blocks/DatabaseBlock'));
+const ArtifactBlock = lazy(() => import('@/components/Blocks/ArtifactBlock'));
 import {
   DndContext,
   closestCenter,
@@ -33,13 +35,13 @@ interface CanvasContentProps {
   blocks: Block[];
 }
 
-// Sortable Block Wrapper Component
+// Sortable Block Wrapper Component - Memoized to prevent unnecessary re-renders
 interface SortableBlockProps {
   block: Block;
   children: React.ReactNode;
 }
 
-const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
+const SortableBlock: React.FC<SortableBlockProps> = React.memo(({ block, children }) => {
   const { deleteBlock: deleteBlockFromStore } = useBlocksStore();
   const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const {
@@ -140,11 +142,17 @@ const SortableBlock: React.FC<SortableBlockProps> = ({ block, children }) => {
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if block data actually changed
+  return prevProps.block.id === nextProps.block.id &&
+         prevProps.block.data === nextProps.block.data &&
+         prevProps.block.position === nextProps.block.position;
+});
 
 const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
   const { addBlock, setBlocks } = useBlocksStore();
   const creatingInitialBlock = useRef(false);
+  const initializedNotes = useRef<Set<string>>(new Set()); // Track which notes have been loaded
 
   // Configure drag sensors
   const sensors = useSensors(
@@ -158,25 +166,49 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
     })
   );
 
-  // Auto-create first text block if note is empty
+  // Auto-create first text block ONLY if note is truly empty (not during loading)
   useEffect(() => {
-    if (note && blocks.length === 0 && !creatingInitialBlock.current) {
-      creatingInitialBlock.current = true;
-      createBlock({
-        note_id: note.id,
-        type: 'text',
-        position: 0,
-        data: { type: 'text', content: '' },
-      })
-        .then((newBlock) => {
-          addBlock(newBlock);
-        })
-        .catch((error) => {
-          console.error('Failed to create initial block:', error);
-        })
-        .finally(() => {
-          creatingInitialBlock.current = false;
-        });
+    if (!note) return;
+
+    // Mark this note as initialized once we have blocks
+    if (blocks.length > 0) {
+      initializedNotes.current.add(note.id);
+      return;
+    }
+
+    // Only auto-create if:
+    // 1. Note has never been loaded before (not in initializedNotes)
+    // 2. Blocks are still empty after a delay (meaning it's truly empty, not just loading)
+    // 3. Not already creating
+    const hasBeenInitialized = initializedNotes.current.has(note.id);
+
+    if (!hasBeenInitialized && blocks.length === 0 && !creatingInitialBlock.current) {
+      // Wait a bit to ensure blocks have finished loading
+      const timer = setTimeout(() => {
+        // Double-check blocks are still empty after waiting
+        if (blocks.length === 0 && !creatingInitialBlock.current) {
+          console.log('📝 [INIT] Creating initial empty block for new note');
+          creatingInitialBlock.current = true;
+          createBlock({
+            note_id: note.id,
+            type: 'text',
+            position: 0,
+            data: { type: 'text', content: '' },
+          })
+            .then((newBlock) => {
+              addBlock(newBlock);
+              initializedNotes.current.add(note.id);
+            })
+            .catch((error) => {
+              console.error('Failed to create initial block:', error);
+            })
+            .finally(() => {
+              creatingInitialBlock.current = false;
+            });
+        }
+      }, 200); // 200ms delay to let blocks load
+
+      return () => clearTimeout(timer);
     }
   }, [note?.id, blocks.length, addBlock]);
 
@@ -220,6 +252,16 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
     }
   };
 
+  // Loading placeholder for heavy blocks
+  const BlockLoadingPlaceholder = ({ type }: { type: string }) => (
+    <div className="canvas-block p-4 bg-[#161b22] rounded border border-[#30363d] animate-pulse">
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="w-4 h-4 border-2 border-gray-600 border-t-purple-500 rounded-full animate-spin"></div>
+        <span>Loading {type}...</span>
+      </div>
+    </div>
+  );
+
   const renderBlock = (block: Block) => {
     switch (block.type) {
       case 'text':
@@ -228,9 +270,19 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
       case 'heading2':
         return <HeadingBlock block={block} />;
       case 'database':
-        return <DatabaseBlock block={block} />;
+        // Wrap heavy database block in Suspense
+        return (
+          <Suspense fallback={<BlockLoadingPlaceholder type="database" />}>
+            <DatabaseBlock block={block} />
+          </Suspense>
+        );
       case 'artifact':
-        return <ArtifactBlock block={block} />;
+        // Wrap heavy artifact block in Suspense
+        return (
+          <Suspense fallback={<BlockLoadingPlaceholder type="artifact" />}>
+            <ArtifactBlock block={block} />
+          </Suspense>
+        );
       case 'task':
         return <TaskBlock block={block} />;
       case 'web':
@@ -252,7 +304,7 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-5xl py-12 px-8 pl-20" id="canvas">
+      <div className="max-w-[90%] mx-auto py-12 px-8 pl-20" id="canvas">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { updateBlock, createBlock } from '@/utils/tauri';
 import { useBlocksStore, useNotesStore, useAIStore } from '@/store';
 import type { Block, TextBlockData } from '@/types';
@@ -13,7 +13,7 @@ interface TextBlockProps {
   block: Block;
 }
 
-const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
+const TextBlock: React.FC<TextBlockProps> = React.memo(({ block }) => {
   const { updateBlock: updateBlockInStore, addBlock } = useBlocksStore();
   const { activeNoteId } = useNotesStore();
 
@@ -32,13 +32,15 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
 
   const { enterEditMode } = useAIStore();
 
-  // Check if content has markdown or LaTeX (always render with RichTextRenderer)
-  const hasMarkdownOrLatex = content.includes('$') ||
-                             content.includes('#') ||
-                             content.includes('**') ||
-                             content.includes('- ') ||
-                             content.includes('```') ||
-                             content.length > 100; // Long content likely needs markdown rendering
+  // Check if content has markdown or LaTeX (memoized to avoid recalculation)
+  const hasMarkdownOrLatex = useMemo(() =>
+    content.includes('$') ||
+    content.includes('#') ||
+    content.includes('**') ||
+    content.includes('- ') ||
+    content.includes('```') ||
+    content.length > 100, // Long content likely needs markdown rendering
+  [content]);
 
   // Sync content with block data
   useEffect(() => {
@@ -54,13 +56,16 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
     }
   }, [content, isEditing]);
 
-  // Auto-focus on empty blocks (newly created)
+  // Auto-focus ONLY on newly created empty blocks (not all empty blocks on load)
+  // This prevents lag when loading notes with many blocks
+  const isNewBlock = useRef(content === '' && block.data.content === '');
   useEffect(() => {
-    if (content === '') {
+    if (isNewBlock.current && content === '') {
       setIsEditing(true);
       setTimeout(() => {
         textareaRef.current?.focus();
       }, 0);
+      isNewBlock.current = false;
     }
   }, []);
 
@@ -462,6 +467,10 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
       )}
     </>
   );
-};
+}, (prevProps, nextProps) => {
+  // Only re-render if block data actually changed
+  return prevProps.block.id === nextProps.block.id &&
+         prevProps.block.data === nextProps.block.data;
+});
 
 export default TextBlock;
