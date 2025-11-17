@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { useNotesStore } from '@/store';
+import { useNotesStore, useUIStore } from '@/store';
 import { updateNote } from '@/utils/tauri';
 import type { Note } from '@/types';
+import { FileText, Sparkles } from 'lucide-react';
 
 interface CanvasHeaderProps {
   note: Note | null;
@@ -9,6 +10,7 @@ interface CanvasHeaderProps {
 
 const CanvasHeader: React.FC<CanvasHeaderProps> = ({ note }) => {
   const { updateNote: updateNoteInStore } = useNotesStore();
+  const { canvasMode, setCanvasMode } = useUIStore();
   const [title, setTitle] = useState(note?.title || '');
   const [icon, setIcon] = useState(note?.icon || '📝');
 
@@ -63,8 +65,31 @@ const CanvasHeader: React.FC<CanvasHeaderProps> = ({ note }) => {
           placeholder="Untitled"
         />
       </div>
-      <div className="text-xs text-gray-500">
+
+      {/* Mode Switcher */}
+      <div className="flex items-center gap-2">
+        <div className="canvas-mode-switcher">
+          <button
+            className={`mode-btn ${canvasMode === 'note' ? 'active' : ''}`}
+            onClick={() => setCanvasMode('note')}
+            title="Note Mode"
+          >
+            <FileText size={16} />
+            <span>Note</span>
+          </button>
+          <button
+            className={`mode-btn ${canvasMode === 'canvas' ? 'active' : ''}`}
+            onClick={() => setCanvasMode('canvas')}
+            title="Canvas Mode"
+          >
+            <Sparkles size={16} />
+            <span>Canvas</span>
+          </button>
+        </div>
+
+        <div className="text-xs text-gray-500 ml-4">
           Type <kbd className="px-2 py-1 bg-[#161b22] rounded text-gray-400">/</kbd> for commands
+        </div>
       </div>
     </header>
   );
