@@ -31,12 +31,37 @@ const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note }) => {
     showContextMenu(e.pageX, e.pageY, note.id);
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    // Store note data for dropping on canvas
+    e.dataTransfer.setData('application/json', JSON.stringify({
+      noteId: note.id,
+      title: note.title,
+      icon: note.icon,
+    }));
+    e.dataTransfer.effectAllowed = 'copy';
+
+    // Visual feedback
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.5';
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    // Reset visual feedback
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1';
+    }
+  };
+
   return (
     <div>
       <div
         className={`note-tree-item ${isActive ? 'active' : ''}`}
+        draggable={true}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
       >
         <span
           className={`note-chevron ${isExpanded ? 'expanded' : ''}`}

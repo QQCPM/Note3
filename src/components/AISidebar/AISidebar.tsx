@@ -4,7 +4,6 @@ import AgentTab from './AgentTab';
 import RecommendTab from './RecommendTab';
 import SettingsTab from './SettingsTab';
 import AIInput from './AIInput';
-import { ChevronRight, ChevronLeft } from 'lucide-react';
 
 const AISidebar: React.FC = () => {
   const {
@@ -52,7 +51,7 @@ const AISidebar: React.FC = () => {
   return (
     <aside
       ref={sidebarRef}
-      className="flex-shrink-0 flex flex-col rounded-lg relative"
+      className={`sidebar right-sidebar flex-shrink-0 flex flex-col rounded-lg relative ${aiSidebarCollapsed ? 'collapsed' : ''}`}
       style={{
         width: `${aiSidebarWidth}px`,
         background: 'radial-gradient(circle at top left, rgba(13, 71, 161, 0.2) 0%, rgba(30, 136, 229, 0.1) 40%, #010409 80%)',
@@ -66,11 +65,11 @@ const AISidebar: React.FC = () => {
 
       {/* Collapse/Expand Button */}
       <button
+        className="sidebar-toggle right"
         onClick={toggleAISidebar}
-        className="absolute top-1/2 -left-4 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white p-1 rounded-full z-20"
         title={aiSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
       >
-        {aiSidebarCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+        <span>{aiSidebarCollapsed ? '‹' : '›'}</span>
       </button>
 
       {/* Tab Navigation */}

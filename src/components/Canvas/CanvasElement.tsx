@@ -6,9 +6,10 @@ import { Trash2, Edit3, Maximize2 } from 'lucide-react';
 interface CanvasElementProps {
   element: CanvasElementType;
   isSelected: boolean;
+  onClick?: () => void;
 }
 
-const CanvasElement: React.FC<CanvasElementProps> = ({ element, isSelected }) => {
+const CanvasElement: React.FC<CanvasElementProps> = ({ element, isSelected, onClick }) => {
   const {
     activeTool,
     updateElement,
@@ -40,6 +41,14 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element, isSelected }) =>
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
     setPositionStart({ ...element.position });
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Only trigger modal on click if not dragging
+    if (!isDragging && !isResizing && onClick) {
+      e.stopPropagation();
+      onClick();
+    }
   };
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
@@ -233,6 +242,7 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element, isSelected }) =>
         backgroundColor: element.data.type === 'note' ? element.data.color : undefined,
       }}
       onMouseDown={handleMouseDown}
+      onClick={handleClick}
     >
       {/* Glassmorphic Label Bar */}
       <div

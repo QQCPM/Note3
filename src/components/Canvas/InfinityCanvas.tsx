@@ -5,12 +5,15 @@ import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import CanvasToolbar from './CanvasToolbar';
 import CanvasElement from './CanvasElement';
 import CanvasConnections from './CanvasConnections';
+import CanvasElementModal from './CanvasElementModal';
 import type { CanvasPosition } from '@/types/canvas';
+import type { CanvasElement as CanvasElementType } from '@/types/canvas';
 
 const InfinityCanvas: React.FC = () => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState<CanvasPosition>({ x: 0, y: 0 });
+  const [modalElement, setModalElement] = useState<CanvasElementType | null>(null);
 
   const {
     elements,
@@ -246,6 +249,46 @@ const InfinityCanvas: React.FC = () => {
     setScrollStart(null);
   };
 
+  // Handle drag over - allow drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  // Handle drop - create note element from dragged note
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+
+    const viewportEl = viewportRef.current;
+    if (!viewportEl || !activeNoteId) return;
+
+    try {
+      // Get note data from drag event
+      const noteData = JSON.parse(e.dataTransfer.getData('application/json'));
+
+      // Calculate drop position on canvas
+      const rect = viewportEl.getBoundingClientRect();
+      const x = (viewportEl.scrollLeft + e.clientX - rect.left) / viewport.zoom;
+      const y = (viewportEl.scrollTop + e.clientY - rect.top) / viewport.zoom;
+
+      // Create a note element at drop position
+      addElement({
+        type: 'note',
+        position: { x: x - 75, y: y - 75 }, // Center on cursor (note is 150x150)
+        size: { width: 150, height: 150 },
+        noteId: activeNoteId,
+        data: {
+          type: 'note',
+          title: noteData.title,
+          content: `Note from: ${noteData.title}\n\nDrag to move, resize from corner.`,
+          color: '#fef3c7',
+        },
+      });
+    } catch (error) {
+      console.error('Failed to drop note:', error);
+    }
+  };
+
   // Update cursor based on active tool
   const getCursorClass = () => {
     if (isPanning) return 'grabbing';
@@ -253,6 +296,13 @@ const InfinityCanvas: React.FC = () => {
     if (activeTool === 'cursor') return 'default';
     if (activeTool === 'arrow') return 'crosshair';
     return 'crosshair';
+  };
+
+  // Handle element click for full-screen modal
+  const handleElementClick = (element: CanvasElementType) => {
+    if (activeTool === 'cursor') {
+      setModalElement(element);
+    }
   };
 
   return (
@@ -297,6 +347,8 @@ const InfinityCanvas: React.FC = () => {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         <div
           ref={canvasRef}
@@ -324,10 +376,19 @@ const InfinityCanvas: React.FC = () => {
                 key={element.id}
                 element={element}
                 isSelected={selectedElementIds.has(element.id)}
+                onClick={() => handleElementClick(element)}
               />
             ))}
         </div>
       </div>
+
+      {/* Full-screen modal */}
+      {modalElement && (
+        <CanvasElementModal
+          element={modalElement}
+          onClose={() => setModalElement(null)}
+        />
+      )}
     </div>
   );
 };

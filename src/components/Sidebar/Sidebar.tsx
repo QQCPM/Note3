@@ -1,10 +1,11 @@
 import React from 'react';
-import { useNotesStore } from '@/store';
+import { useNotesStore, useUIStore } from '@/store';
 import { createNote } from '@/utils/tauri';
 import NoteTree from './NoteTree';
 
 const Sidebar: React.FC = () => {
   const { notes, setActiveNote, addNote } = useNotesStore();
+  const { canvasMode, setCanvasMode, sidebarCollapsed, toggleSidebar } = useUIStore();
 
   const handleNewPage = async () => {
     try {
@@ -21,10 +22,23 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <nav className="w-60 bg-[#010409] flex flex-col flex-shrink-0 rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="p-4 h-16 flex items-center justify-between border-b border-[#30363d]">
-        <h1 className="text-lg font-semibold text-white">Notes</h1>
+    <nav className={`sidebar w-60 bg-[#010409] flex flex-col flex-shrink-0 rounded-lg overflow-hidden relative ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      {/* Header with Mode Switcher */}
+      <div className="p-4 h-16 flex items-center border-b border-[#30363d]">
+        <div className="mode-switcher">
+          <button
+            className={`mode-btn ${canvasMode === 'note' ? 'active' : ''}`}
+            onClick={() => setCanvasMode('note')}
+          >
+            Note
+          </button>
+          <button
+            className={`mode-btn ${canvasMode === 'canvas' ? 'active' : ''}`}
+            onClick={() => setCanvasMode('canvas')}
+          >
+            Canvas
+          </button>
+        </div>
       </div>
 
       {/* Note Tree */}
@@ -41,6 +55,14 @@ const Sidebar: React.FC = () => {
           + New Page
         </button>
       </div>
+
+      {/* Toggle Button */}
+      <button
+        className="sidebar-toggle left"
+        onClick={toggleSidebar}
+      >
+        <span>{sidebarCollapsed ? '›' : '‹'}</span>
+      </button>
     </nav>
   );
 };

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNotesStore, useUIStore } from '@/store';
 import { updateNote } from '@/utils/tauri';
 import type { Note } from '@/types';
-import { FileText, Sparkles } from 'lucide-react';
 
 interface CanvasHeaderProps {
   note: Note | null;
@@ -10,7 +9,7 @@ interface CanvasHeaderProps {
 
 const CanvasHeader: React.FC<CanvasHeaderProps> = ({ note }) => {
   const { updateNote: updateNoteInStore } = useNotesStore();
-  const { canvasMode, setCanvasMode } = useUIStore();
+  const { canvasMode } = useUIStore();
   const [title, setTitle] = useState(note?.title || '');
   const [icon, setIcon] = useState(note?.icon || '📝');
 
@@ -66,31 +65,12 @@ const CanvasHeader: React.FC<CanvasHeaderProps> = ({ note }) => {
         />
       </div>
 
-      {/* Compact Mode Switcher */}
-      <div className="flex items-center gap-4">
-        <div className="mode-switcher-compact">
-          <button
-            className={`mode-indicator ${canvasMode === 'note' ? 'active' : ''}`}
-            onClick={() => setCanvasMode('note')}
-            title="Note Mode"
-          >
-            <FileText size={14} />
-          </button>
-          <button
-            className={`mode-indicator ${canvasMode === 'canvas' ? 'active' : ''}`}
-            onClick={() => setCanvasMode('canvas')}
-            title="Canvas Mode"
-          >
-            <Sparkles size={14} />
-          </button>
-        </div>
-
-        <div className="text-xs text-gray-500">
-          {canvasMode === 'note'
-            ? <>Type <kbd className="px-2 py-1 bg-[#161b22] rounded text-gray-400">/</kbd> for commands</>
-            : 'Scroll to zoom • Drag to pan'
-          }
-        </div>
+      {/* Mode Hint */}
+      <div className="text-xs text-gray-500">
+        {canvasMode === 'note'
+          ? <>Type <kbd className="px-2 py-1 bg-[#161b22] rounded text-gray-400">/</kbd> for commands</>
+          : 'Scroll to zoom • Drag to pan'
+        }
       </div>
     </header>
   );

@@ -22,7 +22,7 @@ const queryClient = new QueryClient({
 
 function App() {
   const { setNotes } = useNotesStore();
-  const { aiSidebarCollapsed, toggleAISidebar } = useUIStore();
+  const { aiSidebarCollapsed, toggleAISidebar, sidebarCollapsed, toggleSidebar } = useUIStore();
   const [aiInitialized, setAiInitialized] = useState(false);
   const [aiHealthy, setAiHealthy] = useState(false);
 
@@ -112,7 +112,17 @@ function App() {
         </div>
 
         {/* Left Sidebar - Note Tree */}
-        <Sidebar />
+        {sidebarCollapsed ? (
+          <button
+            onClick={toggleSidebar}
+            className="absolute top-1/2 left-0 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white p-1 rounded-full z-20"
+            title="Expand Sidebar"
+          >
+            <ChevronLeft size={16} className="rotate-180" />
+          </button>
+        ) : (
+          <Sidebar />
+        )}
 
         {/* Main Canvas Area */}
         <Canvas />
