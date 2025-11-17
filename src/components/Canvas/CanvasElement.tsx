@@ -193,6 +193,31 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element, isSelected }) =>
     }
   };
 
+  // Handle label input change
+  const [label, setLabel] = React.useState(element.data.type === 'note' ? element.data.title : 'Untitled');
+  const [labelWidth, setLabelWidth] = React.useState(200);
+
+  const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newLabel = e.target.value;
+    setLabel(newLabel);
+
+    // Auto-resize input to fit text
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.font = '600 28px Inter';
+      const width = context.measureText(newLabel || 'Untitled').width;
+      setLabelWidth(Math.max(200, width + 48));
+    }
+
+    // Update element data
+    if (element.data.type === 'note') {
+      updateElement(element.id, {
+        data: { ...element.data, title: newLabel }
+      });
+    }
+  };
+
   return (
     <div
       ref={elementRef}
@@ -209,6 +234,21 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element, isSelected }) =>
       }}
       onMouseDown={handleMouseDown}
     >
+      {/* Glassmorphic Label Bar */}
+      <div
+        className="canvas-element-label-bar"
+        style={{ width: labelWidth }}
+      >
+        <input
+          type="text"
+          value={label}
+          onChange={handleLabelChange}
+          onClick={(e) => e.stopPropagation()}
+          placeholder="Untitled"
+          className="canvas-element-label-input"
+        />
+      </div>
+
       {renderContent()}
 
       {/* Selection Border */}

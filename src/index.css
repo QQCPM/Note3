@@ -1615,43 +1615,39 @@ body {
    INFINITY CANVAS STYLES
    ============================================ */
 
-/* Canvas Mode Switcher */
-.canvas-mode-switcher {
-  display: flex;
-  gap: 0;
+/* Compact Mode Switcher */
+.mode-switcher-compact {
+  display: inline-flex;
   background: #161b22;
   border: 1px solid #30363d;
-  border-radius: 6px;
-  padding: 2px;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
 }
 
-.canvas-mode-switcher .mode-btn {
+.mode-switcher-compact .mode-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   color: #8b949e;
-  font-size: 13px;
-  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
 }
 
-.canvas-mode-switcher .mode-btn:hover {
+.mode-switcher-compact .mode-indicator:hover {
   color: #c9d1d9;
   background: rgba(110, 118, 129, 0.1);
 }
 
-.canvas-mode-switcher .mode-btn.active {
-  background: #1f6feb;
+.mode-switcher-compact .mode-indicator.active {
+  background: #0d1117;
   color: #ffffff;
-}
-
-.canvas-mode-switcher .mode-btn svg {
-  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* Canvas Toolbar */
@@ -2035,4 +2031,41 @@ body {
 .canvas-connection.selected path {
   stroke: #1f6feb !important;
   stroke-width: 3 !important;
+}
+
+/* Glassmorphic Label Bar */
+.canvas-element-label-bar {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(22, 27, 34, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  border-radius: 32px;
+  padding: 12px 32px;
+  min-width: 200px;
+  max-width: none;
+  opacity: 1;
+  z-index: 10;
+  white-space: nowrap;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.canvas-element-label-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 600;
+  width: 100%;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+}
+
+.canvas-element-label-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
 }
