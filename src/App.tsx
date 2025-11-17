@@ -22,7 +22,7 @@ const queryClient = new QueryClient({
 
 function App() {
   const { setNotes } = useNotesStore();
-  const { aiSidebarCollapsed, toggleAISidebar, sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { aiSidebarCollapsed, toggleAISidebar, sidebarCollapsed, toggleSidebar, canvasMode, setCanvasMode, modeSwitcherPosition } = useUIStore();
   const [aiInitialized, setAiInitialized] = useState(false);
   const [aiHealthy, setAiHealthy] = useState(false);
 
@@ -91,8 +91,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex h-screen w-full bg-[#0d1117] text-gray-300 antialiased p-2 gap-2">
-        {/* AI Status Indicator - Minimal Green Dot */}
-        <div className="absolute top-4 left-4 z-50">
+        {/* Top-left controls: AI Status + Mode Switcher */}
+        <div className="fixed top-4 left-4 z-50 flex items-center gap-3">
+          {/* AI Status Indicator - Minimal Green Dot */}
           <div
             className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
               aiInitialized && aiHealthy
@@ -109,6 +110,32 @@ function App() {
                 : 'AI Offline'
             }
           />
+
+          {/* Mode Switcher - ALWAYS VISIBLE */}
+          <div
+            className="inline-flex bg-[#161b22] border border-[#30363d] rounded-lg p-1 gap-1 shadow-lg"
+          >
+            <button
+              onClick={() => setCanvasMode('note')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                canvasMode === 'note'
+                  ? 'bg-[#0d1117] text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              Note
+            </button>
+            <button
+              onClick={() => setCanvasMode('canvas')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                canvasMode === 'canvas'
+                  ? 'bg-[#0d1117] text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              Canvas
+            </button>
+          </div>
         </div>
 
         {/* Left Sidebar - Note Tree */}

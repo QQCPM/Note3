@@ -88,7 +88,22 @@ export const useUIStore = create<UIState>((set) => ({
 
   setAISidebarTab: (tab) => set({ aiSidebarTab: tab }),
 
-  setCanvasMode: (mode) => set({ canvasMode: mode }),
+  setCanvasMode: (mode) => set((state) => {
+    // Auto-collapse both sidebars when entering canvas mode
+    if (mode === 'canvas') {
+      return {
+        canvasMode: mode,
+        sidebarCollapsed: true,
+        aiSidebarCollapsed: true,
+      };
+    }
+    // Auto-expand both sidebars when entering note mode
+    return {
+      canvasMode: mode,
+      sidebarCollapsed: false,
+      aiSidebarCollapsed: false,
+    };
+  }),
 
   showContextMenu: (x, y, noteId) => set({
     contextMenu: { visible: true, position: { x, y }, noteId }

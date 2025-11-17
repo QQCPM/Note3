@@ -5,7 +5,7 @@ import NoteTree from './NoteTree';
 
 const Sidebar: React.FC = () => {
   const { notes, setActiveNote, addNote } = useNotesStore();
-  const { canvasMode, setCanvasMode } = useUIStore();
+  const { canvasMode, setCanvasMode, sidebarCollapsed, toggleSidebar } = useUIStore();
 
   const handleNewPage = async () => {
     try {
@@ -22,32 +22,20 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <nav className="w-60 bg-[#010409] flex flex-col flex-shrink-0 rounded-lg overflow-hidden">
-      {/* Header with Mode Switcher */}
-      <div className="p-4 h-16 flex items-center border-b border-[#30363d]">
-        <div
-          className="inline-flex bg-[#161b22] border border-[#30363d] rounded-lg p-1 gap-1"
-        >
-          <button
-            onClick={() => setCanvasMode('note')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-              canvasMode === 'note'
-                ? 'bg-[#0d1117] text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-300'
-            }`}
-          >
-            Note
-          </button>
-          <button
-            onClick={() => setCanvasMode('canvas')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-              canvasMode === 'canvas'
-                ? 'bg-[#0d1117] text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-300'
-            }`}
-          >
-            Canvas
-          </button>
+    <nav className={`sidebar w-60 bg-[#010409] flex flex-col flex-shrink-0 rounded-lg overflow-hidden relative ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      {/* Collapse/Expand Button */}
+      <button
+        className="sidebar-toggle left"
+        onClick={toggleSidebar}
+        title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+      >
+        <span>{sidebarCollapsed ? '›' : '‹'}</span>
+      </button>
+
+      {/* Header - Mode switcher now at top center of screen */}
+      <div className="p-4 h-16 flex items-center justify-center border-b border-[#30363d]">
+        <div className="text-sm font-semibold text-gray-400">
+          📝 Notes
         </div>
       </div>
 

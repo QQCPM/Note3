@@ -33,12 +33,12 @@ pub async fn ai_initialize(
 ) -> Result<(), String> {
     let manager = AIManager::new(config);
 
-    // Health check
-    let health = manager.health_check().await?;
+    // Health check (silently check - status available via ai_health_check command)
+    let _health = manager.health_check().await?;
 
-    if !health.embedding_service {
-        eprintln!("Warning: Embedding service is not available. Semantic search will not work.");
-    }
+    // NOTE: We don't print warnings here - graceful degradation
+    // Users can check service status in the Settings tab UI
+    // Embedding service is optional - app works fine without it
 
     *state.manager.write().await = Some(manager);
 
@@ -100,12 +100,11 @@ pub async fn ai_update_and_save_config(
     let ai_config = config.to_ai_config();
     let manager = AIManager::new(ai_config);
 
-    // Health check
-    let health = manager.health_check().await?;
+    // Health check (silently check - status available via ai_health_check command)
+    let _health = manager.health_check().await?;
 
-    if !health.embedding_service {
-        eprintln!("Warning: Embedding service is not available after config update.");
-    }
+    // NOTE: We don't print warnings here - graceful degradation
+    // Users can check service status in the Settings tab UI
 
     // Update the running manager
     *state.manager.write().await = Some(manager);

@@ -285,7 +285,7 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element }) => {
             placeholder="Label..."
             className="bg-transparent border-none outline-none text-white text-center font-semibold w-full"
             style={{
-              fontSize: '28px', // 2X BIGGER as requested
+              fontSize: '14px', // Smaller, more readable size
               minWidth: '100px',
             }}
           />

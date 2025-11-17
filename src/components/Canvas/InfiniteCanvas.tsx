@@ -1,5 +1,6 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useCanvasStore } from '@/store/canvasStore';
+import { useUIStore } from '@/store';
 import CanvasElement from './CanvasElement';
 import ConnectionLayer from './ConnectionLayer';
 import CanvasToolbar from './CanvasToolbar';
@@ -8,6 +9,7 @@ import CanvasModal from './CanvasModal';
 
 const InfiniteCanvas: React.FC = () => {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const { canvasMode } = useUIStore();
   const {
     zoom,
     setZoom,
@@ -20,6 +22,57 @@ const InfiniteCanvas: React.FC = () => {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [scrollStart, setScrollStart] = useState({ left: 0, top: 0 });
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const hasInitializedRef = useRef(false);
+
+  // Handle mouse wheel zoom - Zoom toward cursor position
+  // CRITICAL: Always prevent default scrolling - wheel events should ONLY zoom, never scroll
+  // Defined early so it can be used in useEffect below
+  const handleWheel = useCallback((e: WheelEvent | React.WheelEvent) => {
+    // ALWAYS prevent default scrolling behavior first
+    e.preventDefault();
+    e.stopPropagation();
+
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    // Store old zoom BEFORE calculating new zoom
+    const currentZoom = useCanvasStore.getState().zoom;
+    const oldZoom = currentZoom;
+
+    // Calculate new zoom (scroll up = zoom in, scroll down = zoom out)
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    const newZoom = Math.max(0.5, Math.min(2.0, currentZoom + delta));
+
+    // Only update if zoom actually changed
+    if (newZoom === oldZoom) {
+      // At zoom limits (50% or 200%), do nothing
+      return;
+    }
+
+    // Get mouse position relative to viewport
+    const rect = viewport.getBoundingClientRect();
+    const mouseRelX = e.clientX - rect.left;
+    const mouseRelY = e.clientY - rect.top;
+
+    // Calculate the canvas point under mouse BEFORE zoom (using oldZoom)
+    // Element coordinate = (scroll + mouse) / zoom
+    const elementX = (viewport.scrollLeft + mouseRelX) / oldZoom;
+    const elementY = (viewport.scrollTop + mouseRelY) / oldZoom;
+
+    // Calculate new scroll position to keep the same element point under the cursor
+    // After zoom: newScroll + mouse = element * newZoom
+    // Therefore: newScroll = element * newZoom - mouse
+    const newScrollLeft = elementX * newZoom - mouseRelX;
+    const newScrollTop = elementY * newZoom - mouseRelY;
+
+    // CRITICAL: Set scroll position FIRST, synchronously
+    // This prevents visual jumping by updating scroll BEFORE the zoom transform changes
+    viewport.scrollLeft = newScrollLeft;
+    viewport.scrollTop = newScrollTop;
+
+    // THEN update zoom state (this triggers React re-render)
+    useCanvasStore.getState().setZoom(newZoom);
+  }, []); // Empty deps - we use getState() inside to get current values
 
   // Initialize canvas with default elements
   useEffect(() => {
@@ -28,54 +81,43 @@ const InfiniteCanvas: React.FC = () => {
     }
   }, [elements.length]);
 
-  // Center viewport on mount
+  // Add wheel event listener with passive: false to ensure preventDefault always works
   useEffect(() => {
-    if (viewportRef.current && elements.length > 0) {
-      viewportRef.current.scrollLeft = 2000;
-      viewportRef.current.scrollTop = 2000;
-    }
-  }, [elements.length]);
-
-  // Handle mouse wheel zoom - ONLY ZOOM, no scrolling
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
     const viewport = viewportRef.current;
     if (!viewport) return;
 
-    // Store old zoom for calculation
-    const oldZoom = zoom;
+    // Add native event listener with passive: false to ensure preventDefault works
+    // This prevents ALL scrolling - wheel events will ONLY zoom
+    viewport.addEventListener('wheel', handleWheel as any, { passive: false });
 
-    // Calculate new zoom (scroll up = zoom in, scroll down = zoom out)
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    const newZoom = Math.max(0.5, Math.min(2.0, zoom + delta));
+    return () => {
+      viewport.removeEventListener('wheel', handleWheel as any);
+    };
+  }, [handleWheel]); // Re-add when handleWheel changes
 
-    // Only update if zoom actually changed
-    if (newZoom === zoom) {
-      // At zoom limits (50% or 200%), do nothing - don't scroll canvas
-      return;
+  // Center viewport ONLY when first entering canvas mode (not on zoom changes!)
+  // This prevents interference with zoom-to-cursor functionality
+  useEffect(() => {
+    if (viewportRef.current && canvasMode === 'canvas' && !hasInitializedRef.current) {
+      // Canvas size is now dynamic: 5000 * zoom
+      // Center of canvas at current zoom: (2500 * zoom, 2500 * zoom)
+      // To center viewport: scrollLeft = canvasCenter - viewportWidth / 2
+      const viewport = viewportRef.current;
+      const currentZoom = useCanvasStore.getState().zoom;
+      const canvasCenter = 2500 * currentZoom;
+      const centerX = canvasCenter - viewport.clientWidth / 2;
+      const centerY = canvasCenter - viewport.clientHeight / 2;
+
+      viewport.scrollLeft = Math.max(0, centerX);
+      viewport.scrollTop = Math.max(0, centerY);
+      hasInitializedRef.current = true;
     }
 
-    setZoom(newZoom);
-
-    // Zoom towards mouse cursor position
-    const rect = viewport.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    // Calculate canvas point under mouse BEFORE zoom
-    const canvasPointX = (viewport.scrollLeft + mouseX) / oldZoom;
-    const canvasPointY = (viewport.scrollTop + mouseY) / oldZoom;
-
-    // Calculate where that point should be AFTER zoom to stay under cursor
-    const newScrollLeft = canvasPointX * newZoom - mouseX;
-    const newScrollTop = canvasPointY * newZoom - mouseY;
-
-    // Apply new scroll position
-    viewport.scrollLeft = newScrollLeft;
-    viewport.scrollTop = newScrollTop;
-  };
+    // Reset when leaving canvas mode
+    if (canvasMode !== 'canvas') {
+      hasInitializedRef.current = false;
+    }
+  }, [canvasMode]); // ONLY depend on canvasMode, NOT zoom!
 
   // Handle pan start
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -145,19 +187,28 @@ const InfiniteCanvas: React.FC = () => {
     const clickY = e.clientY - rect.top;
 
     // Convert to canvas coordinates
-    const canvasX = (viewport.scrollLeft + clickX) / zoom;
-    const canvasY = (viewport.scrollTop + clickY) / zoom;
+    // The 5000x5000 canvas is unscaled, but the elements container inside is scaled by zoom
+    // scrollLeft/scrollTop are in the unscaled canvas coordinate system
+    // clickX/clickY are in viewport pixels
+    // Since the elements container is scaled, we need to divide clickX/clickY by zoom
+    // to get the position in the unscaled canvas coordinate system
+    const canvasX = viewport.scrollLeft + clickX / zoom;
+    const canvasY = viewport.scrollTop + clickY / zoom;
 
     // Create element based on selected tool
     const colors = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f472b6'];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
+    // Calculate element dimensions
+    const elementWidth = selectedTool === 'note' ? 150 : 200;
+    const elementHeight = selectedTool === 'note' ? 150 : 200;
+
     const newElement = {
       type: selectedTool as any,
-      x: canvasX - 100, // Center on click
-      y: canvasY - 100,
-      width: selectedTool === 'note' ? 150 : 200,
-      height: selectedTool === 'note' ? 150 : 200,
+      x: canvasX - elementWidth / 2, // Center on click precisely
+      y: canvasY - elementHeight / 2,
+      width: elementWidth,
+      height: elementHeight,
       content:
         selectedTool === 'note'
           ? 'New note...'
@@ -186,34 +237,29 @@ const InfiniteCanvas: React.FC = () => {
       {/* Zoom Controls */}
       <ZoomControls />
 
-      {/* Viewport with scrolling */}
+      {/* Viewport - scrolling disabled, only zoom allowed (panning still works programmatically) */}
       <div
         ref={viewportRef}
-        className="w-full h-full overflow-auto"
+        className="w-full h-full canvas-viewport"
         style={{
-          cursor: isPanning
-            ? 'grabbing'
-            : selectedTool === 'hand'
-            ? 'grab'
-            : 'default',
+          overflow: 'auto', // Needed for programmatic scrolling (panning)
         }}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onClick={handleCanvasClick}
       >
-        {/* Infinite Canvas Container */}
+        {/* Infinite Canvas Container - Size scales with zoom for proper scrolling */}
         <div
           id="infinityCanvas"
           className="relative"
           style={{
-            width: '5000px',
-            height: '5000px',
+            width: `${5000 * zoom}px`,
+            height: `${5000 * zoom}px`,
             backgroundImage:
               'radial-gradient(circle, #21262d 1px, transparent 1px)',
-            backgroundSize: '20px 20px',
+            backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
           }}
         >
           {/* SVG Connection Layer */}
