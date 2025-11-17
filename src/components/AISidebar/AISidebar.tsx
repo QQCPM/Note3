@@ -55,7 +55,7 @@ const AISidebar: React.FC = () => {
       className="flex-shrink-0 flex flex-col rounded-lg relative"
       style={{
         width: `${aiSidebarWidth}px`,
-        background: 'radial-gradient(circle at top left, rgba(185, 28, 28, 0.15) 0%, rgba(234, 88, 12, 0.08) 40%, #010409 80%)',
+        background: 'radial-gradient(circle at top left, rgba(13, 71, 161, 0.2) 0%, rgba(30, 136, 229, 0.1) 40%, #010409 80%)',
       }}
     >
       {/* Resize Handle */}
