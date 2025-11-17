@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { useNotesStore, useBlocksStore } from '@/store';
+import { useNotesStore, useBlocksStore, useUIStore } from '@/store';
 import { getNoteById, getBlocksByNote } from '@/utils/tauri';
 import CanvasHeader from './CanvasHeader';
 import CanvasContent from './CanvasContent';
+import InfinityCanvas from './InfinityCanvas';
 
 const Canvas: React.FC = () => {
   const { activeNoteId } = useNotesStore();
   const { setBlocks, blocks } = useBlocksStore();
+  const { canvasMode } = useUIStore();
   const [activeNote, setActiveNote] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -62,7 +64,11 @@ const Canvas: React.FC = () => {
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
       <CanvasHeader note={activeNote} />
-      <CanvasContent note={activeNote} blocks={blocks} />
+      {canvasMode === 'note' ? (
+        <CanvasContent note={activeNote} blocks={blocks} />
+      ) : (
+        <InfinityCanvas />
+      )}
     </main>
   );
 };
