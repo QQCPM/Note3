@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNotesStore, useBlocksStore, useUIStore } from '@/store';
-import { getNoteById, getBlocksByNote, createNote } from '@/utils/tauri';
+import { getNoteById, getBlocksByNote } from '@/utils/tauri';
 import CanvasHeader from './CanvasHeader';
 import CanvasContent from './CanvasContent';
-import InfinityCanvas from './InfinityCanvas';
+import InfiniteCanvas from './InfiniteCanvas';
 
 const Canvas: React.FC = () => {
   const { activeNoteId, setActiveNote: setActiveNoteId, addNote } = useNotesStore();
@@ -35,39 +35,16 @@ const Canvas: React.FC = () => {
     }
   }, [activeNoteId, setBlocks]);
 
-  // Auto-create a canvas note when entering canvas mode without a note
-  useEffect(() => {
-    const autoCreateCanvasNote = async () => {
-      if (!activeNoteId && canvasMode === 'canvas' && !loading) {
-        try {
-          setLoading(true);
-          const newNote = await createNote({
-            title: 'Infinity Canvas',
-            icon: '🎨',
-            parent_id: null,
-          });
-          addNote(newNote);
-          setActiveNoteId(newNote.id);
-        } catch (error) {
-          console.error('Failed to create canvas note:', error);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-    autoCreateCanvasNote();
-  }, [activeNoteId, canvasMode, loading, addNote, setActiveNoteId]);
-
-  // In canvas mode, show infinity canvas even without a note selected
-  if (!activeNoteId && canvasMode === 'canvas') {
+  // Canvas mode doesn't require an active note
+  if (canvasMode === 'canvas') {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
-        <InfinityCanvas />
+        <InfiniteCanvas />
       </main>
     );
   }
 
-  // In note mode, show welcome screen if no note selected
+  // Note mode requires an active note
   if (!activeNoteId) {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-bg-primary rounded-lg">
@@ -100,7 +77,7 @@ const Canvas: React.FC = () => {
       {canvasMode === 'note' ? (
         <CanvasContent note={activeNote} blocks={blocks} />
       ) : (
-        <InfinityCanvas />
+        <InfiniteCanvas />
       )}
     </main>
   );

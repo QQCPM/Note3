@@ -39,10 +39,7 @@ interface UIState {
   setAISidebarWidth: (width: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setAISidebarTab: (tab: 'agent' | 'recommend' | 'settings') => void;
-
-  // Canvas Mode
   setCanvasMode: (mode: 'note' | 'canvas') => void;
-  toggleCanvasMode: () => void;
 
   // Context Menu
   showContextMenu: (x: number, y: number, noteId: string) => void;
@@ -62,6 +59,7 @@ export const useUIStore = create<UIState>((set) => ({
   aiSidebarCollapsed: false,
   aiSidebarWidth: 350,
   aiSidebarTab: 'agent',
+
   canvasMode: 'note',
 
   contextMenu: {
@@ -90,40 +88,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   setAISidebarTab: (tab) => set({ aiSidebarTab: tab }),
 
-  setCanvasMode: (mode) => set(() => {
-    // Auto-collapse sidebars when entering canvas mode
-    if (mode === 'canvas') {
-      return {
-        canvasMode: mode,
-        sidebarCollapsed: true,
-        aiSidebarCollapsed: true,
-      };
-    }
-    // Auto-expand sidebars when entering note mode
-    return {
-      canvasMode: mode,
-      sidebarCollapsed: false,
-      aiSidebarCollapsed: false,
-    };
-  }),
-
-  toggleCanvasMode: () => set((state) => {
-    const newMode = state.canvasMode === 'note' ? 'canvas' : 'note';
-    // Auto-collapse sidebars when entering canvas mode
-    if (newMode === 'canvas') {
-      return {
-        canvasMode: newMode,
-        sidebarCollapsed: true,
-        aiSidebarCollapsed: true,
-      };
-    }
-    // Auto-expand sidebars when entering note mode
-    return {
-      canvasMode: newMode,
-      sidebarCollapsed: false,
-      aiSidebarCollapsed: false,
-    };
-  }),
+  setCanvasMode: (mode) => set({ canvasMode: mode }),
 
   showContextMenu: (x, y, noteId) => set({
     contextMenu: { visible: true, position: { x, y }, noteId }

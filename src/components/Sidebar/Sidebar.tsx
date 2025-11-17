@@ -5,7 +5,7 @@ import NoteTree from './NoteTree';
 
 const Sidebar: React.FC = () => {
   const { notes, setActiveNote, addNote } = useNotesStore();
-  const { canvasMode, setCanvasMode, sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { canvasMode, setCanvasMode } = useUIStore();
 
   const handleNewPage = async () => {
     try {
@@ -22,19 +22,29 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <nav className={`sidebar w-60 bg-[#010409] flex flex-col flex-shrink-0 rounded-lg overflow-hidden relative ${sidebarCollapsed ? 'collapsed' : ''}`}>
+    <nav className="w-60 bg-[#010409] flex flex-col flex-shrink-0 rounded-lg overflow-hidden">
       {/* Header with Mode Switcher */}
       <div className="p-4 h-16 flex items-center border-b border-[#30363d]">
-        <div className="mode-switcher">
+        <div
+          className="inline-flex bg-[#161b22] border border-[#30363d] rounded-lg p-1 gap-1"
+        >
           <button
-            className={`mode-btn ${canvasMode === 'note' ? 'active' : ''}`}
             onClick={() => setCanvasMode('note')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+              canvasMode === 'note'
+                ? 'bg-[#0d1117] text-white shadow-sm'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
           >
             Note
           </button>
           <button
-            className={`mode-btn ${canvasMode === 'canvas' ? 'active' : ''}`}
             onClick={() => setCanvasMode('canvas')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+              canvasMode === 'canvas'
+                ? 'bg-[#0d1117] text-white shadow-sm'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
           >
             Canvas
           </button>
@@ -55,14 +65,6 @@ const Sidebar: React.FC = () => {
           + New Page
         </button>
       </div>
-
-      {/* Toggle Button */}
-      <button
-        className="sidebar-toggle left"
-        onClick={toggleSidebar}
-      >
-        <span>{sidebarCollapsed ? '›' : '‹'}</span>
-      </button>
     </nav>
   );
 };
