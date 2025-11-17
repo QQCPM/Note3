@@ -42,49 +42,59 @@ const InfinityCanvas: React.FC = () => {
     (conn) => conn.noteId === activeNoteId
   );
 
-  // Handle wheel zoom with cursor focus
+  // Handle wheel zoom with cursor focus (exactly like prototype)
   const handleWheel = (e: React.WheelEvent) => {
-    if (!e.ctrlKey && !e.metaKey) return; // Only zoom with Ctrl/Cmd
     e.preventDefault();
 
     const viewportEl = viewportRef.current;
     if (!viewportEl) return;
 
-    const rect = viewportEl.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
     const oldZoom = viewport.zoom;
-    const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.1, Math.min(5, oldZoom * zoomDelta));
 
-    // Calculate canvas point under mouse (cursor-focused zoom algorithm from prototype)
-    const canvasPointX = (viewportEl.scrollLeft + mouseX) / oldZoom;
-    const canvasPointY = (viewportEl.scrollTop + mouseY) / oldZoom;
+    // Determine zoom direction (additive, not multiplicative)
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    const newZoom = Math.max(0.5, Math.min(2.0, oldZoom + delta));
+
+    if (newZoom === oldZoom) return; // No change
+
+    const rect = viewportEl.getBoundingClientRect();
+
+    // Mouse position relative to viewport
+    const mouseRelX = e.clientX - rect.left;
+    const mouseRelY = e.clientY - rect.top;
+
+    // Calculate the canvas point under mouse BEFORE zoom (using old zoom)
+    const canvasPointX = (viewportEl.scrollLeft + mouseRelX) / oldZoom;
+    const canvasPointY = (viewportEl.scrollTop + mouseRelY) / oldZoom;
 
     // Update zoom
     setZoom(newZoom);
 
-    // Adjust scroll to keep canvas point under mouse
+    // Calculate where that point should be AFTER zoom to stay under cursor
     requestAnimationFrame(() => {
       if (viewportEl) {
-        viewportEl.scrollLeft = canvasPointX * newZoom - mouseX;
-        viewportEl.scrollTop = canvasPointY * newZoom - mouseY;
+        const newScrollLeft = canvasPointX * newZoom - mouseRelX;
+        const newScrollTop = canvasPointY * newZoom - mouseRelY;
+
+        viewportEl.scrollLeft = newScrollLeft;
+        viewportEl.scrollTop = newScrollTop;
       }
     });
   };
 
-  // Handle zoom button clicks (centered zoom)
+  // Handle zoom button clicks (centered zoom, matching prototype)
   const handleZoomIn = () => {
     const viewportEl = viewportRef.current;
     if (!viewportEl) return;
 
+    const oldZoom = viewport.zoom;
+    const newZoom = Math.min(2.0, oldZoom + 0.1);
+
+    if (newZoom === oldZoom) return;
+
     const rect = viewportEl.getBoundingClientRect();
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
-
-    const oldZoom = viewport.zoom;
-    const newZoom = Math.min(5, oldZoom * 1.2);
 
     const canvasPointX = (viewportEl.scrollLeft + centerX) / oldZoom;
     const canvasPointY = (viewportEl.scrollTop + centerY) / oldZoom;
@@ -103,12 +113,14 @@ const InfinityCanvas: React.FC = () => {
     const viewportEl = viewportRef.current;
     if (!viewportEl) return;
 
+    const oldZoom = viewport.zoom;
+    const newZoom = Math.max(0.5, oldZoom - 0.1);
+
+    if (newZoom === oldZoom) return;
+
     const rect = viewportEl.getBoundingClientRect();
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
-
-    const oldZoom = viewport.zoom;
-    const newZoom = Math.max(0.1, oldZoom / 1.2);
 
     const canvasPointX = (viewportEl.scrollLeft + centerX) / oldZoom;
     const canvasPointY = (viewportEl.scrollTop + centerY) / oldZoom;
@@ -127,11 +139,21 @@ const InfinityCanvas: React.FC = () => {
     const viewportEl = viewportRef.current;
     if (!viewportEl) return;
 
+    const oldZoom = viewport.zoom;
+
     resetZoom();
+
+    const rect = viewportEl.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const canvasPointX = (viewportEl.scrollLeft + centerX) / oldZoom;
+    const canvasPointY = (viewportEl.scrollTop + centerY) / oldZoom;
+
     requestAnimationFrame(() => {
       if (viewportEl) {
-        viewportEl.scrollLeft = 0;
-        viewportEl.scrollTop = 0;
+        viewportEl.scrollLeft = canvasPointX * 1.0 - centerX;
+        viewportEl.scrollTop = canvasPointY * 1.0 - centerY;
       }
     });
   };

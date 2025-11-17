@@ -66,29 +66,30 @@ const CanvasHeader: React.FC<CanvasHeaderProps> = ({ note }) => {
         />
       </div>
 
-      {/* Mode Switcher */}
-      <div className="flex items-center gap-2">
-        <div className="canvas-mode-switcher">
+      {/* Compact Mode Switcher */}
+      <div className="flex items-center gap-4">
+        <div className="mode-switcher-compact">
           <button
-            className={`mode-btn ${canvasMode === 'note' ? 'active' : ''}`}
+            className={`mode-indicator ${canvasMode === 'note' ? 'active' : ''}`}
             onClick={() => setCanvasMode('note')}
             title="Note Mode"
           >
-            <FileText size={16} />
-            <span>Note</span>
+            <FileText size={14} />
           </button>
           <button
-            className={`mode-btn ${canvasMode === 'canvas' ? 'active' : ''}`}
+            className={`mode-indicator ${canvasMode === 'canvas' ? 'active' : ''}`}
             onClick={() => setCanvasMode('canvas')}
             title="Canvas Mode"
           >
-            <Sparkles size={16} />
-            <span>Canvas</span>
+            <Sparkles size={14} />
           </button>
         </div>
 
-        <div className="text-xs text-gray-500 ml-4">
-          Type <kbd className="px-2 py-1 bg-[#161b22] rounded text-gray-400">/</kbd> for commands
+        <div className="text-xs text-gray-500">
+          {canvasMode === 'note'
+            ? <>Type <kbd className="px-2 py-1 bg-[#161b22] rounded text-gray-400">/</kbd> for commands</>
+            : 'Scroll to zoom • Drag to pan'
+          }
         </div>
       </div>
     </header>
