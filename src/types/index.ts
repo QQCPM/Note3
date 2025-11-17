@@ -9,7 +9,7 @@ export * from './skill';
 export interface UIState {
   activeNoteId: string | null;
   sidebarCollapsed: boolean;
-  aiSidebarTab: 'agent' | 'mcp' | 'skills';
+  aiSidebarTab: 'agent' | 'recommend' | 'settings';
   contextMenuVisible: boolean;
   contextMenuPosition: { x: number; y: number } | null;
   contextMenuNoteId: string | null;

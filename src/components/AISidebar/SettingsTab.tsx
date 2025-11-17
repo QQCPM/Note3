@@ -1,8 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { tauriAI } from '@/services/tauriAI';
-import { Settings, Check, X, Loader2 } from 'lucide-react';
+import { Settings, Check, X, Loader2, Sparkles } from 'lucide-react';
 
 const SettingsTab: React.FC = () => {
+  // Skills state
+  const [skills, setSkills] = useState([
+    { id: '1', name: '📝 Note Writer', icon: '📝', active: true },
+    { id: '2', name: '💻 Code Generator', icon: '💻', active: true },
+    { id: '3', name: '📊 Data Analyzer', icon: '📊', active: true },
+    { id: '4', name: '🎨 UI Designer', icon: '🎨', active: false },
+    { id: '5', name: '🔍 Researcher', icon: '🔍', active: false },
+    { id: '6', name: '📚 Summarizer', icon: '📚', active: false },
+    { id: '7', name: '🌐 Translator', icon: '🌐', active: false },
+    { id: '8', name: '🧮 Math Solver', icon: '🧮', active: false },
+    { id: '9', name: '✍️ Editor', icon: '✍️', active: false },
+  ]);
+
+  const toggleSkill = (id: string) => {
+    setSkills(skills.map(skill =>
+      skill.id === id ? { ...skill, active: !skill.active } : skill
+    ));
+  };
+
+  // MCP tools state
+  const [mcpTools, setMcpTools] = useState([
+    { id: 'github', name: 'GitHub', icon: '🐙', active: true },
+    { id: 'filesystem', name: 'Filesystem', icon: '📁', active: true },
+    { id: 'websearch', name: 'Web Search', icon: '🔍', active: true },
+    { id: 'database', name: 'Database', icon: '📊', active: false },
+    { id: 'figma', name: 'Figma', icon: '🎨', active: false },
+    { id: 'gmail', name: 'Gmail', icon: '📧', active: false },
+  ]);
+
+  const toggleMCPTool = (id: string) => {
+    setMcpTools(mcpTools.map(tool =>
+      tool.id === id ? { ...tool, active: !tool.active } : tool
+    ));
+  };
+
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -88,14 +123,96 @@ const SettingsTab: React.FC = () => {
   );
 
   return (
-    <div className="tab-content active p-4 space-y-6" id="settingsTab">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <Settings size={20} className="text-purple-400" />
-        <h2 className="text-lg font-semibold text-white">AI Settings</h2>
-      </div>
+    <div className="tab-content active overflow-y-auto">
+      <div className="ai-conversation-flow">
+        {/* AI Skills Section */}
+        <div className="settings-section">
+          <div className="section-card">
+            <div className="section-header">
+              <div className="section-title">
+                <Sparkles size={14} className="inline mr-2" />
+                AI Skills
+              </div>
+              <button className="section-action" onClick={() => alert('Manage skills')}>
+                Manage
+              </button>
+            </div>
 
-      {/* Service Status */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', margin: '-4px' }}>
+              {skills.map((skill) => (
+                <div
+                  key={skill.id}
+                  className={`skill-pill ${skill.active ? 'active' : ''}`}
+                  onClick={() => toggleSkill(skill.id)}
+                >
+                  <div className="skill-pill-check">{skill.active ? '✓' : ''}</div>
+                  <span>{skill.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-divider"></div>
+
+        {/* MCP Servers Section */}
+        <div className="settings-section">
+          <div className="section-card">
+            <div className="section-header">
+              <div className="section-title">🔌 MCP Servers</div>
+              <button className="section-action" onClick={() => alert('Add new MCP server')}>
+                + Add
+              </button>
+            </div>
+
+            <div>
+              {mcpTools.map((tool) => (
+                <div
+                  key={tool.id}
+                  className="mcp-tool-item"
+                  onClick={() => toggleMCPTool(tool.id)}
+                >
+                  <div className="mcp-tool-info">
+                    <span className="mcp-tool-icon">{tool.icon}</span>
+                    <span className="mcp-tool-name">{tool.name}</span>
+                  </div>
+                  <div className={`toggle-switch ${tool.active ? 'active' : ''}`}>
+                    <div className="toggle-slider"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Info Section */}
+        <div className="message-group" style={{ marginTop: '16px' }}>
+          <div className="bg-[#161b22] rounded-lg p-3 border border-[#30363d]">
+            <div className="text-xs text-gray-400 mb-2 font-semibold">💡 About Settings</div>
+            <div className="text-xs text-gray-500 leading-relaxed space-y-2">
+              <p>
+                <strong className="text-gray-400">Skills:</strong> Specialized instruction
+                sets that enhance AI capabilities for specific tasks.
+              </p>
+              <p>
+                <strong className="text-gray-400">MCP Servers:</strong> External tools that
+                provide the AI with additional capabilities like GitHub integration, file
+                system access, and web search.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-divider"></div>
+
+        {/* OpenAI Configuration - Existing content */}
+        <div className="settings-section px-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Settings size={20} className="text-purple-400" />
+            <h2 className="text-lg font-semibold text-white">OpenAI Configuration</h2>
+          </div>
+
+          {/* Service Status */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-400">Service Status</h3>
@@ -274,15 +391,17 @@ const SettingsTab: React.FC = () => {
         </button>
       </div>
 
-      {/* Cost Info */}
-      <div className="bg-purple-900/20 border border-purple-700/30 rounded p-3">
-        <div className="text-xs text-purple-300 font-semibold mb-2">💰 Cost Savings</div>
-        <div className="text-xs text-gray-400 space-y-1">
-          <div>• Embeddings: $0 (local)</div>
-          <div>• Code Gen: $0 (local with fallback)</div>
-          <div>• Chat: ~$5-20/month (GPT-4o)</div>
-          <div className="pt-2 border-t border-purple-700/30 text-purple-300">
-            Total: ~$5-20/month vs $50-100 all-API
+          {/* Cost Info */}
+          <div className="bg-purple-900/20 border border-purple-700/30 rounded p-3">
+            <div className="text-xs text-purple-300 font-semibold mb-2">💰 Cost Savings</div>
+            <div className="text-xs text-gray-400 space-y-1">
+              <div>• Embeddings: $0 (local)</div>
+              <div>• Code Gen: $0 (local with fallback)</div>
+              <div>• Chat: ~$5-20/month (GPT-4o)</div>
+              <div className="pt-2 border-t border-purple-700/30 text-purple-300">
+                Total: ~$5-20/month vs $50-100 all-API
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useUIStore } from '@/store';
 import AgentTab from './AgentTab';
-import MCPTab from './MCPTab';
-import SkillsTab from './SkillsTab';
+import RecommendTab from './RecommendTab';
 import SettingsTab from './SettingsTab';
 import AIInput from './AIInput';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
@@ -56,7 +55,7 @@ const AISidebar: React.FC = () => {
       className="flex-shrink-0 flex flex-col rounded-lg relative"
       style={{
         width: `${aiSidebarWidth}px`,
-        background: 'radial-gradient(circle at top left, rgba(13, 71, 161, 0.2) 0%, rgba(30, 136, 229, 0.1) 40%, #010409 80%)',
+        background: 'radial-gradient(circle at top left, rgba(185, 28, 28, 0.15) 0%, rgba(234, 88, 12, 0.08) 40%, #010409 80%)',
       }}
     >
       {/* Resize Handle */}
@@ -84,16 +83,10 @@ const AISidebar: React.FC = () => {
             Agent
           </button>
           <button
-            className={`tab-button ${aiSidebarTab === 'mcp' ? 'active' : ''}`}
-            onClick={() => setAISidebarTab('mcp')}
+            className={`tab-button ${aiSidebarTab === 'recommend' ? 'active' : ''}`}
+            onClick={() => setAISidebarTab('recommend')}
           >
-            MCP
-          </button>
-          <button
-            className={`tab-button ${aiSidebarTab === 'skills' ? 'active' : ''}`}
-            onClick={() => setAISidebarTab('skills')}
-          >
-            Skills
+            Recommend
           </button>
           <button
             className={`tab-button ${aiSidebarTab === 'settings' ? 'active' : ''}`}
@@ -107,8 +100,7 @@ const AISidebar: React.FC = () => {
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden flex flex-col overflow-y-auto">
         {aiSidebarTab === 'agent' && <AgentTab />}
-        {aiSidebarTab === 'mcp' && <MCPTab />}
-        {aiSidebarTab === 'skills' && <SkillsTab />}
+        {aiSidebarTab === 'recommend' && <RecommendTab />}
         {aiSidebarTab === 'settings' && <SettingsTab />}
       </div>
 

@@ -23,7 +23,7 @@ interface UIState {
   sidebarCollapsed: boolean;
   aiSidebarCollapsed: boolean;
   aiSidebarWidth: number;
-  aiSidebarTab: 'agent' | 'mcp' | 'skills' | 'settings';
+  aiSidebarTab: 'agent' | 'recommend' | 'settings';
 
   // Menus & Modals
   contextMenu: ContextMenuState;
@@ -35,7 +35,7 @@ interface UIState {
   toggleAISidebar: () => void;
   setAISidebarWidth: (width: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
-  setAISidebarTab: (tab: 'agent' | 'mcp' | 'skills' | 'settings') => void;
+  setAISidebarTab: (tab: 'agent' | 'recommend' | 'settings') => void;
 
   // Context Menu
   showContextMenu: (x: number, y: number, noteId: string) => void;
