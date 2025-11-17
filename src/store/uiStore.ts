@@ -25,6 +25,9 @@ interface UIState {
   aiSidebarWidth: number;
   aiSidebarTab: 'agent' | 'recommend' | 'settings';
 
+  // Canvas Mode
+  canvasMode: 'note' | 'canvas';
+
   // Menus & Modals
   contextMenu: ContextMenuState;
   slashMenu: SlashMenuState;
@@ -36,6 +39,7 @@ interface UIState {
   setAISidebarWidth: (width: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setAISidebarTab: (tab: 'agent' | 'recommend' | 'settings') => void;
+  setCanvasMode: (mode: 'note' | 'canvas') => void;
 
   // Context Menu
   showContextMenu: (x: number, y: number, noteId: string) => void;
@@ -55,6 +59,8 @@ export const useUIStore = create<UIState>((set) => ({
   aiSidebarCollapsed: false,
   aiSidebarWidth: 350,
   aiSidebarTab: 'agent',
+
+  canvasMode: 'note',
 
   contextMenu: {
     visible: false,
@@ -81,6 +87,8 @@ export const useUIStore = create<UIState>((set) => ({
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
   setAISidebarTab: (tab) => set({ aiSidebarTab: tab }),
+
+  setCanvasMode: (mode) => set({ canvasMode: mode }),
 
   showContextMenu: (x, y, noteId) => set({
     contextMenu: { visible: true, position: { x, y }, noteId }
