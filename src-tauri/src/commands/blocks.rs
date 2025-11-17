@@ -20,6 +20,22 @@ pub async fn get_blocks_by_note(
 }
 
 #[tauri::command]
+pub async fn get_block(
+    db: tauri::State<'_, SqlitePool>,
+    block_id: String,
+) -> Result<Block, String> {
+    let block = sqlx::query_as::<_, Block>(
+        "SELECT * FROM blocks WHERE id = ?"
+    )
+    .bind(&block_id)
+    .fetch_one(db.inner())
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(block)
+}
+
+#[tauri::command]
 pub async fn create_block(
     db: tauri::State<'_, SqlitePool>,
     input: CreateBlockInput,

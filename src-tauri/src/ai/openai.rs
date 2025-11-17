@@ -11,19 +11,19 @@ pub struct OpenAIConfig {
     pub max_tokens: Option<u32>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub role: String,
     pub content: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tool {
     pub r#type: String,
     pub function: FunctionDefinition,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionDefinition {
     pub name: String,
     pub description: String,
@@ -50,6 +50,8 @@ struct ChatCompletionRequest {
     temperature: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_completion_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<Tool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -91,6 +93,7 @@ struct Delta {
     tool_calls: Vec<ToolCall>,
 }
 
+#[derive(Clone)]
 pub struct OpenAIService {
     client: Client,
     config: OpenAIConfig,
@@ -108,11 +111,17 @@ impl OpenAIService {
     pub async fn chat(&self, messages: Vec<Message>, tools: Option<Vec<Tool>>) -> Result<(String, Vec<ToolCall>), String> {
         let url = "https://api.openai.com/v1/chat/completions";
 
+        // GPT-5 and newer use max_completion_tokens, older models use max_tokens
+        let is_gpt5_or_newer = self.config.model.starts_with("gpt-5") ||
+                                self.config.model.starts_with("o1") ||
+                                self.config.model.starts_with("o3");
+
         let request = ChatCompletionRequest {
             model: self.config.model.clone(),
             messages,
             temperature: self.config.temperature,
-            max_tokens: self.config.max_tokens,
+            max_tokens: if is_gpt5_or_newer { None } else { self.config.max_tokens },
+            max_completion_tokens: if is_gpt5_or_newer { self.config.max_tokens } else { None },
             tools,
             stream: None,
         };
@@ -215,6 +224,7 @@ Return ONLY valid JSON with this structure:
   "title": "Database name",
   "columns": [
     {
+      "id": "unique-column-id",
       "name": "Column name",
       "type": "text|number|date|select|checkbox",
       "options": ["option1", "option2"] // Only for select type
@@ -222,6 +232,8 @@ Return ONLY valid JSON with this structure:
   ],
   "rows": [] // Start with empty array
 }
+
+IMPORTANT: Each column MUST have a unique "id" field. Generate UUIDs or use format like "col_1", "col_2", etc.
 
 Examples:
 - "text" for names, descriptions, URLs
@@ -268,11 +280,17 @@ Return ONLY the JSON, no explanations."#;
     ) -> Result<impl futures_core::Stream<Item = Result<String, String>>, String> {
         let url = "https://api.openai.com/v1/chat/completions";
 
+        // GPT-5 and newer use max_completion_tokens, older models use max_tokens
+        let is_gpt5_or_newer = self.config.model.starts_with("gpt-5") ||
+                                self.config.model.starts_with("o1") ||
+                                self.config.model.starts_with("o3");
+
         let request = ChatCompletionRequest {
             model: self.config.model.clone(),
             messages,
             temperature: self.config.temperature,
-            max_tokens: self.config.max_tokens,
+            max_tokens: if is_gpt5_or_newer { None } else { self.config.max_tokens },
+            max_completion_tokens: if is_gpt5_or_newer { self.config.max_tokens } else { None },
             tools: None,
             stream: Some(true),
         };

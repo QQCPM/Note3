@@ -2,11 +2,13 @@ pub mod embedding;
 pub mod openai;
 pub mod local;
 pub mod config_persistence;
+pub mod tools;
 
 pub use embedding::{EmbeddingConfig, LocalEmbeddingService};
-pub use openai::{OpenAIConfig, OpenAIService, Message, Tool, ToolCall};
+pub use openai::{OpenAIConfig, OpenAIService, Message, Tool, ToolCall, FunctionDefinition};
 pub use local::{LocalModelConfig, LocalModelService};
 pub use config_persistence::PersistedConfig;
+pub use tools::{ToolDefinition, ToolResult, get_all_tools, get_database_tools, get_artifact_tools};
 
 use serde::{Deserialize, Serialize};
 
@@ -31,10 +33,17 @@ pub struct DatabaseResult {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DatabaseColumn {
+    #[serde(default = "generate_column_id")]
+    pub id: String,
     pub name: String,
     pub r#type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<Vec<String>>,
+}
+
+fn generate_column_id() -> String {
+    use uuid::Uuid;
+    Uuid::new_v4().to_string()
 }
 
 /// Complete AI configuration for the hybrid system
@@ -112,6 +121,7 @@ impl AIConfig {
 }
 
 /// Manages both local and cloud AI services
+#[derive(Clone)]
 pub struct AIManager {
     pub config: AIConfig,
     pub embedding_service: LocalEmbeddingService,

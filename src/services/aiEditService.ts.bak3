@@ -339,25 +339,6 @@ When user says "create table of top 5 X":
    Step 6: Repeat for rows 2, 3, 4, 5
    Step 7: Verify ALL 5 rows have ALL column values filled
 
-
-**CRITICAL RULES - READ FIRST:**
-
-1. **"LIST OF X" = TABLE, NOT TEXT**
-   - "make a list of 5 tallest buildings" → create_database (NOT edit_block!)
-   - "complete list of X" → create_database
-   - "I want a list of X" → create_database
-   - Exception: Only use edit_block if user specifically says "write a paragraph about X"
-
-2. **MAINTAIN CONTEXT**
-   - Remember what the user just asked for
-   - If user says "list of buildings" then "table", create table of BUILDINGS (not something else!)
-   - Keep conversation history in mind
-
-3. **IMMEDIATE ACTION**
-   - Don't give text responses when user wants a table
-   - If user asks for "list of X", immediately create_database
-   - Don't explain what you'll do - just do it
-
 ===========================================
 DECISION TREE - CHOOSE THE RIGHT TOOL:
 ===========================================

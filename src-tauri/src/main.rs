@@ -4,6 +4,8 @@
 mod db;
 mod commands;
 mod ai;
+mod orchestration;
+mod agentic;
 
 use db::initialize_database;
 use commands::*;
@@ -12,6 +14,7 @@ use tauri::Manager;
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Initialize database
             let app_handle = app.handle().clone();
@@ -44,6 +47,7 @@ fn main() {
             get_child_notes,
             // Block commands
             get_blocks_by_note,
+            get_block,
             create_block,
             update_block,
             delete_block,
@@ -66,6 +70,28 @@ fn main() {
             ai_read_block,
             ai_get_note_context,
             ai_chat_with_note_context,
+            // Advanced AI tools (Phase 1 & 2)
+            ai_get_tools,
+            ai_get_database_tools,
+            ai_get_artifact_tools,
+            ai_execute_database_tool,
+            ai_execute_artifact_tool,
+            ai_chat_with_auto_tools,
+            // Orchestration (Phase 3)
+            get_workflow_templates,
+            get_workflow_template,
+            orchestrate_workflow,
+            create_custom_workflow,
+            cancel_workflow,
+            get_workflow_status,
+            // Agentic AI (Phase 4)
+            agentic_execute_task,
+            agentic_plan_task,
+            agentic_research,
+            agentic_research_and_extract,
+            agentic_verify_data,
+            // Web Search (CORS proxy)
+            search_web,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

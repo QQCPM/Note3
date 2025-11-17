@@ -426,14 +426,14 @@ export function createMacM2UltraConfig(openaiKey: string): AIConfig {
     local_code_generation: {
       endpoint: 'http://localhost:8080',
       model: 'qwen3-coder-30b',
-      max_tokens: 8192, // Increased for longer responses
+      max_tokens: 8192,
       temperature: 0.7,
     },
     agent: {
       api_key: openaiKey,
-      model: 'gpt-4o',
-      temperature: 0.7,
-      max_tokens: 8192, // Increased for longer responses
+      model: 'gpt-5.1', // Upgraded to GPT-5.1 with advanced reasoning
+      temperature: 0.3, // Lower for more focused, accurate responses
+      max_tokens: 16000, // Increased for longer, more detailed responses
     },
   };
 }

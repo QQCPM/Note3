@@ -46,15 +46,13 @@ const AIInput: React.FC = () => {
     const userMessage = message.trim();
     setMessage('');
 
-    // Always use Agent mode: AI editing with diffs
-    await handleAgentMode(userMessage);
+    // Let AI handle everything intelligently with tools
+    // The AI will decide whether to create artifacts, databases, or edit text
+    await handleSmartAgent(userMessage);
   };
 
-  const handleAgentMode = async (userMessage: string) => {
-    // Get or create target block
-    const targetBlock = await getTargetBlock();
-
-    if (!targetBlock) {
+  const handleSmartAgent = async (userMessage: string) => {
+    if (!activeNoteId) {
       addMessage({
         role: 'assistant',
         content: 'Error: No active note. Please select or create a note first.',
@@ -62,15 +60,30 @@ const AIInput: React.FC = () => {
       return;
     }
 
-    // Use AI editing service
+    // User message will be added by streamAIEditChat (avoid duplicates)
+
+    // Get or create target block
+    const targetBlock = await getTargetBlock();
+    if (!targetBlock) {
+      addMessage({
+        role: 'assistant',
+        content: 'Error: Failed to get target block.',
+      });
+      return;
+    }
+
+    // Use the enhanced AI editing service with all tools
+    // This includes: read_block, read_note, edit_block, search_web, create_artifact, create_database
+    // Plus: 10 database tools + 10 artifact tools
+    // The AI will intelligently decide which tools to use based on the request
     await streamAIEditChat({
       blockId: targetBlock.id,
       userMessage,
       onComplete: () => {
-        console.log('✅ Agent mode edit complete');
+        console.log('✅ Smart agent complete');
       },
       onError: (error) => {
-        console.error('❌ Agent mode error:', error);
+        console.error('❌ Smart agent error:', error);
         addMessage({
           role: 'assistant',
           content: `Error: ${error.message}`,

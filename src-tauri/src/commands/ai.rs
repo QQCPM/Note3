@@ -14,6 +14,15 @@ impl AIState {
             manager: Arc::new(RwLock::new(None)),
         }
     }
+
+    /// Helper to get a cloned AIManager instance or return an error if not initialized
+    pub async fn get_ai_manager(&self) -> Result<AIManager, String> {
+        let manager_lock = self.manager.read().await;
+        manager_lock
+            .as_ref()
+            .cloned()
+            .ok_or("AI not initialized".to_string())
+    }
 }
 
 /// Initialize the AI system with configuration
@@ -188,17 +197,27 @@ pub async fn ai_generate_database(
         .ok_or("AI not initialized")?;
 
     // Try local first if available
-    if let Some(ref service) = manager.local_code_service {
+    let mut result = if let Some(ref service) = manager.local_code_service {
         match service.generate_database(&prompt).await {
-            Ok(result) => return Ok(result),
+            Ok(result) => result,
             Err(e) => {
                 eprintln!("Local database generation failed, falling back to API: {}", e);
+                manager.agent_service.generate_database(&prompt).await?
             }
+        }
+    } else {
+        // Fallback to OpenAI
+        manager.agent_service.generate_database(&prompt).await?
+    };
+
+    // Ensure all columns have IDs (safety check)
+    for column in &mut result.columns {
+        if column.id.is_empty() {
+            column.id = uuid::Uuid::new_v4().to_string();
         }
     }
 
-    // Fallback to OpenAI
-    manager.agent_service.generate_database(&prompt).await
+    Ok(result)
 }
 
 /// Chat with AI agent (using GPT for reasoning)
@@ -669,10 +688,12 @@ pub async fn ai_get_note_context(
                 "database" => {
                     // Extract database content
                     if let Some(title) = data.get("title").and_then(|v| v.as_str()) {
-                        context.push_str(&format!("## Database: {}\n\n", title));
+                        context.push_str(&format!("## Database: {}\n", title));
                     } else {
-                        context.push_str("## Database Table\n\n");
+                        context.push_str("## Database Table\n");
                     }
+                    // CRITICAL: Include block_id so AI knows how to reference this database
+                    context.push_str(&format!("**[Database Block ID: {}]**\n\n", block.id));
 
                     // Extract columns
                     if let Some(columns) = data.get("columns").and_then(|v| v.as_array()) {
@@ -814,6 +835,147 @@ pub async fn ai_chat_with_note_context(
         vec![system_message, user_msg],
         None
     ).await?;
+
+    Ok(response)
+}
+
+/// Get all available tools for AI to use
+#[tauri::command]
+pub async fn ai_get_tools() -> Result<Vec<crate::ai::ToolDefinition>, String> {
+    Ok(crate::ai::get_all_tools())
+}
+
+/// Get database-specific tools
+#[tauri::command]
+pub async fn ai_get_database_tools() -> Result<Vec<crate::ai::ToolDefinition>, String> {
+    Ok(crate::ai::get_database_tools())
+}
+
+/// Get artifact-specific tools
+#[tauri::command]
+pub async fn ai_get_artifact_tools() -> Result<Vec<crate::ai::ToolDefinition>, String> {
+    Ok(crate::ai::get_artifact_tools())
+}
+
+/// Execute a database tool
+#[tauri::command]
+pub async fn ai_execute_database_tool(
+    tool_name: String,
+    params: serde_json::Value,
+    db: State<'_, sqlx::SqlitePool>,
+) -> Result<crate::ai::ToolResult, String> {
+    crate::ai::tools::execute_database_tool(&tool_name, params, db.inner()).await
+}
+
+/// Execute an artifact tool
+#[tauri::command]
+pub async fn ai_execute_artifact_tool(
+    tool_name: String,
+    params: serde_json::Value,
+    db: State<'_, sqlx::SqlitePool>,
+) -> Result<crate::ai::ToolResult, String> {
+    crate::ai::tools::execute_artifact_tool(&tool_name, params, db.inner()).await
+}
+
+/// Enhanced AI chat with automatic tool calling
+/// The AI will use database and artifact tools as needed
+#[tauri::command]
+pub async fn ai_chat_with_auto_tools(
+    messages: Vec<crate::ai::Message>,
+    note_id: Option<String>,
+    state: State<'_, AIState>,
+    db: State<'_, sqlx::SqlitePool>,
+) -> Result<String, String> {
+    let manager_lock = state.manager.read().await;
+    let manager = manager_lock
+        .as_ref()
+        .ok_or("AI not initialized")?;
+
+    // Get all available tools
+    let tools = crate::ai::get_all_tools();
+
+    // Convert to OpenAI tool format
+    let openai_tools: Vec<crate::ai::Tool> = tools
+        .iter()
+        .map(|t| crate::ai::Tool {
+            r#type: "function".to_string(),
+            function: crate::ai::FunctionDefinition {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                parameters: t.parameters.clone(),
+            },
+        })
+        .collect();
+
+    // Add note context if provided
+    let mut enhanced_messages = messages.clone();
+    if let Some(nid) = note_id {
+        if let Ok(context) = ai_get_note_context(nid.clone(), db.clone()).await {
+            enhanced_messages.insert(
+                0,
+                crate::ai::Message {
+                    role: "system".to_string(),
+                    content: format!(
+                        "You have access to advanced tools for working with databases and artifacts. \
+                         Here is the current note context:\n\n{}\n\n\
+                         Use the available tools to help answer questions and perform tasks.",
+                        context
+                    ),
+                },
+            );
+        }
+    }
+
+    // Initial AI response with tool calls
+    let (mut response, mut tool_calls) = manager
+        .agent_service
+        .chat(enhanced_messages.clone(), Some(openai_tools.clone()))
+        .await?;
+
+    // Execute tool calls and continue conversation
+    let max_iterations = 5;
+    let mut iteration = 0;
+
+    while !tool_calls.is_empty() && iteration < max_iterations {
+        iteration += 1;
+
+        // Execute each tool call
+        for tool_call in &tool_calls {
+            let tool_name = &tool_call.function.name;
+
+            // Parse arguments (they come as a JSON string from OpenAI)
+            let params: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+                .unwrap_or(serde_json::json!({}));
+
+            // Execute the tool
+            let result = if tool_name.starts_with("db_") {
+                ai_execute_database_tool(tool_name.to_string(), params, db.clone()).await?
+            } else if tool_name.starts_with("artifact_") {
+                ai_execute_artifact_tool(tool_name.to_string(), params, db.clone()).await?
+            } else {
+                continue;
+            };
+
+            // Add tool result as a message
+            enhanced_messages.push(crate::ai::Message {
+                role: "user".to_string(),
+                content: format!(
+                    "Tool '{}' result:\n{}",
+                    tool_name,
+                    serde_json::to_string_pretty(&result).unwrap_or_default()
+                ),
+            });
+        }
+
+        // Continue conversation with new tool results
+        let (new_response, new_tool_calls) = manager
+            .agent_service
+            .chat(enhanced_messages.clone(), Some(openai_tools.clone()))
+            .await?;
+
+        response = new_response;
+        tool_calls = new_tool_calls;
+    }
 
     Ok(response)
 }

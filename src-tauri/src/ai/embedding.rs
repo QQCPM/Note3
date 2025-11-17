@@ -18,6 +18,7 @@ struct EmbeddingResponse {
     embedding: Vec<f32>,
 }
 
+#[derive(Clone)]
 pub struct LocalEmbeddingService {
     client: Client,
     config: EmbeddingConfig,

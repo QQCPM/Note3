@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useNotesStore, useUIStore } from '@/store';
 import { createNote, updateNote, deleteNote } from '@/utils/tauri';
+import { ask } from '@tauri-apps/plugin-dialog';
 
 const ContextMenu: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -93,15 +94,21 @@ const ContextMenu: React.FC = () => {
     const note = getNoteById(contextMenu.noteId);
     if (!note) return;
 
-    if (confirm(`Are you sure you want to delete "${note.title}"?`)) {
-      try {
+    try {
+      const confirmed = await ask(`Are you sure you want to delete "${note.title}"?`, {
+        title: 'Delete Note',
+        kind: 'warning',
+      });
+
+      if (confirmed) {
         await deleteNote(contextMenu.noteId);
         deleteNoteInStore(contextMenu.noteId);
         hideContextMenu();
-      } catch (error) {
-        console.error('Failed to delete note:', error);
+      } else {
+        hideContextMenu();
       }
-    } else {
+    } catch (error) {
+      console.error('Failed to delete note:', error);
       hideContextMenu();
     }
   };

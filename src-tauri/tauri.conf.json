@@ -45,6 +45,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Note",
         "width": 1400,
         "height": 900,
@@ -59,7 +60,19 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob:; img-src 'self' https: http: data: blob:; frame-src 'self' https: http:; media-src 'self' https: http: data: blob:;"
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob:; img-src 'self' https: http: data: blob:; frame-src 'self' https: http:; media-src 'self' https: http: data: blob:;",
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "windows": ["main"],
+          "permissions": [
+            "dialog:allow-ask",
+            "dialog:allow-message",
+            "dialog:allow-confirm",
+            "core:default"
+          ]
+        }
+      ]
     }
   },
   "plugins": {}

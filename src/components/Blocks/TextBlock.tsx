@@ -32,8 +32,13 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
 
   const { enterEditMode } = useAIStore();
 
-  // Check if content has LaTeX formulas
-  const hasLatex = content.includes('$');
+  // Check if content has markdown or LaTeX (always render with RichTextRenderer)
+  const hasMarkdownOrLatex = content.includes('$') ||
+                             content.includes('#') ||
+                             content.includes('**') ||
+                             content.includes('- ') ||
+                             content.includes('```') ||
+                             content.length > 100; // Long content likely needs markdown rendering
 
   // Sync content with block data
   useEffect(() => {
@@ -418,7 +423,7 @@ const TextBlock: React.FC<TextBlockProps> = ({ block }) => {
             onClick={handleViewClick}
             className="cursor-text min-h-[32px] px-2 py-1 rounded hover:bg-[#161b22] transition-colors"
           >
-            {content && hasLatex ? (
+            {content && hasMarkdownOrLatex ? (
               <RichTextRenderer content={content} />
             ) : (
               <div className="text-gray-400 whitespace-pre-wrap">

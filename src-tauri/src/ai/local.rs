@@ -39,6 +39,7 @@ struct MessageResponse {
     content: String,
 }
 
+#[derive(Clone)]
 pub struct LocalModelService {
     client: Client,
     config: LocalModelConfig,
@@ -141,6 +142,7 @@ Return ONLY valid JSON with this structure:
   "title": "Database name",
   "columns": [
     {
+      "id": "unique-column-id",
       "name": "Column name",
       "type": "text|number|date|select|checkbox",
       "options": ["option1", "option2"] // Only for select type
@@ -148,6 +150,8 @@ Return ONLY valid JSON with this structure:
   ],
   "rows": [] // Start with empty array
 }
+
+IMPORTANT: Each column MUST have a unique "id" field. Generate UUIDs or use format like "col_1", "col_2", etc.
 
 Examples:
 - "text" for names, descriptions, URLs

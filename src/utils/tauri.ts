@@ -44,6 +44,12 @@ export const getBlocksByNote = async (noteId: string): Promise<Block[]> => {
   return tauriBlocks.map(parseBlock);
 };
 
+export const getBlock = async (blockId: string): Promise<Block> => {
+  // Fetch a single block by ID
+  const tauriBlock = await invoke<TauriBlock>('get_block', { blockId });
+  return parseBlock(tauriBlock);
+};
+
 export const createBlock = async (input: CreateBlockInput): Promise<Block> => {
   const tauriInput = {
     ...input,

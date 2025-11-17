@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Maximize2, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
-import { updateBlock } from '@/utils/tauri';
+import { Maximize2, AlignLeft, AlignCenter, AlignRight, Trash2 } from 'lucide-react';
+import { updateBlock, deleteBlock } from '@/utils/tauri';
+import { ask } from '@tauri-apps/plugin-dialog';
 import { useBlocksStore } from '@/store';
 import type { Block, BlockData, BlockLayout } from '@/types';
 
@@ -9,7 +10,7 @@ interface BlockLayoutControlsProps {
 }
 
 const BlockLayoutControls: React.FC<BlockLayoutControlsProps> = ({ block }) => {
-  const { updateBlock: updateBlockInStore } = useBlocksStore();
+  const { updateBlock: updateBlockInStore, deleteBlock: deleteBlockInStore } = useBlocksStore();
   const [isOpen, setIsOpen] = useState(false);
 
   const currentAlignment = block.data.alignment || 'left';
@@ -21,6 +22,27 @@ const BlockLayoutControls: React.FC<BlockLayoutControlsProps> = ({ block }) => {
       updateBlockInStore(block.id, updated);
     } catch (error) {
       console.error('Failed to update block alignment:', error);
+    }
+  };
+
+  const handleDeleteBlock = async () => {
+    try {
+      const confirmed = await ask('Are you sure you want to delete this block?', {
+        title: 'Delete Block',
+        kind: 'warning',
+      });
+
+      if (confirmed) {
+        await deleteBlock(block.id);
+        deleteBlockInStore(block.id);
+        setIsOpen(false);
+      }
+    } catch (error) {
+      console.error('Failed to delete block:', error);
+      await ask(`Failed to delete block: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        title: 'Error',
+        kind: 'error',
+      });
     }
   };
 
@@ -85,7 +107,19 @@ const BlockLayoutControls: React.FC<BlockLayoutControlsProps> = ({ block }) => {
                 </button>
               </div>
             </div>
-            
+
+            {/* Delete Block */}
+            <div className="mt-3 pt-3 border-t border-[#30363d]">
+              <button
+                onClick={handleDeleteBlock}
+                className="w-full p-2 rounded transition-all flex items-center justify-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30"
+                title="Delete Block"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="text-xs font-medium">Delete Block</span>
+              </button>
+            </div>
+
             {/* Tip */}
             <div className="mt-3 pt-3 border-t border-[#30363d]">
               <div className="text-xs text-gray-500">
