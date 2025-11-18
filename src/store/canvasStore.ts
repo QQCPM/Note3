@@ -24,6 +24,7 @@ export interface CanvasElement {
   color: string; // background color
   label: string; // glassmorphic label text
   drawing?: string; // base64 data URL for drawings
+  noteId?: string; // ID of linked note (for full note editing)
 }
 
 interface CanvasState {

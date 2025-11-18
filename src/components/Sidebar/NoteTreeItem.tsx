@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNotesStore, useUIStore } from '@/store';
 import type { NoteWithChildren } from '@/types';
 
@@ -8,7 +8,8 @@ interface NoteTreeItemProps {
 
 const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note }) => {
   const { activeNoteId, setActiveNote, expandedNoteIds, toggleExpanded } = useNotesStore();
-  const { showContextMenu } = useUIStore();
+  const { showContextMenu, canvasMode } = useUIStore();
+  const [isDragging, setIsDragging] = useState(false);
 
   const isActive = activeNoteId === note.id;
   const isExpanded = expandedNoteIds.has(note.id);
@@ -31,37 +32,39 @@ const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note }) => {
     showContextMenu(e.pageX, e.pageY, note.id);
   };
 
+  // Drag handlers - only enable dragging when in canvas mode
   const handleDragStart = (e: React.DragEvent) => {
-    // Store note data for dropping on canvas
-    e.dataTransfer.setData('application/json', JSON.stringify({
+    if (canvasMode !== 'canvas') return;
+
+    setIsDragging(true);
+
+    // Store note data for drop handler
+    const dragData = {
       noteId: note.id,
       title: note.title,
-      icon: note.icon,
-    }));
-    e.dataTransfer.effectAllowed = 'copy';
+      icon: note.icon || '📝',
+    };
 
-    // Visual feedback
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '0.5';
-    }
+    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'copy';
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
-    // Reset visual feedback
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '1';
-    }
+  const handleDragEnd = () => {
+    setIsDragging(false);
   };
 
   return (
     <div>
       <div
-        className={`note-tree-item ${isActive ? 'active' : ''}`}
-        draggable={true}
+        className={`note-tree-item ${isActive ? 'active' : ''} ${isDragging ? 'opacity-50' : ''}`}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        draggable={canvasMode === 'canvas'}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        style={{
+          cursor: canvasMode === 'canvas' ? 'grab' : 'pointer',
+        }}
       >
         <span
           className={`note-chevron ${isExpanded ? 'expanded' : ''}`}

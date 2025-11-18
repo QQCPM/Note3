@@ -229,6 +229,57 @@ const InfiniteCanvas: React.FC = () => {
     useCanvasStore.getState().setSelectedTool('hand');
   };
 
+  // Handle drag over - allow drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  // Handle drop - create canvas element from dropped note
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+
+    try {
+      const data = e.dataTransfer.getData('application/json');
+      if (!data) return;
+
+      const dragData = JSON.parse(data);
+      if (!dragData.noteId) return;
+
+      // Calculate drop position on canvas (accounting for zoom and scroll)
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+
+      const rect = viewport.getBoundingClientRect();
+      const dropX = e.clientX - rect.left;
+      const dropY = e.clientY - rect.top;
+
+      // Convert to canvas coordinates
+      const canvasX = (viewport.scrollLeft + dropX) / zoom;
+      const canvasY = (viewport.scrollTop + dropY) / zoom;
+
+      // Create note element from dropped note
+      const colors = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f472b6'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+      const newElement = {
+        type: 'note' as const,
+        x: canvasX - 100, // Center on drop point
+        y: canvasY - 100,
+        width: 200,
+        height: 200,
+        content: dragData.title, // Show title as preview
+        color: randomColor,
+        label: dragData.title,
+        noteId: dragData.noteId, // Store note ID for full editing
+      };
+
+      addElement(newElement);
+    } catch (error) {
+      console.error('Failed to handle drop:', error);
+    }
+  };
+
   return (
     <div className="flex-1 relative overflow-hidden bg-[#0d1117]">
       {/* Canvas Toolbar */}
@@ -249,6 +300,8 @@ const InfiniteCanvas: React.FC = () => {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onClick={handleCanvasClick}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         {/* Infinite Canvas Container - Size scales with zoom for proper scrolling */}
         <div

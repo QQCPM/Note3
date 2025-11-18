@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useCanvasStore } from '@/store/canvasStore';
+import { getBlocksByNote } from '@/utils/tauri';
+import type { Block } from '@/types';
 
 const CanvasModal: React.FC = () => {
   const { editingElement, setEditingElement, updateElement, deleteElement } = useCanvasStore();
@@ -7,6 +9,8 @@ const CanvasModal: React.FC = () => {
   const [content, setContent] = useState('');
   const [color, setColor] = useState('#a78bfa');
   const [url, setUrl] = useState('');
+  const [noteBlocks, setNoteBlocks] = useState<Block[]>([]);
+  const [loadingBlocks, setLoadingBlocks] = useState(false);
 
   // Drawing state
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -20,6 +24,22 @@ const CanvasModal: React.FC = () => {
       setContent(editingElement.content);
       setColor(editingElement.color);
       setUrl(editingElement.content);
+      setNoteBlocks([]);
+
+      // Fetch note blocks if this is a note element with a linked note
+      if (editingElement.type === 'note' && editingElement.noteId) {
+        setLoadingBlocks(true);
+        getBlocksByNote(editingElement.noteId)
+          .then((blocks) => {
+            setNoteBlocks(blocks);
+          })
+          .catch((error) => {
+            console.error('Failed to load note blocks:', error);
+          })
+          .finally(() => {
+            setLoadingBlocks(false);
+          });
+      }
 
       // Initialize drawing canvas
       if (editingElement.type === 'drawing' && canvasRef.current) {
@@ -138,6 +158,86 @@ const CanvasModal: React.FC = () => {
     switch (editingElement.type) {
       case 'note':
         const colors = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f472b6'];
+
+        // If this is a linked note, show full note editor
+        if (editingElement.noteId) {
+          return (
+            <div className="flex flex-col h-full">
+              <div className="mb-4">
+                <div className="text-sm font-semibold text-gray-700 mb-2">Linked Note</div>
+                <div className="text-xs text-gray-500 mb-4">
+                  This note is linked to your note library. Changes here are reflected in the original note.
+                </div>
+                <div className="text-sm font-semibold text-gray-700 mb-2">Choose color:</div>
+                <div className="flex gap-2">
+                  {colors.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => handleColorChange(c)}
+                      className="w-8 h-8 rounded-lg transition-all"
+                      style={{
+                        backgroundColor: c,
+                        border: color === c ? '2px solid #000' : '2px solid transparent',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Note blocks display */}
+              <div className="flex-1 overflow-y-auto border-2 border-gray-300 rounded-2xl p-6">
+                {loadingBlocks ? (
+                  <div className="text-center text-gray-500">Loading note content...</div>
+                ) : noteBlocks.length === 0 ? (
+                  <div className="text-center text-gray-400">This note is empty</div>
+                ) : (
+                  <div className="space-y-4">
+                    {noteBlocks.map((block) => {
+                      const blockData = block.data as any;
+                      return (
+                        <div key={block.id} className="border-b border-gray-200 pb-4 last:border-0">
+                          {block.type === 'heading1' && (
+                            <h1 className="text-3xl font-bold text-gray-800">{blockData.content}</h1>
+                          )}
+                          {block.type === 'heading2' && (
+                            <h2 className="text-2xl font-semibold text-gray-800">{blockData.content}</h2>
+                          )}
+                          {block.type === 'text' && (
+                            <p className="text-base text-gray-700 whitespace-pre-wrap">{blockData.content}</p>
+                          )}
+                          {block.type === 'task' && (
+                            <div className="space-y-2">
+                              <div className="font-semibold text-gray-800">{blockData.title}</div>
+                              {blockData.tasks?.map((task: any) => (
+                                <div key={task.id} className="flex items-center gap-2">
+                                  <input type="checkbox" checked={task.completed} readOnly />
+                                  <span className={task.completed ? 'line-through text-gray-500' : 'text-gray-700'}>
+                                    {task.text}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {!['heading1', 'heading2', 'text', 'task'].includes(block.type) && (
+                            <div className="text-gray-500 text-sm italic">
+                              [{block.type} block - preview not available]
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
+                💡 Tip: To edit this note's content, click on it in the sidebar and switch to Note mode.
+              </div>
+            </div>
+          );
+        }
+
+        // Regular note element (not linked)
         return (
           <div className="flex flex-col h-full">
             <div className="mb-4">
