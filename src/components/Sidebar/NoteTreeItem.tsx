@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNotesStore, useUIStore } from '@/store';
+import { useDragStore } from '@/store/dragStore';
 import type { NoteWithChildren } from '@/types';
 
 interface NoteTreeItemProps {
@@ -9,11 +10,16 @@ interface NoteTreeItemProps {
 const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note }) => {
   const { activeNoteId, setActiveNote, expandedNoteIds, toggleExpanded } = useNotesStore();
   const { showContextMenu, canvasMode } = useUIStore();
-  const [isDragging, setIsDragging] = useState(false);
+  const { startDrag, updateDragPosition, endDrag } = useDragStore();
+
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const hasDragStartedRef = useRef(false);
 
   const isActive = activeNoteId === note.id;
   const isExpanded = expandedNoteIds.has(note.id);
   const hasChildren = note.children && note.children.length > 0;
+  const isDraggable = canvasMode === 'canvas';
 
   const handleClick = () => {
     setActiveNote(note.id);
@@ -32,38 +38,82 @@ const NoteTreeItem: React.FC<NoteTreeItemProps> = ({ note }) => {
     showContextMenu(e.pageX, e.pageY, note.id);
   };
 
-  // Drag handlers - only enable dragging when in canvas mode
-  const handleDragStart = (e: React.DragEvent) => {
-    if (canvasMode !== 'canvas') return;
+  // Custom drag implementation for canvas mode
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!isDraggable) return;
 
-    setIsDragging(true);
+    // Ignore if clicking on chevron
+    if ((e.target as HTMLElement).classList.contains('note-chevron')) {
+      return;
+    }
 
-    // Store note data for drop handler
-    const dragData = {
-      noteId: note.id,
-      title: note.title,
-      icon: note.icon || '📝',
-    };
-
-    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
-    e.dataTransfer.effectAllowed = 'copy';
+    setIsMouseDown(true);
+    dragStartPosRef.current = { x: e.clientX, y: e.clientY };
+    hasDragStartedRef.current = false;
   };
 
-  const handleDragEnd = () => {
-    setIsDragging(false);
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isMouseDown || !dragStartPosRef.current || !isDraggable) return;
+
+    const dx = e.clientX - dragStartPosRef.current.x;
+    const dy = e.clientY - dragStartPosRef.current.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Start drag after moving 5px (prevents accidental drags on clicks)
+    if (distance > 5 && !hasDragStartedRef.current) {
+      hasDragStartedRef.current = true;
+      startDrag(
+        {
+          noteId: note.id,
+          title: note.title,
+          icon: note.icon || '📝',
+        },
+        { x: e.clientX, y: e.clientY }
+      );
+    }
+
+    // Update drag position
+    if (hasDragStartedRef.current) {
+      updateDragPosition({ x: e.clientX, y: e.clientY });
+    }
   };
+
+  const handleMouseUp = () => {
+    if (hasDragStartedRef.current) {
+      endDrag();
+    } else if (isMouseDown && !hasDragStartedRef.current) {
+      // If we didn't drag, treat it as a click
+      handleClick();
+    }
+
+    setIsMouseDown(false);
+    dragStartPosRef.current = null;
+    hasDragStartedRef.current = false;
+  };
+
+  // Attach global mouse event listeners when mouse is down
+  React.useEffect(() => {
+    if (isMouseDown) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isMouseDown, isDraggable]);
 
   return (
     <div>
       <div
-        className={`note-tree-item ${isActive ? 'active' : ''} ${isDragging ? 'opacity-50' : ''}`}
-        onClick={handleClick}
+        className={`note-tree-item ${isActive ? 'active' : ''}`}
+        onClick={isDraggable ? undefined : handleClick}
+        onMouseDown={isDraggable ? handleMouseDown : undefined}
         onContextMenu={handleContextMenu}
-        draggable={canvasMode === 'canvas'}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
         style={{
-          cursor: canvasMode === 'canvas' ? 'grab' : 'pointer',
+          cursor: isDraggable ? 'grab' : 'pointer',
+          userSelect: isDraggable ? 'none' : 'auto',
         }}
       >
         <span

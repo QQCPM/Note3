@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useCanvasStore } from '@/store/canvasStore';
-import { useUIStore } from '@/store';
+import { useDragStore } from '@/store/dragStore';
+import { getBlocksByNote } from '@/utils/tauri';
+import type { TextBlockData, HeadingBlockData } from '@/types';
 import CanvasElement from './CanvasElement';
 import ConnectionLayer from './ConnectionLayer';
 import CanvasToolbar from './CanvasToolbar';
@@ -9,70 +11,96 @@ import CanvasModal from './CanvasModal';
 
 const InfiniteCanvas: React.FC = () => {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const { canvasMode } = useUIStore();
+  const { isDragging, draggedNote, mousePosition } = useDragStore();
   const {
     zoom,
-    setZoom,
+    panX,
+    panY,
     selectedTool,
     elements,
     addElement,
+    setPan,
+    setZoom,
+    setSelectedTool
   } = useCanvasStore();
 
   const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [scrollStart, setScrollStart] = useState({ left: 0, top: 0 });
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
-  const hasInitializedRef = useRef(false);
+
+  // Helper: Convert screen coordinates to canvas coordinates
+  const screenToCanvas = useCallback((screenX: number, screenY: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return { x: 0, y: 0 };
+
+    const rect = viewport.getBoundingClientRect();
+    const viewportCenterX = rect.width / 2;
+    const viewportCenterY = rect.height / 2;
+
+    // Mouse position relative to viewport top-left
+    const viewportMouseX = screenX - rect.left;
+    const viewportMouseY = screenY - rect.top;
+
+    // Mouse position relative to viewport center
+    const centerRelX = viewportMouseX - viewportCenterX;
+    const centerRelY = viewportMouseY - viewportCenterY;
+
+    // Convert to canvas coordinates
+    // CanvasX = CameraCenter + (Distance from Center) / Zoom
+    const canvasX = panX + centerRelX / zoom;
+    const canvasY = panY + centerRelY / zoom;
+
+    return { x: canvasX, y: canvasY };
+  }, [panX, panY, zoom]);
 
   // Handle mouse wheel zoom - Zoom toward cursor position
-  // CRITICAL: Always prevent default scrolling - wheel events should ONLY zoom, never scroll
-  // Defined early so it can be used in useEffect below
   const handleWheel = useCallback((e: WheelEvent | React.WheelEvent) => {
-    // ALWAYS prevent default scrolling behavior first
     e.preventDefault();
     e.stopPropagation();
 
     const viewport = viewportRef.current;
     if (!viewport) return;
 
-    // Store old zoom BEFORE calculating new zoom
-    const currentZoom = useCanvasStore.getState().zoom;
-    const oldZoom = currentZoom;
-
-    // Calculate new zoom (scroll up = zoom in, scroll down = zoom out)
+    // Calculate new zoom
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    const newZoom = Math.max(0.5, Math.min(2.0, currentZoom + delta));
+    const newZoom = Math.max(0.1, Math.min(5.0, zoom + delta));
 
-    // Only update if zoom actually changed
-    if (newZoom === oldZoom) {
-      // At zoom limits (50% or 200%), do nothing
-      return;
-    }
+    if (newZoom === zoom) return;
 
-    // Get mouse position relative to viewport
+    // Get mouse position relative to viewport center
     const rect = viewport.getBoundingClientRect();
-    const mouseRelX = e.clientX - rect.left;
-    const mouseRelY = e.clientY - rect.top;
+    const viewportCenterX = rect.width / 2;
+    const viewportCenterY = rect.height / 2;
 
-    // Calculate the canvas point under mouse BEFORE zoom (using oldZoom)
-    // Element coordinate = (scroll + mouse) / zoom
-    const elementX = (viewport.scrollLeft + mouseRelX) / oldZoom;
-    const elementY = (viewport.scrollTop + mouseRelY) / oldZoom;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
-    // Calculate new scroll position to keep the same element point under the cursor
-    // After zoom: newScroll + mouse = element * newZoom
-    // Therefore: newScroll = element * newZoom - mouse
-    const newScrollLeft = elementX * newZoom - mouseRelX;
-    const newScrollTop = elementY * newZoom - mouseRelY;
+    const centerRelX = mouseX - viewportCenterX;
+    const centerRelY = mouseY - viewportCenterY;
 
-    // CRITICAL: Set scroll position FIRST, synchronously
-    // This prevents visual jumping by updating scroll BEFORE the zoom transform changes
-    viewport.scrollLeft = newScrollLeft;
-    viewport.scrollTop = newScrollTop;
+    // Calculate the canvas point currently under the mouse
+    // Point = Pan + Offset / OldZoom
+    const canvasPointX = panX + centerRelX / zoom;
+    const canvasPointY = panY + centerRelY / zoom;
 
-    // THEN update zoom state (this triggers React re-render)
-    useCanvasStore.getState().setZoom(newZoom);
-  }, []); // Empty deps - we use getState() inside to get current values
+    // Calculate new Pan position so that the same canvas point remains under the mouse
+    // CanvasPoint = NewPan + Offset / NewZoom
+    // NewPan = CanvasPoint - Offset / NewZoom
+    const newPanX = canvasPointX - centerRelX / newZoom;
+    const newPanY = canvasPointY - centerRelY / newZoom;
+
+    setPan(newPanX, newPanY);
+    setZoom(newZoom);
+  }, [zoom, panX, panY, setPan, setZoom]);
+
+  // Add wheel event listener
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.addEventListener('wheel', handleWheel as any, { passive: false });
+    return () => {
+      viewport.removeEventListener('wheel', handleWheel as any);
+    };
+  }, [handleWheel]);
 
   // Initialize canvas with default elements
   useEffect(() => {
@@ -81,131 +109,119 @@ const InfiniteCanvas: React.FC = () => {
     }
   }, [elements.length]);
 
-  // Add wheel event listener with passive: false to ensure preventDefault always works
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    // Add native event listener with passive: false to ensure preventDefault works
-    // This prevents ALL scrolling - wheel events will ONLY zoom
-    viewport.addEventListener('wheel', handleWheel as any, { passive: false });
-
-    return () => {
-      viewport.removeEventListener('wheel', handleWheel as any);
-    };
-  }, [handleWheel]); // Re-add when handleWheel changes
-
-  // Center viewport ONLY when first entering canvas mode (not on zoom changes!)
-  // This prevents interference with zoom-to-cursor functionality
-  useEffect(() => {
-    if (viewportRef.current && canvasMode === 'canvas' && !hasInitializedRef.current) {
-      // Canvas size is now dynamic: 5000 * zoom
-      // Center of canvas at current zoom: (2500 * zoom, 2500 * zoom)
-      // To center viewport: scrollLeft = canvasCenter - viewportWidth / 2
-      const viewport = viewportRef.current;
-      const currentZoom = useCanvasStore.getState().zoom;
-      const canvasCenter = 2500 * currentZoom;
-      const centerX = canvasCenter - viewport.clientWidth / 2;
-      const centerY = canvasCenter - viewport.clientHeight / 2;
-
-      viewport.scrollLeft = Math.max(0, centerX);
-      viewport.scrollTop = Math.max(0, centerY);
-      hasInitializedRef.current = true;
-    }
-
-    // Reset when leaving canvas mode
-    if (canvasMode !== 'canvas') {
-      hasInitializedRef.current = false;
-    }
-  }, [canvasMode]); // ONLY depend on canvasMode, NOT zoom!
-
   // Handle pan start
   const handleMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-
-    // Only pan if:
-    // 1. Hand tool is selected AND
-    // 2. Clicking on canvas background (not on elements)
     const isCanvasBackground =
       target.id === 'infinityCanvas' ||
       target.id === 'canvasElements' ||
-      target.id === 'connectionSvg';
+      target.id === 'connectionSvg' ||
+      target.classList.contains('canvas-viewport');
 
-    if (selectedTool === 'hand' && isCanvasBackground) {
+    // Middle mouse button or Space+Click or Hand tool
+    if (e.button === 1 || (selectedTool === 'hand' && isCanvasBackground)) {
       setIsPanning(true);
-      setPanStart({ x: e.clientX, y: e.clientY });
-      if (viewportRef.current) {
-        setScrollStart({
-          left: viewportRef.current.scrollLeft,
-          top: viewportRef.current.scrollTop,
-        });
-      }
+      setLastMousePos({ x: e.clientX, y: e.clientY });
       e.preventDefault();
     }
   };
 
   // Handle pan move
   const handleMouseMove = (e: React.MouseEvent) => {
-    // Update last mouse position for zoom
-    setLastMousePos({ x: e.clientX, y: e.clientY });
+    if (isPanning) {
+      const dx = e.clientX - lastMousePos.x;
+      const dy = e.clientY - lastMousePos.y;
 
-    if (isPanning && viewportRef.current) {
-      const dx = e.clientX - panStart.x;
-      const dy = e.clientY - panStart.y;
-
-      viewportRef.current.scrollLeft = scrollStart.left - dx;
-      viewportRef.current.scrollTop = scrollStart.top - dy;
+      // Update pan position
+      // Moving mouse right (positive dx) should move camera left (decrease panX)
+      // Adjusted by zoom level
+      setPan(panX - dx / zoom, panY - dy / zoom);
+      setLastMousePos({ x: e.clientX, y: e.clientY });
     }
   };
 
-  // Handle pan end
-  const handleMouseUp = () => {
+  // Handle pan end and drop handling
+  const handleMouseUp = async () => {
     setIsPanning(false);
+
+    // Handle drop if there's an active drag
+    if (isDragging && draggedNote && mousePosition) {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+
+      const rect = viewport.getBoundingClientRect();
+      const isOverCanvas =
+        mousePosition.x >= rect.left &&
+        mousePosition.x <= rect.right &&
+        mousePosition.y >= rect.top &&
+        mousePosition.y <= rect.bottom;
+
+      if (isOverCanvas) {
+        const { x: canvasX, y: canvasY } = screenToCanvas(mousePosition.x, mousePosition.y);
+
+        // Fetch note blocks
+        let noteContent = draggedNote.title;
+        try {
+          const blocks = await getBlocksByNote(draggedNote.noteId);
+          const contentParts = blocks
+            .filter(block => block.type === 'text' || block.type === 'heading1' || block.type === 'heading2')
+            .map(block => {
+              const blockData = block.data as TextBlockData | HeadingBlockData;
+              return blockData.content;
+            });
+
+          if (contentParts.length > 0) {
+            noteContent = contentParts.join('\n\n');
+          }
+        } catch (error) {
+          console.error('Failed to fetch note blocks:', error);
+        }
+
+        const colors = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f472b6'];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+        const newElement = {
+          type: 'note' as const,
+          x: canvasX - 100,
+          y: canvasY - 75,
+          width: 200,
+          height: 150,
+          content: noteContent,
+          color: randomColor,
+          label: draggedNote.title,
+          noteId: draggedNote.noteId,
+        };
+
+        addElement(newElement);
+      }
+    }
   };
 
   // Handle canvas click to create new elements
   const handleCanvasClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
+    if (isPanning) return; // Don't create if we were just panning
 
-    // Only create elements when clicking on canvas background
+    const target = e.target as HTMLElement;
     const isCanvasBackground =
       target.id === 'infinityCanvas' ||
       target.id === 'canvasElements' ||
-      target.id === 'connectionSvg';
+      target.id === 'connectionSvg' ||
+      target.classList.contains('canvas-viewport');
 
     if (!isCanvasBackground) return;
-
-    // Don't create if using hand, cursor, or arrow tool
     if (['hand', 'cursor', 'arrow'].includes(selectedTool)) return;
 
-    // Calculate click position on canvas (accounting for zoom and scroll)
-    const viewport = viewportRef.current;
-    if (!viewport) return;
+    const { x: canvasX, y: canvasY } = screenToCanvas(e.clientX, e.clientY);
 
-    const rect = viewport.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    // Convert to canvas coordinates
-    // The 5000x5000 canvas is unscaled, but the elements container inside is scaled by zoom
-    // scrollLeft/scrollTop are in the unscaled canvas coordinate system
-    // clickX/clickY are in viewport pixels
-    // Since the elements container is scaled, we need to divide clickX/clickY by zoom
-    // to get the position in the unscaled canvas coordinate system
-    const canvasX = viewport.scrollLeft + clickX / zoom;
-    const canvasY = viewport.scrollTop + clickY / zoom;
-
-    // Create element based on selected tool
     const colors = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f472b6'];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
-    // Calculate element dimensions
     const elementWidth = selectedTool === 'note' ? 150 : 200;
     const elementHeight = selectedTool === 'note' ? 150 : 200;
 
     const newElement = {
       type: selectedTool as any,
-      x: canvasX - elementWidth / 2, // Center on click precisely
+      x: canvasX - elementWidth / 2,
       y: canvasY - elementHeight / 2,
       width: elementWidth,
       height: elementHeight,
@@ -213,121 +229,74 @@ const InfiniteCanvas: React.FC = () => {
         selectedTool === 'note'
           ? 'New note...'
           : selectedTool === 'text'
-          ? 'Type here...'
-          : selectedTool === 'website'
-          ? 'https://example.com'
-          : selectedTool === 'mindmap'
-          ? 'Central Idea'
-          : '',
+            ? 'Type here...'
+            : selectedTool === 'website'
+              ? 'https://example.com'
+              : selectedTool === 'mindmap'
+                ? 'Central Idea'
+                : '',
       color: selectedTool === 'note' ? randomColor : '#ffffff',
       label: selectedTool.charAt(0).toUpperCase() + selectedTool.slice(1),
     };
 
     addElement(newElement);
-
-    // Switch back to hand tool after creating
-    useCanvasStore.getState().setSelectedTool('hand');
-  };
-
-  // Handle drag over - allow drop
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-  };
-
-  // Handle drop - create canvas element from dropped note
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-
-    try {
-      const data = e.dataTransfer.getData('application/json');
-      if (!data) return;
-
-      const dragData = JSON.parse(data);
-      if (!dragData.noteId) return;
-
-      // Calculate drop position on canvas (accounting for zoom and scroll)
-      const viewport = viewportRef.current;
-      if (!viewport) return;
-
-      const rect = viewport.getBoundingClientRect();
-      const dropX = e.clientX - rect.left;
-      const dropY = e.clientY - rect.top;
-
-      // Convert to canvas coordinates
-      const canvasX = (viewport.scrollLeft + dropX) / zoom;
-      const canvasY = (viewport.scrollTop + dropY) / zoom;
-
-      // Create note element from dropped note
-      const colors = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f472b6'];
-      const randomColor = colors[Math.floor(Math.random() * colors.length)];
-
-      const newElement = {
-        type: 'note' as const,
-        x: canvasX - 100, // Center on drop point
-        y: canvasY - 100,
-        width: 200,
-        height: 200,
-        content: dragData.title, // Show title as preview
-        color: randomColor,
-        label: dragData.title,
-        noteId: dragData.noteId, // Store note ID for full editing
-      };
-
-      addElement(newElement);
-    } catch (error) {
-      console.error('Failed to handle drop:', error);
-    }
+    setSelectedTool('hand');
   };
 
   return (
     <div className="flex-1 relative overflow-hidden bg-[#0d1117]">
-      {/* Canvas Toolbar */}
       <CanvasToolbar />
-
-      {/* Zoom Controls */}
       <ZoomControls />
 
-      {/* Viewport - scrolling disabled, only zoom allowed (panning still works programmatically) */}
+      {/* Viewport - Flex container to center the world */}
       <div
         ref={viewportRef}
-        className="w-full h-full canvas-viewport"
+        className="w-full h-full canvas-viewport flex items-center justify-center overflow-hidden cursor-default"
         style={{
-          overflow: 'auto', // Needed for programmatic scrolling (panning)
+          cursor: selectedTool === 'hand' ? (isPanning ? 'grabbing' : 'grab') : 'default',
+          // Show drop zone indicator
+          outline: isDragging ? '2px dashed #58a6ff' : 'none',
+          outlineOffset: isDragging ? '-4px' : '0',
         }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onClick={handleCanvasClick}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
       >
-        {/* Infinite Canvas Container - Size scales with zoom for proper scrolling */}
+        {/* World Container - Transformed to show correct view */}
         <div
           id="infinityCanvas"
           className="relative"
           style={{
-            width: `${5000 * zoom}px`,
-            height: `${5000 * zoom}px`,
-            backgroundImage:
-              'radial-gradient(circle, #21262d 1px, transparent 1px)',
-            backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+            width: 0,
+            height: 0,
+            overflow: 'visible',
+            transform: `scale(${zoom}) translate(${-panX}px, ${-panY}px)`,
+            transformOrigin: 'center center', // Important: Scale around the center (which is the viewport center)
+            willChange: 'transform',
           }}
         >
-          {/* SVG Connection Layer */}
-          <ConnectionLayer />
-
-          {/* Canvas Elements Container */}
+          {/* Grid Background - Needs to be large enough or repeated */}
+          {/* Since width/height is 0, we need a large background div positioned relative to the world origin */}
           <div
-            id="canvasElements"
             style={{
               position: 'absolute',
-              inset: 0,
-              transformOrigin: '0 0',
-              transform: `scale(${zoom})`,
+              left: -50000,
+              top: -50000,
+              width: 100000,
+              height: 100000,
+              backgroundImage: 'radial-gradient(circle, #21262d 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+              pointerEvents: 'none', // Don't block clicks
+              opacity: 0.5
             }}
-          >
+          />
+
+          <ConnectionLayer />
+
+          {/* Canvas Elements */}
+          <div id="canvasElements" className="absolute inset-0 overflow-visible">
             {elements.map((element) => (
               <CanvasElement key={element.id} element={element} />
             ))}
@@ -335,10 +304,11 @@ const InfiniteCanvas: React.FC = () => {
         </div>
       </div>
 
-      {/* Full-Screen Modal */}
       <CanvasModal />
     </div>
   );
 };
 
 export default InfiniteCanvas;
+
+

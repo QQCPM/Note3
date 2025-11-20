@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useUIStore } from '@/store';
 import AgentTab from './AgentTab';
 import RecommendTab from './RecommendTab';
@@ -11,32 +11,48 @@ const AISidebar: React.FC = () => {
     setAISidebarTab,
     aiSidebarWidth,
     setAISidebarWidth,
-    toggleAISidebar,
     aiSidebarCollapsed,
   } = useUIStore();
 
   const sidebarRef = useRef<HTMLElement>(null);
   const isResizing = useRef(false);
+  const [isResizingState, setIsResizingState] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     isResizing.current = true;
+    setIsResizingState(true);
     document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none'; // Prevent text selection during resize
   };
 
   const handleMouseUp = useCallback(() => {
+    if (isResizing.current && sidebarRef.current) {
+      // Sync the final width back to state after resize is complete
+      const finalWidth = parseInt(sidebarRef.current.style.width);
+      if (!isNaN(finalWidth)) {
+        setAISidebarWidth(finalWidth);
+      }
+    }
+
     isResizing.current = false;
+    setIsResizingState(false);
     document.body.style.cursor = 'default';
-  }, []);
+    document.body.style.userSelect = '';
+  }, [setAISidebarWidth]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (isResizing.current && sidebarRef.current) {
-      const newWidth = sidebarRef.current.parentElement!.getBoundingClientRect().right - e.clientX;
-      if (newWidth > 300 && newWidth < 800) { // Min and max width
-        setAISidebarWidth(newWidth);
+      const parentRect = sidebarRef.current.parentElement!.getBoundingClientRect();
+      const newWidth = parentRect.right - e.clientX;
+
+      if (newWidth >= 300 && newWidth <= 800) { // Min and max width
+        // Direct DOM manipulation for instant visual feedback
+        sidebarRef.current.style.width = `${newWidth}px`;
+        sidebarRef.current.style.minWidth = `${newWidth}px`;
       }
     }
-  }, [setAISidebarWidth]);
+  }, []);
 
   useEffect(() => {
     document.addEventListener('mousemove', handleMouseMove);
@@ -51,26 +67,29 @@ const AISidebar: React.FC = () => {
   return (
     <aside
       ref={sidebarRef}
-      className={`sidebar right-sidebar flex-shrink-0 flex flex-col rounded-lg relative ${aiSidebarCollapsed ? 'collapsed' : ''}`}
+      className={`sidebar right-sidebar flex-shrink-0 flex flex-col rounded-lg ${aiSidebarCollapsed ? 'collapsed' : ''}`}
       style={{
-        width: `${aiSidebarWidth}px`,
+        width: aiSidebarCollapsed ? '0' : `${aiSidebarWidth}px`,
+        minWidth: aiSidebarCollapsed ? '0' : `${aiSidebarWidth}px`,
+        overflowX: aiSidebarCollapsed ? 'hidden' : 'visible',
+        overflowY: 'auto',
+        visibility: aiSidebarCollapsed ? 'hidden' : 'visible',
         background: 'radial-gradient(circle at top left, rgba(13, 71, 161, 0.2) 0%, rgba(30, 136, 229, 0.1) 40%, #010409 80%)',
+        transition: isResizingState ? 'none' : 'width 0.3s ease, min-width 0.3s ease',
+        position: 'relative',
+        zIndex: 1,
+        marginRight: aiSidebarCollapsed ? '0' : '0.5rem', // Prevent gap issue
       }}
     >
-      {/* Resize Handle */}
-      <div
-        className="absolute top-0 left-0 w-2 h-full cursor-col-resize z-10"
-        onMouseDown={handleMouseDown}
-      />
+      {/* Resize Handle - Only show when not collapsed */}
+      {!aiSidebarCollapsed && (
+        <div
+          className="absolute top-0 left-0 w-2 h-full cursor-col-resize z-10"
+          onMouseDown={handleMouseDown}
+        />
+      )}
 
-      {/* Collapse/Expand Button */}
-      <button
-        className="sidebar-toggle right"
-        onClick={toggleAISidebar}
-        title={aiSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-      >
-        <span>{aiSidebarCollapsed ? '‹' : '›'}</span>
-      </button>
+
 
       {/* Tab Navigation */}
       <header className="flex-shrink-0 border-b border-[#30363d] flex items-center justify-center bg-transparent">

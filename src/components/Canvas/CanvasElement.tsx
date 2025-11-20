@@ -1,11 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useCanvasStore, CanvasElement as CanvasElementType } from '@/store/canvasStore';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface CanvasElementProps {
   element: CanvasElementType;
+  isSelected?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
 }
 
-const CanvasElement: React.FC<CanvasElementProps> = ({ element }) => {
+const CanvasElement: React.FC<CanvasElementProps> = React.memo(({ element, isSelected, onClick }) => {
   const {
     selectedTool,
     updateElement,
@@ -23,12 +30,18 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element }) => {
 
   const elementRef = useRef<HTMLDivElement>(null);
 
-  // Handle element click
-  const handleClick = (e: React.MouseEvent) => {
+  // Handle element click - memoized to prevent recreation
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
 
+    // If an external onClick handler is provided, use it (e.g. for InfinityCanvas)
+    if (onClick) {
+      onClick(e);
+      return;
+    }
+
     if (selectedTool === 'cursor') {
-      // Cursor tool: Open full-screen modal
+      // Cursor tool: Single-click to open full-screen modal
       setEditingElement(element);
     } else if (selectedTool === 'arrow') {
       // Arrow tool: Create connection
@@ -51,7 +64,16 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element }) => {
         }
       }
     }
-  };
+  }, [selectedTool, connectingFrom, element.id, setEditingElement, setConnectingFrom, addConnection, onClick, element]);
+
+  // Handle double-click to open modal (for hand tool and others)
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Open modal on double-click with hand tool or other tools (except cursor which uses single-click)
+    if (selectedTool !== 'cursor') {
+      setEditingElement(element);
+    }
+  }, [selectedTool, element, setEditingElement]);
 
   // Handle drag start (hand tool only)
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -156,23 +178,34 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element }) => {
     }
   }, [isDragging, isResizing, dragStart, elementStart, element.id, resizeHandle]);
 
-  // Update label
-  const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Update label - memoized
+  const handleLabelChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     updateElement(element.id, { label: e.target.value });
-  };
+  }, [element.id, updateElement]);
 
-  // Render element content based on type
-  const renderContent = () => {
+  // Memoize markdown plugins array to prevent recreation
+  const markdownPlugins = useMemo(() => ({
+    remark: [remarkGfm, remarkMath],
+    rehype: [rehypeKatex]
+  }), []);
+
+  // Render element content based on type - memoized for performance
+  const renderContent = useMemo(() => {
     switch (element.type) {
       case 'note':
         return (
-          <div className="flex flex-col gap-2 p-4 h-full">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.7 }}>
+          <div className="flex flex-col gap-2 p-4 h-full overflow-auto">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.7, flexShrink: 0 }}>
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
             </svg>
-            <div className="flex-1 text-[#0d1117] text-sm font-medium overflow-hidden">
-              {element.content}
+            <div className="flex-1 text-[#0d1117] text-sm overflow-auto prose prose-sm max-w-none prose-headings:text-[#0d1117] prose-p:text-[#0d1117] prose-strong:text-[#0d1117] prose-code:text-[#0d1117] prose-pre:bg-gray-100 prose-pre:text-[#0d1117]">
+              <ReactMarkdown
+                remarkPlugins={markdownPlugins.remark}
+                rehypePlugins={markdownPlugins.rehype}
+              >
+                {element.content}
+              </ReactMarkdown>
             </div>
           </div>
         );
@@ -230,7 +263,7 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element }) => {
       default:
         return null;
     }
-  };
+  }, [element.type, element.content, element.drawing, element.color]);
 
   // Get background style based on type
   const getBackgroundStyle = () => {
@@ -303,12 +336,14 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element }) => {
           height: `${element.height}px`,
           cursor: selectedTool === 'hand' ? (isDragging ? 'grabbing' : 'grab') : 'pointer',
           zIndex: isDragging || isResizing ? 1000 : 'auto',
+          pointerEvents: 'auto', // Re-enable pointer events for elements (parent has none)
           ...getBackgroundStyle(),
         }}
         onMouseDown={handleMouseDown}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
       >
-        {renderContent()}
+        {renderContent}
 
         {/* Resize Handles (only visible with hand tool and on hover) */}
         {selectedTool === 'hand' && (
@@ -336,15 +371,21 @@ const CanvasElement: React.FC<CanvasElementProps> = ({ element }) => {
           </>
         )}
       </div>
-
-      {/* Show resize handles on hover */}
-      <style jsx>{`
-        .absolute:hover .resize-handle {
-          opacity: 1;
-        }
-      `}</style>
     </>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison function - only re-render if element actually changed
+  return (
+    prevProps.element.id === nextProps.element.id &&
+    prevProps.element.x === nextProps.element.x &&
+    prevProps.element.y === nextProps.element.y &&
+    prevProps.element.width === nextProps.element.width &&
+    prevProps.element.height === nextProps.element.height &&
+    prevProps.element.content === nextProps.element.content &&
+    prevProps.element.color === nextProps.element.color &&
+    prevProps.element.label === nextProps.element.label &&
+    prevProps.element.drawing === nextProps.element.drawing
+  );
+});
 
 export default CanvasElement;

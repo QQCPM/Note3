@@ -114,11 +114,10 @@ const CanvasToolbar: React.FC = () => {
             key={tool.id}
             onClick={() => setSelectedTool(tool.id)}
             title={tool.title}
-            className={`p-2 rounded-lg transition-all ${
-              selectedTool === tool.id
+            className={`p-2 rounded-lg transition-all ${selectedTool === tool.id
                 ? 'bg-blue-500 text-white'
                 : 'bg-transparent text-gray-400 hover:bg-gray-800 hover:text-white'
-            }`}
+              }`}
           >
             {tool.icon}
           </button>
@@ -132,11 +131,10 @@ const CanvasToolbar: React.FC = () => {
             key={tool.id}
             onClick={() => setSelectedTool(tool.id)}
             title={tool.title}
-            className={`p-2 rounded-lg transition-all ${
-              selectedTool === tool.id
+            className={`p-2 rounded-lg transition-all ${selectedTool === tool.id
                 ? 'bg-blue-500 text-white'
                 : 'bg-transparent text-gray-400 hover:bg-gray-800 hover:text-white'
-            }`}
+              }`}
           >
             {tool.icon}
           </button>

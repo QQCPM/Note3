@@ -1,13 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useNotesStore, useUIStore } from '@/store';
+import { useNotesStore } from '@/store';
 import { getAllNotes } from '@/utils/tauri';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import Canvas from '@/components/Canvas/Canvas';
 import AISidebar from '@/components/AISidebar/AISidebar';
 import ContextMenu from '@/components/ContextMenu/ContextMenu';
-import { ChevronLeft } from 'lucide-react';
+import GlobalDragLayer from '@/components/GlobalDragLayer/GlobalDragLayer';
 import { tauriAI, createMacM2UltraConfig } from '@/services/tauriAI';
+
+
+import HeaderDock from '@/components/CommandDock/HeaderDock';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -22,7 +25,6 @@ const queryClient = new QueryClient({
 
 function App() {
   const { setNotes } = useNotesStore();
-  const { aiSidebarCollapsed, toggleAISidebar, sidebarCollapsed, toggleSidebar, canvasMode, setCanvasMode, modeSwitcherPosition } = useUIStore();
   const [aiInitialized, setAiInitialized] = useState(false);
   const [aiHealthy, setAiHealthy] = useState(false);
 
@@ -70,8 +72,8 @@ function App() {
         console.log('🏥 AI Health Check:', health);
 
         const allHealthy = health.embedding_service &&
-                          health.local_code_service &&
-                          health.reranker_service;
+          health.local_code_service &&
+          health.reranker_service;
         setAiHealthy(allHealthy);
 
         if (!allHealthy) {
@@ -90,85 +92,43 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex h-screen w-full bg-[#0d1117] text-gray-300 antialiased p-2 gap-2">
-        {/* Top-left controls: AI Status + Mode Switcher */}
-        <div className="fixed top-4 left-4 z-50 flex items-center gap-3">
-          {/* AI Status Indicator - Minimal Green Dot */}
+      <div className="flex h-screen w-full bg-[#0d1117] text-gray-300 antialiased p-2 gap-2 relative">
+        {/* AI Status Indicator - Minimal Green Dot (Top Left) */}
+        <div className="fixed top-4 left-4 z-50">
           <div
-            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-              aiInitialized && aiHealthy
-                ? 'bg-green-500 shadow-lg shadow-green-500/50'
-                : aiInitialized
+            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${aiInitialized && aiHealthy
+              ? 'bg-green-500 shadow-lg shadow-green-500/50'
+              : aiInitialized
                 ? 'bg-yellow-500 shadow-lg shadow-yellow-500/50'
                 : 'bg-gray-600'
-            }`}
+              }`}
             title={
               aiInitialized && aiHealthy
                 ? 'AI Ready'
                 : aiInitialized
-                ? 'AI Partial'
-                : 'AI Offline'
+                  ? 'AI Partial'
+                  : 'AI Offline'
             }
           />
-
-          {/* Mode Switcher - ALWAYS VISIBLE */}
-          <div
-            className="inline-flex bg-[#161b22] border border-[#30363d] rounded-lg p-1 gap-1 shadow-lg"
-          >
-            <button
-              onClick={() => setCanvasMode('note')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                canvasMode === 'note'
-                  ? 'bg-[#0d1117] text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-300'
-              }`}
-            >
-              Note
-            </button>
-            <button
-              onClick={() => setCanvasMode('canvas')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                canvasMode === 'canvas'
-                  ? 'bg-[#0d1117] text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-300'
-              }`}
-            >
-              Canvas
-            </button>
-          </div>
         </div>
 
+        {/* Header Dock - Persistent Top Left */}
+        <HeaderDock />
+
         {/* Left Sidebar - Note Tree */}
-        {sidebarCollapsed ? (
-          <button
-            onClick={toggleSidebar}
-            className="absolute top-1/2 left-0 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white p-1 rounded-full z-20"
-            title="Expand Sidebar"
-          >
-            <ChevronLeft size={16} className="rotate-180" />
-          </button>
-        ) : (
-          <Sidebar />
-        )}
+        <Sidebar />
 
         {/* Main Canvas Area */}
         <Canvas />
 
         {/* Right Sidebar - AI Panel */}
-        {aiSidebarCollapsed ? (
-          <button
-            onClick={toggleAISidebar}
-            className="absolute top-1/2 right-0 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white p-1 rounded-full z-20"
-            title="Expand Sidebar"
-          >
-            <ChevronLeft size={16} />
-          </button>
-        ) : (
-          <AISidebar />
-        )}
+        <AISidebar />
 
         {/* Context Menu (global) */}
         <ContextMenu />
+
+        {/* Global Drag Layer - Renders drag preview */}
+        <GlobalDragLayer />
       </div>
     </QueryClientProvider>
   );

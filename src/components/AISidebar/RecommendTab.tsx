@@ -34,7 +34,7 @@ const RecommendTab: React.FC = () => {
   const [thinkingMessage, setThinkingMessage] = useState<string>('');
   const [thinkingMessageForType, setThinkingMessageForType] = useState<Record<string, string>>({});
   const [thinkingMessageKey, setThinkingMessageKey] = useState<number>(0);
-  const thinkingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const thinkingIntervalRef = useRef<number | null>(null);
 
   // Get the current note content
   useEffect(() => {

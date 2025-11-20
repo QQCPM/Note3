@@ -1,7 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useCanvasStore } from '@/store/canvasStore';
 import { getBlocksByNote } from '@/utils/tauri';
 import type { Block } from '@/types';
+import TextBlock from '@/components/Blocks/TextBlock';
+import HeadingBlock from '@/components/Blocks/HeadingBlock';
+import TaskBlock from '@/components/Blocks/TaskBlock';
+import WebBlock from '@/components/Blocks/WebBlock';
+import ErrorBoundary from '@/components/ErrorBoundary';
+
+// Lazy load heavy components
+const DatabaseBlock = lazy(() => import('@/components/Blocks/DatabaseBlock'));
+const ArtifactBlock = lazy(() => import('@/components/Blocks/ArtifactBlock'));
 
 const CanvasModal: React.FC = () => {
   const { editingElement, setEditingElement, updateElement, deleteElement } = useCanvasStore();
@@ -157,81 +166,63 @@ const CanvasModal: React.FC = () => {
   const renderModalBody = () => {
     switch (editingElement.type) {
       case 'note':
-        const colors = ['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f472b6'];
-
-        // If this is a linked note, show full note editor
+        // If this is a linked note, show full note view
         if (editingElement.noteId) {
           return (
             <div className="flex flex-col h-full">
-              <div className="mb-4">
-                <div className="text-sm font-semibold text-gray-700 mb-2">Linked Note</div>
-                <div className="text-xs text-gray-500 mb-4">
-                  This note is linked to your note library. Changes here are reflected in the original note.
-                </div>
-                <div className="text-sm font-semibold text-gray-700 mb-2">Choose color:</div>
-                <div className="flex gap-2">
-                  {colors.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => handleColorChange(c)}
-                      className="w-8 h-8 rounded-lg transition-all"
-                      style={{
-                        backgroundColor: c,
-                        border: color === c ? '2px solid #000' : '2px solid transparent',
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Note blocks display */}
-              <div className="flex-1 overflow-y-auto border-2 border-gray-300 rounded-2xl p-6">
+              {/* Note blocks display - Full note view like note mode */}
+              <div className="flex-1 overflow-y-auto bg-[#0d1117] rounded-xl">
                 {loadingBlocks ? (
-                  <div className="text-center text-gray-500">Loading note content...</div>
+                  <div className="flex-1 flex items-center justify-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-8 h-8 border-4 border-gray-600 border-t-purple-500 rounded-full animate-spin"></div>
+                      <div className="text-gray-400 text-sm">Loading...</div>
+                    </div>
+                  </div>
                 ) : noteBlocks.length === 0 ? (
-                  <div className="text-center text-gray-400">This note is empty</div>
+                  <div className="flex-1 flex items-center justify-center py-12">
+                    <div className="text-center text-gray-400">This note is empty</div>
+                  </div>
                 ) : (
-                  <div className="space-y-4">
-                    {noteBlocks.map((block) => {
-                      const blockData = block.data as any;
-                      return (
-                        <div key={block.id} className="border-b border-gray-200 pb-4 last:border-0">
-                          {block.type === 'heading1' && (
-                            <h1 className="text-3xl font-bold text-gray-800">{blockData.content}</h1>
-                          )}
-                          {block.type === 'heading2' && (
-                            <h2 className="text-2xl font-semibold text-gray-800">{blockData.content}</h2>
-                          )}
-                          {block.type === 'text' && (
-                            <p className="text-base text-gray-700 whitespace-pre-wrap">{blockData.content}</p>
-                          )}
-                          {block.type === 'task' && (
-                            <div className="space-y-2">
-                              <div className="font-semibold text-gray-800">{blockData.title}</div>
-                              {blockData.tasks?.map((task: any) => (
-                                <div key={task.id} className="flex items-center gap-2">
-                                  <input type="checkbox" checked={task.completed} readOnly />
-                                  <span className={task.completed ? 'line-through text-gray-500' : 'text-gray-700'}>
-                                    {task.text}
-                                  </span>
+                  <div className="max-w-[90%] mx-auto py-8 px-8">
+                    <div className="flex flex-col gap-4">
+                      {noteBlocks.map((block) => (
+                        <div key={block.id} className="w-full">
+                          <ErrorBoundary>
+                            {block.type === 'text' && <TextBlock block={block} />}
+                            {(block.type === 'heading1' || block.type === 'heading2') && <HeadingBlock block={block} />}
+                            {block.type === 'database' && (
+                              <Suspense fallback={
+                                <div className="canvas-block p-4 bg-[#161b22] rounded border border-[#30363d] animate-pulse">
+                                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                                    <div className="w-4 h-4 border-2 border-gray-600 border-t-purple-500 rounded-full animate-spin"></div>
+                                    <span>Loading...</span>
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                          {!['heading1', 'heading2', 'text', 'task'].includes(block.type) && (
-                            <div className="text-gray-500 text-sm italic">
-                              [{block.type} block - preview not available]
-                            </div>
-                          )}
+                              }>
+                                <DatabaseBlock block={block} />
+                              </Suspense>
+                            )}
+                            {block.type === 'artifact' && (
+                              <Suspense fallback={
+                                <div className="canvas-block p-4 bg-[#161b22] rounded border border-[#30363d] animate-pulse">
+                                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                                    <div className="w-4 h-4 border-2 border-gray-600 border-t-purple-500 rounded-full animate-spin"></div>
+                                    <span>Loading...</span>
+                                  </div>
+                                </div>
+                              }>
+                                <ArtifactBlock block={block} />
+                              </Suspense>
+                            )}
+                            {block.type === 'task' && <TaskBlock block={block} />}
+                            {block.type === 'web' && <WebBlock block={block} />}
+                          </ErrorBoundary>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
                 )}
-              </div>
-
-              <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
-                💡 Tip: To edit this note's content, click on it in the sidebar and switch to Note mode.
               </div>
             </div>
           );
@@ -240,26 +231,10 @@ const CanvasModal: React.FC = () => {
         // Regular note element (not linked)
         return (
           <div className="flex flex-col h-full">
-            <div className="mb-4">
-              <div className="text-sm font-semibold text-gray-700 mb-2">Choose color:</div>
-              <div className="flex gap-2">
-                {colors.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => handleColorChange(c)}
-                    className="w-8 h-8 rounded-lg transition-all"
-                    style={{
-                      backgroundColor: c,
-                      border: color === c ? '2px solid #000' : '2px solid transparent',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="flex-1 p-6 border-2 border-gray-300 rounded-2xl text-lg resize-none focus:outline-none focus:border-blue-500"
+              className="flex-1 p-6 bg-[#0d1117] border-2 border-[#30363d] rounded-xl text-lg text-gray-300 resize-none focus:outline-none focus:border-blue-500"
               placeholder="Start typing your notes..."
             />
           </div>
@@ -268,50 +243,9 @@ const CanvasModal: React.FC = () => {
       case 'drawing':
         return (
           <div className="flex flex-col h-full">
-            <div className="flex gap-3 mb-4 items-center">
-              <button
-                onClick={() => setDrawingTool('pen')}
-                className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                  drawingTool === 'pen'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-800'
-                }`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-                  <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-                </svg>
-                Pen
-              </button>
-              <button
-                onClick={() => setDrawingTool('eraser')}
-                className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                  drawingTool === 'eraser'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-800'
-                }`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                </svg>
-                Eraser
-              </button>
-              <input
-                type="color"
-                value={drawingColor}
-                onChange={(e) => setDrawingColor(e.target.value)}
-                className="w-12 h-12 rounded-lg cursor-pointer"
-              />
-              <button
-                onClick={clearCanvas}
-                className="px-4 py-2 rounded-lg bg-red-100 text-red-700 ml-auto"
-              >
-                Clear Canvas
-              </button>
-            </div>
             <canvas
               ref={canvasRef}
-              className="flex-1 border-2 border-gray-300 rounded-2xl bg-white cursor-crosshair"
+              className="flex-1 border-2 border-[#30363d] rounded-xl bg-white cursor-crosshair"
               onMouseDown={startDrawing}
               onMouseMove={draw}
               onMouseUp={stopDrawing}
@@ -325,7 +259,7 @@ const CanvasModal: React.FC = () => {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full h-full p-6 border-2 border-gray-300 rounded-2xl text-base resize-none focus:outline-none focus:border-blue-500"
+            className="w-full h-full p-6 bg-[#0d1117] border-2 border-[#30363d] rounded-xl text-base text-gray-300 resize-none focus:outline-none focus:border-blue-500"
             placeholder="Type your text content here..."
           />
         );
@@ -338,17 +272,17 @@ const CanvasModal: React.FC = () => {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com"
-              className="p-4 border-2 border-gray-300 rounded-xl text-base mb-4 focus:outline-none focus:border-blue-500"
+              className="p-4 bg-[#0d1117] border-2 border-[#30363d] rounded-xl text-base text-gray-300 mb-4 focus:outline-none focus:border-blue-500"
             />
-            <div className="flex-1 bg-gray-100 rounded-2xl flex items-center justify-center">
-              <div className="text-center text-gray-500">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-3">
+            <div className="flex-1 bg-[#0d1117] border-2 border-[#30363d] rounded-xl flex items-center justify-center">
+              <div className="text-center text-gray-400">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-3 opacity-50">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="2" y1="12" x2="22" y2="12"></line>
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                 </svg>
-                <div>Enter a valid URL to preview the website</div>
-                <div className="text-xs mt-2">(Preview feature coming soon)</div>
+                <div className="text-base">Enter a URL to preview</div>
+                <div className="text-xs mt-2 text-gray-500">(Preview coming soon)</div>
               </div>
             </div>
           </div>
@@ -358,7 +292,7 @@ const CanvasModal: React.FC = () => {
         return (
           <div className="flex items-center justify-center h-full">
             <div className="text-center max-w-xl">
-              <svg width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-6">
+              <svg width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-6 text-purple-400">
                 <circle cx="12" cy="12" r="3"></circle>
                 <circle cx="19" cy="6" r="2"></circle>
                 <circle cx="19" cy="18" r="2"></circle>
@@ -374,9 +308,9 @@ const CanvasModal: React.FC = () => {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Central Idea..."
-                className="w-full p-6 border-2 border-purple-300 rounded-2xl text-center text-3xl font-bold focus:outline-none focus:border-purple-500"
+                className="w-full p-6 bg-[#0d1117] border-2 border-purple-500 rounded-xl text-center text-3xl font-bold text-gray-200 focus:outline-none focus:border-purple-400"
               />
-              <p className="text-gray-500 mt-4">Use the arrow tool (connector) to link to other blocks</p>
+              <p className="text-gray-400 mt-4 text-sm">Use the arrow tool to connect to other blocks</p>
             </div>
           </div>
         );
@@ -387,36 +321,23 @@ const CanvasModal: React.FC = () => {
   };
 
   const getModalTitle = () => {
-    switch (editingElement.type) {
-      case 'note':
-        return 'Note Block';
-      case 'drawing':
-        return 'Drawing Block';
-      case 'text':
-        return 'Text Block';
-      case 'website':
-        return 'Website Block';
-      case 'mindmap':
-        return 'Mind Map Block';
-      default:
-        return 'Edit';
+    // Show the label if it exists, otherwise show a generic title
+    if (editingElement.label) {
+      return editingElement.label;
     }
-  };
-
-  const getModalSubtitle = () => {
     switch (editingElement.type) {
       case 'note':
-        return 'Full notepad for your ideas';
+        return 'Note';
       case 'drawing':
-        return 'Full canvas for drawing and sketching';
+        return 'Drawing';
       case 'text':
-        return 'Large text area for paragraphs';
+        return 'Text';
       case 'website':
-        return 'Embed and preview websites';
+        return 'Website';
       case 'mindmap':
-        return 'Central idea and connections';
+        return 'Mind Map';
       default:
-        return '';
+        return 'View';
     }
   };
 
@@ -424,46 +345,133 @@ const CanvasModal: React.FC = () => {
     <div
       className="fixed inset-0 flex items-center justify-center z-50"
       style={{
-        background: 'rgba(0, 0, 0, 0.8)',
-        backdropFilter: 'blur(8px)',
+        background: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(12px)',
       }}
     >
-      <div className="bg-white rounded-3xl flex flex-col shadow-2xl" style={{ width: '90vw', height: '90vh' }}>
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800">{getModalTitle()}</h2>
-            <p className="text-sm text-gray-600 mt-1">{getModalSubtitle()}</p>
+      {/* Main Container - Immersive */}
+      <div className="relative w-[95vw] h-[95vh] bg-[#010409] rounded-3xl shadow-2xl border border-[#30363d] overflow-hidden flex flex-col group">
+
+        {/* Floating Header Controls - Glassmorphic */}
+        <div className="absolute top-6 left-6 right-6 z-20 flex justify-between items-center pointer-events-none">
+          {/* Title/Type Badge */}
+          <div className="pointer-events-auto">
+            <div className="flex items-center gap-3 px-4 py-2 rounded-full backdrop-blur-md bg-[#161b22]/80 border border-white/10 shadow-lg">
+              <span className="text-sm font-medium text-gray-400 uppercase tracking-wider text-xs">
+                {editingElement.type}
+              </span>
+              <div className="w-px h-4 bg-white/10"></div>
+              <span className="font-semibold text-gray-200">
+                {getModalTitle()}
+              </span>
+            </div>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
+
+          {/* Central Tools Section (Colors, Drawing Tools, etc.) */}
+          <div className="pointer-events-auto flex items-center gap-3">
+            {/* Note Colors */}
+            {editingElement.type === 'note' && !editingElement.noteId && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-md bg-[#161b22]/80 border border-white/10 shadow-lg">
+                {['#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f472b6'].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => handleColorChange(c)}
+                    className="w-6 h-6 rounded-full transition-all hover:scale-110"
+                    style={{
+                      background: c,
+                      border: color === c ? '2px solid #fff' : '2px solid transparent',
+                      boxShadow: color === c ? '0 0 0 1px rgba(0,0,0,0.2)' : 'none',
+                    }}
+                    title="Change color"
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Drawing Tools */}
+            {editingElement.type === 'drawing' && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-md bg-[#161b22]/80 border border-white/10 shadow-lg">
+                <button
+                  onClick={() => setDrawingTool('pen')}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${drawingTool === 'pen' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'
+                    }`}
+                >
+                  Pen
+                </button>
+                <button
+                  onClick={() => setDrawingTool('eraser')}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${drawingTool === 'eraser' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'
+                    }`}
+                >
+                  Eraser
+                </button>
+                <div className="w-px h-4 bg-white/10 mx-1"></div>
+                <input
+                  type="color"
+                  value={drawingColor}
+                  onChange={(e) => setDrawingColor(e.target.value)}
+                  className="w-6 h-6 rounded-full cursor-pointer bg-transparent border-none p-0"
+                  title="Drawing Color"
+                />
+                <div className="w-px h-4 bg-white/10 mx-1"></div>
+                <button
+                  onClick={clearCanvas}
+                  className="px-3 py-1.5 rounded-full text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Close Button */}
+          <div className="pointer-events-auto">
+            <button
+              onClick={handleClose}
+              className="flex items-center justify-center w-10 h-10 rounded-full backdrop-blur-md bg-[#161b22]/80 border border-white/10 shadow-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+              title="Close (Esc)"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 p-8 overflow-y-auto">
-          {renderModalBody()}
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-hidden relative">
+          {/* Add padding to account for floating controls */}
+          <div className="h-full w-full p-6 pt-20 pb-24 overflow-y-auto custom-scrollbar">
+            {renderModalBody()}
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-3xl flex items-center justify-between">
-          <button
-            onClick={handleDelete}
-            className="px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 font-medium transition-colors"
-          >
-            Delete
-          </button>
-          <button
-            onClick={handleClose}
-            className="px-8 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 font-medium transition-colors"
-          >
-            Done
-          </button>
+        {/* Floating Footer Controls - Glassmorphic */}
+        <div className="absolute bottom-4 left-0 right-0 z-20 flex justify-center pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-4 px-2 py-2 rounded-full backdrop-blur-md bg-[#161b22]/90 border border-white/10 shadow-2xl transform transition-all hover:scale-105">
+
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all font-medium text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+              Delete
+            </button>
+
+            <div className="w-px h-6 bg-white/10"></div>
+
+            <button
+              onClick={handleClose}
+              className="flex items-center gap-2 px-6 py-2.5 bg-white text-black rounded-full hover:bg-gray-200 transition-all font-semibold text-sm shadow-lg shadow-white/5"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              Done
+            </button>
+          </div>
         </div>
       </div>
     </div>

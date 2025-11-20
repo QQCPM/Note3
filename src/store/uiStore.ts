@@ -88,12 +88,13 @@ export const useUIStore = create<UIState>((set) => ({
 
   setAISidebarTab: (tab) => set({ aiSidebarTab: tab }),
 
-  setCanvasMode: (mode) => set((state) => {
-    // Auto-collapse both sidebars when entering canvas mode
+  setCanvasMode: (mode) => set(() => {
+    // KEEP LEFT SIDEBAR OPEN for drag-and-drop to work!
+    // Only auto-collapse the AI sidebar when entering canvas mode
     if (mode === 'canvas') {
       return {
         canvasMode: mode,
-        sidebarCollapsed: true,
+        sidebarCollapsed: false, // KEEP OPEN so drag-and-drop works
         aiSidebarCollapsed: true,
       };
     }

@@ -67,8 +67,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   nextElementId: 1,
 
   zoom: 1.0,
-  panX: 2000, // Start centered on canvas
-  panY: 2000,
+  panX: 2550, // Center of the 3 default boxes
+  panY: 2450,
 
   selectedTool: 'hand',
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { useCanvasStore } from '@/store/canvasStore';
 
 const ConnectionLayer: React.FC = () => {
-  const { connections, elements, zoom } = useCanvasStore();
+  const { connections, elements } = useCanvasStore();
 
   // Calculate intersection point of line with rectangle edge
   const getBoxEdgePoint = (
@@ -51,19 +51,20 @@ const ConnectionLayer: React.FC = () => {
         height: '100%',
         pointerEvents: 'none',
         zIndex: 1,
+        overflow: 'visible',
       }}
     >
-      {/* Arrowhead marker definition - scales with zoom */}
+      {/* Arrowhead marker definition */}
       <defs>
         <marker
           id="arrowhead"
-          markerWidth={10 * zoom}
-          markerHeight={10 * zoom}
-          refX={9 * zoom}
-          refY={3 * zoom}
+          markerWidth={10}
+          markerHeight={10}
+          refX={9}
+          refY={3}
           orient="auto"
         >
-          <polygon points={`0 0, ${10 * zoom} ${3 * zoom}, 0 ${6 * zoom}`} fill="#58a6ff" />
+          <polygon points="0 0, 10 3, 0 6" fill="#58a6ff" />
         </marker>
       </defs>
 
@@ -87,12 +88,12 @@ const ConnectionLayer: React.FC = () => {
         return (
           <line
             key={`${conn.from}-${conn.to}-${index}`}
-            x1={fromEdge.x * zoom}
-            y1={fromEdge.y * zoom}
-            x2={toEdge.x * zoom}
-            y2={toEdge.y * zoom}
+            x1={fromEdge.x}
+            y1={fromEdge.y}
+            x2={toEdge.x}
+            y2={toEdge.y}
             stroke="#58a6ff"
-            strokeWidth={2 * zoom}
+            strokeWidth={2}
             markerEnd="url(#arrowhead)"
           />
         );
