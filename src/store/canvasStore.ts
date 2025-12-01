@@ -1,5 +1,26 @@
 import { create } from 'zustand';
 
+// ========================================
+// TYPES - Canvas Store
+// ========================================
+// 
+// NOTE: These types (CanvasElement, CanvasConnection, etc.) are simplified versions
+// that differ from the more comprehensive types in @/types/canvas.ts
+// 
+// Key differences:
+// - Store uses flat structure: {id, type, x, y, width, height, content, color, label}
+// - types/canvas.ts uses: {id, type, position: {x,y}, size: {width,height}, data: CanvasElementData}
+// 
+// This duplication creates type incompatibility between store and components.
+// InfiniteCanvas.tsx imports from @/types/canvas, but canvasStore uses these local types.
+// 
+// TODO: Migrate to unified type system from types/canvas.ts to ensure type safety
+// across the entire canvas system. This will require:
+// 1. Update store state to use types/canvas.ts types
+// 2. Update all store actions to work with the new structure
+// 3. Ensure InfiniteCanvas and other canvas components remain compatible
+//
+
 // Canvas element types matching prototype
 export type CanvasElementType = 'note' | 'drawing' | 'text' | 'website' | 'mindmap';
 
@@ -62,7 +83,7 @@ interface CanvasState {
   initializeDefaultElements: () => void;
 }
 
-export const useCanvasStore = create<CanvasState>((set, get) => ({
+export const useCanvasStore = create<CanvasState>((set) => ({
   elements: [],
   nextElementId: 1,
 

@@ -1,0 +1,503 @@
+/* ============================================================================
+   Clean Chat Message Styles - Modern AI Chat Interface
+   ============================================================================ */
+
+/* Base message container */
+.clean-message {
+  padding: 1.5rem 0;
+  margin: 0;
+  border: none;
+  background: none;
+  animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+.clean-message.latest {
+  animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards;
+}
+
+/* ============================================================================
+   User Question Styles
+   ============================================================================ */
+
+.user-question {
+  position: relative;
+  padding: 1rem 0;
+  margin: 1rem 0;
+}
+
+/* Subtle glow effect behind user question */
+.question-glow-line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120%;
+  height: 160%;
+  background: radial-gradient(ellipse at center,
+      rgba(88, 166, 255, 0.2) 0%,
+      rgba(88, 166, 255, 0.08) 40%,
+      transparent 70%);
+  filter: blur(24px);
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+}
+
+.question-text {
+  position: relative;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: #e6edf3;
+  line-height: 1.7;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-shadow: 0 0 30px rgba(88, 166, 255, 0.2);
+  z-index: 1;
+}
+
+/* ============================================================================
+   AI Answer Styles
+   ============================================================================ */
+
+.ai-answer {
+  padding: 0.5rem 0;
+  margin: 0;
+}
+
+.answer-text {
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: #c9d1d9;
+  line-height: 1.7;
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+/* Override pre-wrap to allow markdown to work properly */
+.answer-text.markdown-body {
+  white-space: normal;
+}
+
+/* ============================================================================
+   KaTeX / LaTeX Styles
+   ============================================================================ */
+
+/* Inline math */
+.answer-text .katex {
+  font-size: 1em;
+  color: #e6edf3;
+}
+
+/* Display/block math */
+.answer-text .katex-display {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: rgba(88, 166, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(88, 166, 255, 0.1);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.answer-text .katex-display > .katex {
+  font-size: 1.1em;
+}
+
+/* Math in lists */
+.answer-text li .katex {
+  margin: 0 0.15em;
+}
+
+/* Better scrollbar for math overflow */
+.answer-text .katex-display::-webkit-scrollbar {
+  height: 4px;
+}
+
+.answer-text .katex-display::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.answer-text .katex-display::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 2px;
+}
+
+/* ============================================================================
+   Code Block Styles
+   ============================================================================ */
+
+.code-block-wrapper {
+  margin: 1rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #30363d;
+}
+
+.code-block-header {
+  background: #0d1117;
+  border-bottom: 1px solid #30363d;
+}
+
+/* Syntax highlighting base colors */
+.answer-text code {
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+}
+
+/* Inline code */
+.answer-text :not(pre) > code {
+  background: rgba(110, 118, 129, 0.15);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: #e6edf3;
+  border: 1px solid rgba(110, 118, 129, 0.2);
+}
+
+/* ============================================================================
+   Table Styles (from remark-gfm)
+   ============================================================================ */
+
+.answer-text table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+
+.answer-text thead {
+  background: #161b22;
+}
+
+.answer-text th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: #e6edf3;
+  border-bottom: 2px solid #30363d;
+}
+
+.answer-text td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #21262d;
+  color: #c9d1d9;
+}
+
+.answer-text tbody tr:hover {
+  background: rgba(88, 166, 255, 0.03);
+}
+
+.answer-text tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================================================================
+   List Styles
+   ============================================================================ */
+
+.answer-text ul,
+.answer-text ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+.answer-text li {
+  margin: 0.35rem 0;
+  color: #c9d1d9;
+}
+
+.answer-text li::marker {
+  color: #6e7681;
+}
+
+/* Nested lists */
+.answer-text ul ul,
+.answer-text ol ol,
+.answer-text ul ol,
+.answer-text ol ul {
+  margin: 0.25rem 0;
+}
+
+/* Task lists (from remark-gfm) */
+.answer-text ul.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.answer-text li.task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.answer-text li.task-list-item input[type="checkbox"] {
+  margin-top: 0.35rem;
+  accent-color: #58a6ff;
+}
+
+/* ============================================================================
+   Blockquote Styles
+   ============================================================================ */
+
+.answer-text blockquote {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #58a6ff;
+  background: rgba(88, 166, 255, 0.05);
+  border-radius: 0 6px 6px 0;
+  color: #8b949e;
+  font-style: italic;
+}
+
+.answer-text blockquote p {
+  margin: 0;
+}
+
+/* ============================================================================
+   Heading Styles
+   ============================================================================ */
+
+.answer-text h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #e6edf3;
+  margin: 1.5rem 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #30363d;
+}
+
+.answer-text h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #e6edf3;
+  margin: 1.25rem 0 0.75rem;
+}
+
+.answer-text h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #e6edf3;
+  margin: 1rem 0 0.5rem;
+}
+
+.answer-text h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #c9d1d9;
+  margin: 0.75rem 0 0.5rem;
+}
+
+/* ============================================================================
+   Link Styles
+   ============================================================================ */
+
+.answer-text a {
+  color: #58a6ff;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.answer-text a:hover {
+  color: #79b8ff;
+  text-decoration: underline;
+}
+
+/* ============================================================================
+   Horizontal Rule
+   ============================================================================ */
+
+.answer-text hr {
+  border: none;
+  height: 1px;
+  background: #30363d;
+  margin: 1.5rem 0;
+}
+
+/* ============================================================================
+   Thinking Block Styles
+   ============================================================================ */
+
+.thinking-block {
+  margin-bottom: 1rem;
+}
+
+.thinking-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.thinking-steps {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Thinking step animations */
+.thinking-step {
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ============================================================================
+   Sources Panel Styles
+   ============================================================================ */
+
+.sources-panel {
+  margin-top: 1.5rem;
+}
+
+.sources-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sources-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.source-item {
+  text-decoration: none;
+}
+
+/* ============================================================================
+   Citation Tooltip Styles
+   ============================================================================ */
+
+.citation-trigger {
+  position: relative;
+}
+
+.citation-tooltip {
+  pointer-events: auto;
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tailwind-like animation utilities for components */
+.animate-in {
+  animation-duration: 0.2s;
+  animation-fill-mode: forwards;
+}
+
+.fade-in {
+  animation-name: fadeIn;
+}
+
+.zoom-in-95 {
+  animation-name: zoomIn95;
+}
+
+.slide-in-from-top-2 {
+  animation-name: slideInFromTop;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes zoomIn95 {
+  from { 
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================================
+   Responsive Styles
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .clean-message {
+    padding: 1rem 0;
+  }
+
+  .question-text {
+    font-size: 0.95rem;
+  }
+
+  .answer-text {
+    font-size: 0.9rem;
+  }
+
+  .answer-text h1 {
+    font-size: 1.5rem;
+  }
+
+  .answer-text h2 {
+    font-size: 1.25rem;
+  }
+
+  .answer-text h3 {
+    font-size: 1.1rem;
+  }
+
+  .answer-text table {
+    font-size: 0.85rem;
+  }
+
+  .answer-text th,
+  .answer-text td {
+    padding: 0.5rem 0.75rem;
+  }
+}

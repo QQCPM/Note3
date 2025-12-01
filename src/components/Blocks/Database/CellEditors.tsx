@@ -35,7 +35,7 @@ export const TextCellEditor: React.FC<TextCellProps> = ({ value, onSave, onCance
       onChange={(e) => setEditValue(e.target.value)}
       onKeyDown={handleKeyDown}
       onBlur={() => onSave(editValue)}
-      className="w-full px-2 py-1 bg-[#0d1117] border border-blue-500 rounded text-sm text-white focus:outline-none"
+      className="w-full px-3 py-2 bg-white/5 border border-blue-500/50 rounded-lg text-sm text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all"
     />
   );
 };
@@ -80,7 +80,7 @@ export const NumberCellEditor: React.FC<NumberCellProps> = ({ value, onSave, onC
       onChange={(e) => setEditValue(e.target.value)}
       onKeyDown={handleKeyDown}
       onBlur={handleSave}
-      className="w-full px-2 py-1 bg-[#0d1117] border border-blue-500 rounded text-sm text-white focus:outline-none"
+      className="w-full px-3 py-2 bg-white/5 border border-blue-500/50 rounded-lg text-sm text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all tabular-nums"
       step="any"
     />
   );
@@ -119,7 +119,7 @@ export const DateCellEditor: React.FC<DateCellProps> = ({ value, onSave, onCance
       onChange={(e) => setEditValue(e.target.value)}
       onKeyDown={handleKeyDown}
       onBlur={() => onSave(editValue || null)}
-      className="w-full px-2 py-1 bg-[#0d1117] border border-blue-500 rounded text-sm text-white focus:outline-none"
+      className="w-full px-3 py-2 bg-white/5 border border-blue-500/50 rounded-lg text-sm text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 transition-all"
     />
   );
 };
@@ -162,7 +162,7 @@ export const SelectCellEditor: React.FC<SelectCellProps> = ({ value, column, onS
       onChange={(e) => handleChange(e.target.value)}
       onKeyDown={handleKeyDown}
       onBlur={() => onSave(editValue)}
-      className="w-full px-2 py-1 bg-[#0d1117] border border-blue-500 rounded text-sm text-white focus:outline-none"
+      className="w-full px-3 py-2 bg-white/5 border border-blue-500/50 rounded-lg text-sm text-white focus:outline-none focus:border-blue-400 cursor-pointer transition-all"
     >
       <option value="">Select...</option>
       {options.map((opt) => (
@@ -188,13 +188,21 @@ export const CheckboxCellEditor: React.FC<CheckboxCellProps> = ({ value, onSave 
   };
 
   return (
-    <div className="flex items-center justify-center w-full h-full">
-      <input
-        type="checkbox"
-        checked={value || false}
-        onChange={handleToggle}
-        className="w-4 h-4 cursor-pointer"
-      />
+    <div className="flex items-center justify-center w-full h-full py-2">
+      <button
+        onClick={handleToggle}
+        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-150 ${
+          value 
+            ? 'bg-blue-500/80 border-blue-400/50 text-white' 
+            : 'bg-white/5 border-white/20 hover:border-white/40'
+        }`}
+      >
+        {value && (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </button>
     </div>
   );
 };
@@ -211,56 +219,61 @@ interface CellRendererProps {
 export const CellRenderer: React.FC<CellRendererProps> = ({ column, value, onClick }) => {
   const renderValue = () => {
     if (value === null || value === undefined || value === '') {
-      return <span className="text-gray-500 italic text-xs">Empty</span>;
+      return <span className="text-white/20 italic text-xs">Empty</span>;
     }
 
     switch (column.type) {
       case 'checkbox':
         return (
           <div className="flex items-center justify-center">
-            <input
-              type="checkbox"
-              checked={value || false}
-              readOnly
-              className="w-4 h-4 pointer-events-none"
-            />
+            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${
+              value 
+                ? 'bg-blue-500/80 border-blue-400/50 text-white' 
+                : 'bg-white/5 border-white/20'
+            }`}>
+              {value && (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
           </div>
         );
 
       case 'number':
-        return <span className="font-mono">{typeof value === 'number' ? value.toLocaleString() : value}</span>;
+        return <span className="font-mono text-white/80 tabular-nums">{typeof value === 'number' ? value.toLocaleString() : value}</span>;
 
       case 'date':
-        return <span>{value ? new Date(value).toLocaleDateString() : ''}</span>;
+        return <span className="text-white/70">{value ? new Date(value).toLocaleDateString() : ''}</span>;
 
       case 'select':
         const colorMap: Record<string, string> = {
-          'Todo': 'bg-gray-500/20 text-gray-400',
-          'In Progress': 'bg-yellow-500/20 text-yellow-400',
-          'Done': 'bg-green-500/20 text-green-400',
-          'Complete': 'bg-green-500/20 text-green-400',
-          'Upcoming': 'bg-blue-500/20 text-blue-400',
-          'High': 'bg-red-500/20 text-red-400',
-          'Medium': 'bg-yellow-500/20 text-yellow-400',
-          'Low': 'bg-blue-500/20 text-blue-400',
+          'Todo': 'bg-white/10 text-white/60 border-white/10',
+          'In Progress': 'bg-amber-500/15 text-amber-400/90 border-amber-500/20',
+          'Done': 'bg-emerald-500/15 text-emerald-400/90 border-emerald-500/20',
+          'Complete': 'bg-emerald-500/15 text-emerald-400/90 border-emerald-500/20',
+          'Upcoming': 'bg-sky-500/15 text-sky-400/90 border-sky-500/20',
+          'High': 'bg-rose-500/15 text-rose-400/90 border-rose-500/20',
+          'Medium': 'bg-amber-500/15 text-amber-400/90 border-amber-500/20',
+          'Low': 'bg-sky-500/15 text-sky-400/90 border-sky-500/20',
         };
-        const colorClass = colorMap[value] || 'bg-purple-500/20 text-purple-400';
+        const colorClass = colorMap[value] || 'bg-violet-500/15 text-violet-400/90 border-violet-500/20';
         return (
-          <span className={`px-2 py-0.5 rounded text-xs ${colorClass}`}>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${colorClass}`}>
             {value}
           </span>
         );
 
       case 'text':
       default:
-        return <span className="truncate">{value}</span>;
+        return <span className="truncate text-white/80">{value}</span>;
     }
   };
 
   return (
     <div
       onClick={onClick}
-      className="px-3 py-2 cursor-pointer hover:bg-[#161b22] transition-colors h-full flex items-center"
+      className="px-4 py-2.5 cursor-pointer hover:bg-white/[0.03] transition-colors h-full flex items-center text-sm"
     >
       {renderValue()}
     </div>

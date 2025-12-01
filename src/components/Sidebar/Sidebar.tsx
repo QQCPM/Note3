@@ -23,7 +23,7 @@ const Sidebar: React.FC = () => {
 
   return (
     <nav
-      className={`sidebar bg-[#010409] flex flex-col flex-shrink-0 rounded-lg ${sidebarCollapsed ? 'collapsed' : ''}`}
+      className={`sidebar bg-[#010409] flex flex-col flex-shrink-0 rounded-2xl ${sidebarCollapsed ? 'collapsed' : ''}`}
       style={{
         width: sidebarCollapsed ? '0' : '240px',
         minWidth: sidebarCollapsed ? '0' : '240px',
@@ -33,6 +33,8 @@ const Sidebar: React.FC = () => {
         position: 'relative',
         zIndex: 1,
         transition: 'width 0.3s ease, min-width 0.3s ease',
+        margin: '8px',
+        height: 'calc(100vh - 16px)',
       }}
     >
 

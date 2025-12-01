@@ -1,4 +1,4 @@
-import { useAIStore } from '@/store/aiStore';
+import { useAIStore, type ThinkingStepType } from '@/store/aiStore';
 import { useBlocksStore } from '@/store/blocksStore';
 import { searchWeb, type SearchResult } from './webSearch';
 import { tauriAI, type Tool } from './tauriAI';
@@ -10,6 +10,102 @@ import { aiToolsService } from './aiTools';
  * Provides streaming AI capabilities for direct canvas editing.
  * Integrates with tauriAI for real AI backend, with mock implementation for development.
  */
+
+// ============================================================================
+// THINKING STEP HELPERS
+// ============================================================================
+
+/**
+ * Map tool names to thinking step types for display
+ */
+function getThinkingStepType(toolName: string): ThinkingStepType {
+  if (toolName === 'search_web') return 'search';
+  if (toolName === 'read_block' || toolName === 'read_note') return 'read';
+  if (toolName === 'edit_block') return 'write';
+  if (toolName === 'create_database' || toolName === 'create_artifact') return 'create';
+  if (toolName.startsWith('db_') || toolName.startsWith('artifact_')) return 'tool';
+  return 'tool';
+}
+
+/**
+ * Add a thought step that tracks AI processing time
+ */
+function addThoughtStep(aiStore: ReturnType<typeof useAIStore.getState>): string {
+  aiStore.addThinkingStep({
+    type: 'thought',
+    status: 'running',
+    description: 'Thinking...',
+  });
+  const steps = aiStore.currentThinkingSteps;
+  return steps[steps.length - 1]?.id || '';
+}
+
+/**
+ * Complete a thought step with duration
+ */
+function completeThoughtStep(
+  aiStore: ReturnType<typeof useAIStore.getState>,
+  stepId: string,
+  description?: string
+) {
+  if (stepId) {
+    aiStore.updateThinkingStep(stepId, {
+      status: 'complete',
+      description: description || 'Analyzed request',
+    });
+  }
+}
+
+/**
+ * Get human-readable description for a tool call
+ */
+function getToolDescription(toolName: string, args: any): string {
+  switch (toolName) {
+    case 'search_web':
+      return `Searching the web for "${args.query}"`;
+    case 'read_block':
+      return 'Reading block content';
+    case 'read_note':
+      return 'Reading full note context';
+    case 'edit_block':
+      return 'Preparing content changes';
+    case 'create_database':
+      return `Creating database: "${args.prompt?.substring(0, 50)}..."`;
+    case 'create_artifact':
+      return `Creating artifact: "${args.prompt?.substring(0, 50)}..."`;
+    case 'db_add_row':
+      return 'Adding row to database';
+    case 'db_update_rows':
+      return 'Updating database rows';
+    case 'db_delete_rows':
+      return 'Deleting database rows';
+    default:
+      if (toolName.startsWith('db_')) return `Database operation: ${toolName}`;
+      if (toolName.startsWith('artifact_')) return `Artifact operation: ${toolName}`;
+      return `Executing: ${toolName}`;
+  }
+}
+
+/**
+ * Build citations from search results and add to store
+ */
+function buildCitationsFromSearch(results: SearchResult[]): string {
+  const aiStore = useAIStore.getState();
+  const citationTexts: string[] = [];
+  
+  results.forEach((result) => {
+    const citation = aiStore.addCitation({
+      title: result.title,
+      url: result.url,
+      snippet: result.snippet,
+      source: result.source || new URL(result.url).hostname,
+      publishedDate: result.published_date,
+    });
+    citationTexts.push(`[${citation.id}] ${result.title}: ${result.snippet}`);
+  });
+  
+  return citationTexts.join('\n');
+}
 
 /**
  * Trim conversation history to prevent context window overflow
@@ -178,11 +274,8 @@ export async function streamAIEditChat(options: StreamChatOptions): Promise<void
     aiStore.setLoading(true);
     aiStore.setCurrentRequest(userMessage);
 
-    // Add user message
-    aiStore.addMessage({
-      role: 'user',
-      content: userMessage,
-    });
+    // NOTE: User message should be added by the caller (StartingPage/AIInput)
+    // to avoid duplicate messages in the chat
 
     // Check if tauriAI is initialized
     const useTauriAI = tauriAI.isInitialized();
@@ -482,6 +575,44 @@ DON'T STOP after searching - ADD ALL ROWS!
 - "fill" = search_web + db_add_row (multiple calls)
 - Don't ask permission - just execute
 
+**Rule 5: LaTeX FORMATTING (CRITICAL)**
+When writing mathematical formulas or equations:
+- ✅ USE: Single dollar signs for inline math: $x^2 + y^2 = r^2$
+- ✅ USE: Double dollar signs for display/block math ON A SINGLE LINE:
+  $$E = mc^2$$
+  $$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$
+
+CRITICAL RULES:
+- ❌ NEVER use: \\[ ... \\] or [ ... ] for display math
+- ❌ NEVER use: \\( ... \\) or ( ... ) for inline math
+- ❌ NEVER use: Plain brackets like [ V = \\frac{1}{3} B h ]
+- ❌ NEVER split a formula across multiple lines - keep $$ on SAME line as formula
+- ❌ NEVER put text immediately after closing $$
+
+CORRECT (single line):
+$$ds^2 = -c^2 dt^2 + dr^2 + r^2 d\\Omega^2$$
+
+WRONG (split across lines - will break rendering):
+$$ds^2 = -c^2 dt^2 
++ dr^2 + r^2 d\\Omega^2$$
+
+WRONG (text immediately after):
+$$V = \\frac{1}{3} B h$$ where B is...
+
+CORRECT (text on new line):
+$$V = \\frac{1}{3} B h$$
+
+where B is the base area.
+
+- For fractions use \\frac{a}{b}, for integrals use \\int, for sums use \\sum
+
+**Rule 6: CITATIONS**
+When using information from web search results:
+- ✅ DO: Cite sources inline using [1], [2], [3] format
+- ✅ DO: Place citations immediately after the relevant fact
+- ✅ DO: Use the citation numbers provided in search results
+Example: "Black holes can have masses billions of times that of our Sun [1]. The largest known black hole, TON 618, has a mass of 66 billion solar masses [2]."
+
 ===========================================
 EXAMPLES - STUDY CAREFULLY:
 ===========================================
@@ -573,11 +704,17 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
       currentTurn++;
       console.log(`📞 Turn ${currentTurn}: Calling tauriAI.chatWithTools...`);
 
+      // Add thought step to track AI processing time
+      const thoughtStepId = addThoughtStep(aiStore);
+
       // Trim conversation history if it gets too long
       // Conservative estimate: 1 char ≈ 0.25 tokens, limit to ~50K tokens
       const trimmedHistory = trimConversationHistory(conversationHistory, 200000); // 200K chars ≈ 50K tokens
 
       const result = await tauriAI.chatWithTools(trimmedHistory, allTools);
+      
+      // Complete the thought step
+      completeThoughtStep(aiStore, thoughtStepId, 'Analyzed request');
 
       console.log('📥 Got result:', result);
       console.log('🔧 Tool calls:', result.tool_calls);
@@ -618,6 +755,16 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
           console.log(`🔨 Tool call: ${functionName}`, parsedArgs);
           onToolCall?.(functionName, parsedArgs);
 
+          // Add thinking step for this tool call
+          const stepDescription = getToolDescription(functionName, parsedArgs);
+          aiStore.addThinkingStep({
+            type: getThinkingStepType(functionName),
+            status: 'running',
+            description: stepDescription,
+          });
+          const currentSteps = aiStore.currentThinkingSteps;
+          const currentStepId = currentSteps[currentSteps.length - 1]?.id;
+
           if (functionName === 'read_block') {
             console.log('📖 Reading block:', parsedArgs.block_id);
             try {
@@ -630,10 +777,24 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                 content: `[Block ${parsedArgs.block_id} content]:\n${blockContent}`,
               });
 
+              // Update thinking step
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'complete',
+                  details: `Read ${blockContent.length} characters`,
+                });
+              }
+
               shouldContinue = true;
               onStream?.(`\n📖 Read block content (${blockContent.length} chars)\n`);
             } catch (error) {
               console.error('❌ Failed to read block:', error);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: `Error: ${error}`,
+                });
+              }
               conversationHistory.push({
                 role: 'user',
                 content: `[Error reading block]: ${error}`,
@@ -651,10 +812,24 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                 content: `[Full note content]:\n${noteContent}`,
               });
 
+              // Update thinking step
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'complete',
+                  details: `Read ${noteContent.length} characters`,
+                });
+              }
+
               shouldContinue = true;
               onStream?.(`\n📚 Read full note (${noteContent.length} chars)\n`);
             } catch (error) {
               console.error('❌ Failed to read note:', error);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: `Error: ${error}`,
+                });
+              }
               conversationHistory.push({
                 role: 'user',
                 content: `[Error reading note]: ${error}`,
@@ -671,22 +846,42 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                 proposedContent: parsedArgs.new_content,
                 reason: parsedArgs.reason || 'AI-generated content',
               });
+              // Update thinking step
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'complete',
+                  details: 'Content changes prepared for review',
+                });
+              }
             } else {
               console.error('❌ Block not found:', blockId);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: 'Block not found',
+                });
+              }
             }
           } else if (functionName === 'search_web') {
             const results = await searchWeb(parsedArgs.query);
             onStream?.(`\n✅ Found ${results.length} results\n`);
 
-            // Add search results to conversation
-            const searchSummary = results.slice(0, 3).map(r =>
-              `- ${r.title}: ${r.snippet}`
-            ).join('\n');
+            // Build citations from search results
+            const citationSummary = buildCitationsFromSearch(results);
 
+            // Add search results to conversation with citation IDs
             conversationHistory.push({
               role: 'user',
-              content: `[Search results for "${parsedArgs.query}"]: \n${searchSummary}`,
+              content: `[Search results for "${parsedArgs.query}"]: \n${citationSummary}\n\nIMPORTANT: Use these citations inline in your response with [1], [2], etc. format.`,
             });
+
+            // Update thinking step
+            if (currentStepId) {
+              aiStore.updateThinkingStep(currentStepId, {
+                status: 'complete',
+                details: `Found ${results.length} sources`,
+              });
+            }
 
             shouldContinue = true;
           } else if (functionName === 'create_artifact') {
@@ -720,6 +915,14 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
 
               onStream?.(`\n✅ Created artifact: ${result.title}\n`);
 
+              // Update thinking step
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'complete',
+                  details: `Created "${result.title}"`,
+                });
+              }
+
               conversationHistory.push({
                 role: 'user',
                 content: `[Artifact created successfully]: "${result.title}" has been added to the note`,
@@ -728,6 +931,12 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
               shouldContinue = true;
             } catch (error) {
               console.error('❌ Failed to create artifact:', error);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: `Error: ${error}`,
+                });
+              }
               conversationHistory.push({
                 role: 'user',
                 content: `[Error creating artifact]: ${error}`,
@@ -771,6 +980,14 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
 
               onStream?.(`\n✅ Created database: ${result.title} (${columns.length} columns)\n`);
 
+              // Update thinking step
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'complete',
+                  details: `Created "${result.title}" with ${columns.length} columns`,
+                });
+              }
+
               // Return the block ID so AI can populate it
               conversationHistory.push({
                 role: 'user',
@@ -780,6 +997,12 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
               shouldContinue = true;
             } catch (error) {
               console.error('❌ Failed to create database:', error);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: `Error: ${error}`,
+                });
+              }
               conversationHistory.push({
                 role: 'user',
                 content: `[Error creating database]: ${error}`,
@@ -814,6 +1037,14 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                   }
                 }
 
+                // Update thinking step
+                if (currentStepId) {
+                  aiStore.updateThinkingStep(currentStepId, {
+                    status: 'complete',
+                    details: functionName === 'db_add_row' ? 'Row added successfully' : 'Operation completed',
+                  });
+                }
+
                 // Add tool result to conversation
                 conversationHistory.push({
                   role: 'user',
@@ -823,6 +1054,12 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                 shouldContinue = true;
               } else {
                 console.error(`❌ Database tool failed:`, result.error);
+                if (currentStepId) {
+                  aiStore.updateThinkingStep(currentStepId, {
+                    status: 'error',
+                    details: `Error: ${result.error}`,
+                  });
+                }
                 conversationHistory.push({
                   role: 'user',
                   content: `[Error in ${functionName}]: ${result.error}`,
@@ -830,6 +1067,12 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
               }
             } catch (error) {
               console.error(`❌ Failed to execute ${functionName}:`, error);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: `Error: ${error}`,
+                });
+              }
               conversationHistory.push({
                 role: 'user',
                 content: `[Error executing ${functionName}]: ${error}`,
@@ -844,6 +1087,14 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
               if (result.success) {
                 onStream?.(`\n✅ ${functionName} completed\n`);
 
+                // Update thinking step
+                if (currentStepId) {
+                  aiStore.updateThinkingStep(currentStepId, {
+                    status: 'complete',
+                    details: 'Artifact operation completed',
+                  });
+                }
+
                 // Add tool result to conversation
                 conversationHistory.push({
                   role: 'user',
@@ -853,6 +1104,12 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                 shouldContinue = true;
               } else {
                 console.error(`❌ Artifact tool failed:`, result.error);
+                if (currentStepId) {
+                  aiStore.updateThinkingStep(currentStepId, {
+                    status: 'error',
+                    details: `Error: ${result.error}`,
+                  });
+                }
                 conversationHistory.push({
                   role: 'user',
                   content: `[Error in ${functionName}]: ${result.error}`,
@@ -860,6 +1117,12 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
               }
             } catch (error) {
               console.error(`❌ Failed to execute ${functionName}:`, error);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: `Error: ${error}`,
+                });
+              }
               conversationHistory.push({
                 role: 'user',
                 content: `[Error executing ${functionName}]: ${error}`,

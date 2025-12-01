@@ -53,9 +53,9 @@ function normalizeLatexToInline(content: string): string {
   // Handle both single-line and multi-line block math
   // Use non-greedy matching to handle multiple block math expressions
   let normalized = content;
-  
+
   // Match block math expressions (non-greedy to handle multiple)
-  normalized = normalized.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+  normalized = normalized.replace(/\$\$([\s\S]*?)\$\$/g, (_match, formula) => {
     // Remove leading/trailing whitespace and normalize newlines to spaces
     const cleaned = formula.trim().replace(/\s+/g, ' ');
     // Convert to inline math

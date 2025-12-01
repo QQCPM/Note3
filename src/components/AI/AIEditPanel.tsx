@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAIStore } from '@/store/aiStore';
 import { streamAIEditChat, applyEdit, rejectEdit } from '@/services/aiEditService';
-import DiffPreview from './DiffPreview';
+import NoteEditorWithDiff from './NoteEditorWithDiff';
 import { Bot, Send, X, Loader2 } from 'lucide-react';
 
 interface AIEditPanelProps {
@@ -21,7 +21,7 @@ const AIEditPanel: React.FC<AIEditPanelProps> = ({ blockId, onClose }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { messages, isLoading, pendingEdits, exitEditMode } = useAIStore();
+  const { messages, isLoading, pendingEdits, exitEditMode, acceptHunk, rejectHunk, acceptAllHunks, rejectAllHunks } = useAIStore();
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -83,10 +83,44 @@ const AIEditPanel: React.FC<AIEditPanelProps> = ({ blockId, onClose }) => {
   };
 
   // Get pending edits for this block
+  // Check if there are pending edits for this block
   const blockPendingEdits = pendingEdits.filter(
     (edit) => edit.blockId === blockId && edit.status === 'pending'
   );
+  const hasPendingEdits = blockPendingEdits.length > 0;
+  const currentEdit = blockPendingEdits[0]; // Get the first pending edit
 
+  // If there are pending edits with diff hunks, show the diff viewer
+  if (hasPendingEdits && currentEdit && currentEdit.diffHunks.length > 0) {
+    return (
+      <div className="fixed inset-0 flex items-start justify-center z-50 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-6xl h-[90vh] mt-10 bg-[#0d1117] rounded-xl shadow-2xl border border-[#30363d] overflow-hidden">
+          <NoteEditorWithDiff
+            blockId={blockId}
+            originalContent={currentEdit.originalContent}
+            proposedContent={currentEdit.proposedContent}
+            diffHunks={currentEdit.diffHunks}
+            reason={currentEdit.reason}
+            onAcceptHunk={(hunkId) => acceptHunk(currentEdit.id, hunkId)}
+            onRejectHunk={(hunkId) => rejectHunk(currentEdit.id, hunkId)}
+            onAcceptAll={async () => {
+              acceptAllHunks(currentEdit.id);
+              await applyEdit(currentEdit.id);
+              onClose();
+            }}
+            onRejectAll={() => {
+              rejectAllHunks(currentEdit.id);
+              rejectEdit(currentEdit.id);
+              onClose();
+            }}
+            onClose={onClose}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Otherwise, show the chat interface for AI editing
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#0d1117] border border-[#30363d] rounded-xl w-full max-w-3xl h-[85vh] flex flex-col shadow-2xl">
@@ -126,7 +160,7 @@ const AIEditPanel: React.FC<AIEditPanelProps> = ({ blockId, onClose }) => {
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex gap - 3 ${message.role === 'user' ? 'justify-end' : 'justify-start'} `}
             >
               {message.role === 'assistant' && (
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center flex-shrink-0">
@@ -134,11 +168,10 @@ const AIEditPanel: React.FC<AIEditPanelProps> = ({ blockId, onClose }) => {
                 </div>
               )}
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  message.role === 'user'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-[#161b22] text-gray-300 border border-[#30363d]'
-                }`}
+                className={`max - w - [80 %] rounded - lg px - 4 py - 2 ${message.role === 'user'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-[#161b22] text-gray-300 border border-[#30363d]'
+                  } `}
               >
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 {message.toolCalls && message.toolCalls.length > 0 && (
@@ -167,21 +200,6 @@ const AIEditPanel: React.FC<AIEditPanelProps> = ({ blockId, onClose }) => {
                 <p className="text-sm whitespace-pre-wrap">{streamingText}</p>
                 <span className="inline-block w-2 h-4 bg-purple-500 animate-pulse ml-1"></span>
               </div>
-            </div>
-          )}
-
-          {/* Pending edits */}
-          {blockPendingEdits.length > 0 && (
-            <div className="space-y-3 mt-6">
-              {blockPendingEdits.map((edit) => (
-                <DiffPreview
-                  key={edit.id}
-                  edit={edit}
-                  onAccept={() => handleAcceptEdit(edit.id)}
-                  onReject={() => handleRejectEdit(edit.id)}
-                  autoFocus={blockPendingEdits.length === 1}
-                />
-              ))}
             </div>
           )}
 

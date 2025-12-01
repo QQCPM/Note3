@@ -1,0 +1,49 @@
+/* Starting Page - Clean Chat Animations */
+
+/* Smooth width transition when note panel appears */
+.starting-page-container {
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Recommendations fade-up-away animation */
+.recommendations-container {
+    animation: fadeIn 0.5s ease-out;
+}
+
+.recommendations-exiting {
+    animation: fadeUpAndAway 0.3s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeUpAndAway {
+    0% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+}
+
+/* Selection highlight for text capture */
+.clean-message::selection {
+    background: rgba(255, 215, 0, 0.3);
+}
+
+/* Smooth scrolling */
+.overflow-y-auto {
+    scroll-behavior: smooth;
+}

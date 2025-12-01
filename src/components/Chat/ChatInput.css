@@ -1,0 +1,242 @@
+/* Chat Input - Clean, minimal design */
+
+.chat-input-container {
+  position: relative;
+  padding: 1.5rem 2rem 2rem 2rem;
+  border-top: 1px solid rgba(48, 54, 61, 0.3);
+  background: rgba(13, 17, 23, 0.95);
+  backdrop-filter: blur(12px);
+  z-index: 10;
+}
+
+/* Input Form */
+.input-form {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.input-field {
+  flex: 1;
+  min-height: 48px;
+  max-height: 200px;
+  padding: 0.875rem 1.25rem;
+  background: rgba(22, 27, 34, 0.6);
+  border: 1px solid rgba(48, 54, 61, 0.5);
+  border-radius: 12px;
+  color: #e6edf3;
+  font-size: 0.95rem;
+  font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+  resize: none;
+  transition: all 0.2s ease;
+}
+
+.input-field:focus {
+  background: rgba(22, 27, 34, 0.95);
+  border-color: transparent;
+  box-shadow:
+    0 0 0 2px rgba(22, 27, 34, 1),
+    /* Inner border to separate content */
+    0 0 30px rgba(124, 58, 237, 0.5),
+    /* Purple glow - Stronger */
+    0 0 60px rgba(59, 130, 246, 0.4),
+    /* Blue glow - Stronger */
+    0 0 90px rgba(236, 72, 153, 0.3);
+  /* Pink glow - Stronger */
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0% {
+    box-shadow:
+      0 0 0 2px rgba(22, 27, 34, 1),
+      0 0 30px rgba(124, 58, 237, 0.5),
+      0 0 60px rgba(59, 130, 246, 0.4),
+      0 0 90px rgba(236, 72, 153, 0.3);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(22, 27, 34, 1),
+      0 0 40px rgba(124, 58, 237, 0.6),
+      0 0 80px rgba(59, 130, 246, 0.5),
+      0 0 110px rgba(236, 72, 153, 0.4);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(22, 27, 34, 1),
+      0 0 30px rgba(124, 58, 237, 0.5),
+      0 0 60px rgba(59, 130, 246, 0.4),
+      0 0 90px rgba(236, 72, 153, 0.3);
+  }
+}
+
+.input-field::placeholder {
+  color: #6e7681;
+}
+
+.input-field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Submit Button */
+.submit-button {
+  padding: 0.75rem;
+  background: #58a6ff;
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.submit-button:hover:not(:disabled) {
+  background: #4f98e8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+}
+
+.submit-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submit-button:disabled {
+  background: #30363d;
+  color: #6e7681;
+  cursor: not-allowed;
+}
+
+/* Helper Text */
+.input-helper {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.helper-text {
+  font-size: 0.75rem;
+  color: #6e7681;
+}
+
+.helper-text code {
+  padding: 0.15rem 0.4rem;
+  background: rgba(177, 186, 196, 0.1);
+  border: 1px solid rgba(177, 186, 196, 0.15);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  font-size: 0.7rem;
+  color: #e6edf3;
+}
+
+/* Mention Dropdown */
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 2rem;
+  right: 2rem;
+  margin-bottom: 0.5rem;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  animation: dropdownSlideUp 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes dropdownSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mention-item {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+  color: #e6edf3;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.mention-item:last-child {
+  border-bottom: none;
+}
+
+.mention-item:hover,
+.mention-item.selected {
+  background: rgba(88, 166, 255, 0.1);
+}
+
+.mention-item.selected {
+  border-left: 2px solid #58a6ff;
+}
+
+.note-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.note-title {
+  flex: 1;
+  font-weight: 500;
+}
+
+/* Scrollbar for dropdown */
+.mention-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mention-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mention-dropdown::-webkit-scrollbar-thumb {
+  background: rgba(177, 186, 196, 0.2);
+  border-radius: 3px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .chat-input-container {
+    padding: 1.25rem 1rem 1.5rem 1rem;
+  }
+
+  .input-field {
+    font-size: 0.9rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .mention-dropdown {
+    left: 1rem;
+    right: 1rem;
+  }
+
+  .helper-text {
+    font-size: 0.7rem;
+  }
+}

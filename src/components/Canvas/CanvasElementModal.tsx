@@ -335,7 +335,6 @@ const CanvasElementModal: React.FC<CanvasElementModalProps> = ({ element, onClos
         {/* Floating Footer Controls - Glassmorphic */}
         <div className="absolute bottom-4 left-0 right-0 z-20 flex justify-center pointer-events-none">
           <div className="pointer-events-auto flex items-center gap-4 px-2 py-2 rounded-full backdrop-blur-md bg-[#161b22]/90 border border-white/10 shadow-2xl transform transition-all hover:scale-105">
-
             <button
               onClick={handleDelete}
               className="flex items-center gap-2 px-5 py-2.5 rounded-full text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all font-medium text-sm"

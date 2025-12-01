@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNotesStore } from '@/store';
+import { useLayoutStore } from '@/store/layoutStore';
 import { getAllNotes } from '@/utils/tauri';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import Canvas from '@/components/Canvas/Canvas';
 import AISidebar from '@/components/AISidebar/AISidebar';
+import NotePreviewPanel from '@/components/NotePreview/NotePreviewPanel';
 import ContextMenu from '@/components/ContextMenu/ContextMenu';
 import GlobalDragLayer from '@/components/GlobalDragLayer/GlobalDragLayer';
 import { tauriAI, createMacM2UltraConfig } from '@/services/tauriAI';
@@ -24,7 +26,8 @@ const queryClient = new QueryClient({
 });
 
 function App() {
-  const { setNotes } = useNotesStore();
+  const { setNotes, activeNoteId } = useNotesStore();
+  const { notePanelVisible } = useLayoutStore();
   const [aiInitialized, setAiInitialized] = useState(false);
   const [aiHealthy, setAiHealthy] = useState(false);
 
@@ -92,7 +95,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex h-screen w-full bg-[#0d1117] text-gray-300 antialiased p-2 gap-2 relative">
+      <div className="flex h-screen w-full bg-[#0d1117] text-gray-300 antialiased gap-2 relative overflow-visible">
         {/* AI Status Indicator - Minimal Green Dot (Top Left) */}
         <div className="fixed top-4 left-4 z-50">
           <div
@@ -119,10 +122,19 @@ function App() {
         <Sidebar />
 
         {/* Main Canvas Area */}
-        <Canvas />
-
-        {/* Right Sidebar - AI Panel */}
-        <AISidebar />
+        {activeNoteId ? (
+          // User clicked a note from sidebar - show normal Canvas editor + AISidebar
+          <>
+            <Canvas />
+            <AISidebar />
+          </>
+        ) : (
+          // Default: StartingPage mode (chat interface)
+          <>
+            <Canvas /> {/* Canvas will show StartingPage when activeNoteId is null */}
+            {notePanelVisible && <NotePreviewPanel />}
+          </>
+        )}
 
         {/* Context Menu (global) */}
         <ContextMenu />

@@ -38,6 +38,7 @@ interface UIState {
   toggleAISidebar: () => void;
   setAISidebarWidth: (width: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  setAISidebarCollapsed: (collapsed: boolean) => void;
   setAISidebarTab: (tab: 'agent' | 'recommend' | 'settings') => void;
   setCanvasMode: (mode: 'note' | 'canvas') => void;
 
@@ -85,6 +86,7 @@ export const useUIStore = create<UIState>((set) => ({
   setAISidebarWidth: (width) => set({ aiSidebarWidth: width }),
 
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+  setAISidebarCollapsed: (collapsed) => set({ aiSidebarCollapsed: collapsed }),
 
   setAISidebarTab: (tab) => set({ aiSidebarTab: tab }),
 

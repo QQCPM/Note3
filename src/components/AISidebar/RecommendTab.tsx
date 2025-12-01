@@ -336,21 +336,6 @@ const RecommendTab: React.FC = () => {
             </div>
           </div>
         ))}
-
-        {/* Info Box */}
-        <div className="message-group" style={{ marginTop: '8px' }}>
-          <div className="bg-[#161b22] rounded-lg p-4 border border-[#30363d]">
-            <div className="text-sm text-gray-400 mb-2 flex items-center gap-2">
-              <Sparkles size={16} className="text-purple-400" />
-              How Recommendations Work
-            </div>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              The AI analyzes your note content in real-time and suggests relevant
-              resources, study tools, and enhancements. Recommendations update
-              automatically as you edit your notes.
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* Modals */}

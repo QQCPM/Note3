@@ -82,34 +82,34 @@ const SortableColumnHeader: React.FC<SortableColumnHeaderProps> = ({
     <th
       ref={setNodeRef}
       style={{ ...style, minWidth: column.width || 150 }}
-      className="px-3 py-2 text-left text-xs font-semibold text-gray-400 bg-[#161b22] relative group"
+      className="px-4 py-3 text-left text-xs font-medium text-[#8b949e] uppercase tracking-wider relative group backdrop-blur-sm"
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           {/* Drag Handle */}
           <div
             {...attributes}
             {...listeners}
-            className="cursor-move touch-none"
+            className="cursor-move touch-none opacity-0 group-hover:opacity-100 transition-opacity"
           >
-            <GripVertical className="w-3 h-3 text-gray-600 hover:text-gray-400" />
+            <GripVertical className="w-3 h-3 text-white/20 hover:text-white/40" />
           </div>
 
           {/* Column Name + Sort */}
           <div
             onClick={() => onSort(column.id)}
-            className="flex items-center gap-1 cursor-pointer hover:text-white transition-colors"
+            className="flex items-center gap-1.5 cursor-pointer hover:text-white/90 transition-colors"
           >
-            <span>{column.name}</span>
-            <span className="text-[10px] text-gray-600 ml-1">
+            <span className="text-white/60 text-[10px]">
               {column.type === 'text' && '📝'}
               {column.type === 'number' && '🔢'}
               {column.type === 'date' && '📅'}
               {column.type === 'select' && '📋'}
               {column.type === 'checkbox' && '☑️'}
             </span>
+            <span className="font-medium">{column.name}</span>
             {sortColumn === column.id && (
-              <span className="text-blue-400">
+              <span className="text-blue-400/80">
                 {sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
               </span>
             )}
@@ -123,9 +123,9 @@ const SortableColumnHeader: React.FC<SortableColumnHeaderProps> = ({
               e.stopPropagation();
               onMenuClick(column.id);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[#21262d] rounded transition-opacity"
+            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/10 rounded-lg transition-all"
           >
-            <MoreVertical className="w-3 h-3" />
+            <MoreVertical className="w-3 h-3 text-white/40" />
           </button>
 
           {showMenu && (
@@ -134,7 +134,15 @@ const SortableColumnHeader: React.FC<SortableColumnHeaderProps> = ({
                 className="fixed inset-0 z-40"
                 onClick={() => onMenuClick('')}
               />
-              <div className="absolute right-0 top-full mt-1 bg-[#161b22] border border-[#30363d] rounded shadow-lg py-1 min-w-[150px] z-50">
+              <div 
+                className="absolute right-0 top-full mt-2 py-1.5 min-w-[140px] z-50 rounded-xl overflow-hidden"
+                style={{
+                  background: 'rgba(30, 35, 45, 0.95)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
+                }}
+              >
                 <button
                   onClick={() => {
                     const newName = prompt('Enter new column name:', column.name);
@@ -143,9 +151,9 @@ const SortableColumnHeader: React.FC<SortableColumnHeaderProps> = ({
                     }
                     onMenuClick('');
                   }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-white hover:bg-[#21262d] transition-colors flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-sm text-white/80 hover:bg-white/10 transition-colors flex items-center gap-2.5"
                 >
-                  <Edit2 className="w-3 h-3" />
+                  <Edit2 className="w-3.5 h-3.5 text-white/50" />
                   <span>Rename</span>
                 </button>
                 <button
@@ -154,9 +162,9 @@ const SortableColumnHeader: React.FC<SortableColumnHeaderProps> = ({
                       onDelete(column.id);
                     }
                   }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-red-400 hover:bg-[#21262d] transition-colors flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-sm text-red-400/90 hover:bg-red-500/10 transition-colors flex items-center gap-2.5"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3.5 h-3.5" />
                   <span>Delete</span>
                 </button>
               </div>
@@ -497,82 +505,106 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
   // ========================================
 
   return (
-    <div className="canvas-block database-block">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        {/* Title */}
-        {editingTitle ? (
-          <input
-            type="text"
-            value={titleValue}
-            onChange={(e) => setTitleValue(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleTitleSave();
-              if (e.key === 'Escape') {
-                setTitleValue(data.title);
-                setEditingTitle(false);
-              }
-            }}
-            className="text-sm font-semibold bg-[#0d1117] border border-blue-500 rounded px-2 py-1 text-white focus:outline-none"
-            autoFocus
-          />
-        ) : (
-          <div
-            className="flex items-center gap-2 cursor-pointer group"
-            onClick={() => setEditingTitle(true)}
-          >
-            <span className="text-sm font-semibold text-white">{data.title}</span>
-            <Edit2 className="w-3 h-3 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+    <div className="database-block-glass rounded-2xl overflow-hidden">
+      {/* Glassy Container */}
+      <div 
+        className="relative"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)',
+        }}
+      >
+        {/* Subtle gradient overlay for depth */}
+        <div 
+          className="absolute inset-0 pointer-events-none rounded-2xl"
+          style={{
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)',
+          }}
+        />
+
+        {/* Header */}
+        <div className="relative flex items-center justify-between px-5 py-4 border-b border-white/5">
+          {/* Title */}
+          {editingTitle ? (
+            <input
+              type="text"
+              value={titleValue}
+              onChange={(e) => setTitleValue(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleTitleSave();
+                if (e.key === 'Escape') {
+                  setTitleValue(data.title);
+                  setEditingTitle(false);
+                }
+              }}
+              className="text-base font-medium bg-white/5 border border-white/20 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20"
+              autoFocus
+            />
+          ) : (
+            <div
+              className="flex items-center gap-2 cursor-pointer group"
+              onClick={() => setEditingTitle(true)}
+            >
+              <span className="text-base font-medium text-white/90">{data.title}</span>
+              <Edit2 className="w-3.5 h-3.5 text-white/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          )}
+
+          {/* View Selector */}
+          <div className="flex items-center gap-2">
+            <select
+              className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white/80 focus:outline-none focus:border-white/20 cursor-pointer hover:bg-white/10 transition-colors appearance-none pr-8"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 8px center',
+              }}
+              value={data.view}
+              onChange={(e) => saveDatabase({ view: e.target.value as any })}
+            >
+              <option value="table">📊 Table</option>
+              <option value="gallery">🎨 Gallery</option>
+              <option value="calendar">📅 Calendar</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Filter Bar (Table View Only) */}
+        {data.view === 'table' && (
+          <div className="relative px-5 py-3 border-b border-white/5">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/30" />
+              <input
+                type="text"
+                placeholder="Search rows..."
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="w-full pl-10 pr-10 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/8 transition-all"
+              />
+              {filterText && (
+                <button
+                  onClick={() => setFilterText('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4 text-white/40" />
+                </button>
+              )}
+            </div>
+            {filterText && (
+              <div className="mt-2 text-xs text-white/40">
+                Showing {filteredAndSortedRows.length} of {data.rows.length} rows
+              </div>
+            )}
           </div>
         )}
 
-        {/* View Selector */}
-        <div className="flex items-center gap-2">
-          <select
-            className="px-2 py-1 bg-[#0d1117] border border-[#30363d] rounded text-xs text-white"
-            value={data.view}
-            onChange={(e) => saveDatabase({ view: e.target.value as any })}
-          >
-            <option value="table">📊 Table</option>
-            <option value="gallery">🎨 Gallery</option>
-            <option value="calendar">📅 Calendar</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Filter Bar (Table View Only) */}
-      {data.view === 'table' && (
-        <div className="mb-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input
-              type="text"
-              placeholder="Filter rows..."
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-            />
-            {filterText && (
-              <button
-                onClick={() => setFilterText('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-[#161b22] rounded transition-colors"
-              >
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            )}
-          </div>
-          {filterText && (
-            <div className="mt-2 text-xs text-gray-500">
-              Showing {filteredAndSortedRows.length} of {data.rows.length} rows
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Table View */}
       {data.view === 'table' && (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -580,9 +612,9 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
           >
             <table className="w-full border-collapse">
               <thead>
-                <tr className="border-b border-[#30363d]">
+                <tr className="border-b border-white/5">
                   {/* Row Actions Column */}
-                  <th className="w-12"></th>
+                  <th className="w-12 bg-white/[0.02]"></th>
 
                   {/* Column Headers (Sortable & Draggable) */}
                   <SortableContext
@@ -605,17 +637,23 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
                   </SortableContext>
 
                   {/* Add Column Button */}
-                  <th className="px-3 py-2 bg-[#161b22]">
+                  <th className="px-4 py-3 bg-white/[0.02]">
                     {!showAddColumnForm ? (
                       <button
                         onClick={() => setShowAddColumnForm(true)}
-                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                        className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors group"
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5 group-hover:rotate-90 transition-transform duration-200" />
                         <span>Add</span>
                       </button>
                     ) : (
-                      <div className="flex flex-col gap-2 min-w-[150px]">
+                      <div 
+                        className="flex flex-col gap-2 min-w-[160px] p-3 -m-3 rounded-xl"
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          backdropFilter: 'blur(10px)',
+                        }}
+                      >
                         <input
                           type="text"
                           placeholder="Column name"
@@ -628,13 +666,13 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
                               setNewColumnName('');
                             }
                           }}
-                          className="px-2 py-1 bg-[#0d1117] border border-[#30363d] rounded text-xs text-white focus:outline-none focus:border-blue-500"
+                          className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                           autoFocus
                         />
                         <select
                           value={newColumnType}
                           onChange={(e) => setNewColumnType(e.target.value as any)}
-                          className="px-2 py-1 bg-[#0d1117] border border-[#30363d] rounded text-xs text-white focus:outline-none"
+                          className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white focus:outline-none cursor-pointer"
                         >
                           <option value="text">📝 Text</option>
                           <option value="number">🔢 Number</option>
@@ -642,10 +680,10 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
                           <option value="select">📋 Select</option>
                           <option value="checkbox">☑️ Checkbox</option>
                         </select>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1.5">
                           <button
                             onClick={handleAddColumn}
-                            className="flex-1 px-2 py-1 bg-blue-500 hover:bg-blue-600 rounded text-xs text-white transition-colors"
+                            className="flex-1 px-3 py-1.5 bg-blue-500/80 hover:bg-blue-500 rounded-lg text-xs text-white font-medium transition-colors"
                           >
                             Add
                           </button>
@@ -654,7 +692,7 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
                               setShowAddColumnForm(false);
                               setNewColumnName('');
                             }}
-                            className="flex-1 px-2 py-1 bg-[#21262d] hover:bg-[#30363d] rounded text-xs text-white transition-colors"
+                            className="flex-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs text-white/80 transition-colors"
                           >
                             Cancel
                           </button>
@@ -669,18 +707,18 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
                 {filteredAndSortedRows.map((row, rowIndex) => (
                   <tr
                     key={row.id}
-                    className="border-b border-[#21262d] hover:bg-[#161b22]/50 transition-colors group"
+                    className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-all duration-150 group"
                   >
                     {/* Row Number & Delete */}
-                    <td className="px-2 py-0 text-center text-xs text-gray-600">
+                    <td className="px-3 py-0 text-center text-xs text-white/20">
                       <div className="flex items-center justify-center gap-1">
-                        <span className="opacity-50">{rowIndex + 1}</span>
+                        <span className="tabular-nums">{rowIndex + 1}</span>
                         <button
                           onClick={() => handleDeleteRow(row.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded-lg transition-all"
                           title="Delete row"
                         >
-                          <Trash2 className="w-3 h-3 text-red-400" />
+                          <Trash2 className="w-3 h-3 text-red-400/80" />
                         </button>
                       </div>
                     </td>
@@ -689,7 +727,7 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
                     {data.columns.map((column) => (
                       <td
                         key={column.id}
-                        className="border-r border-[#21262d] p-0"
+                        className="border-r border-white/[0.03] p-0"
                         style={{ minWidth: column.width || 150 }}
                       >
                         {renderCell(row, column)}
@@ -703,12 +741,12 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
 
                 {/* Add Row Button */}
                 <tr>
-                  <td colSpan={data.columns.length + 2} className="py-2 px-3">
+                  <td colSpan={data.columns.length + 2} className="py-3 px-4">
                     <button
                       onClick={handleAddRow}
-                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors group"
                     >
-                      <Plus className="w-3 h-3" />
+                      <Plus className="w-3.5 h-3.5 group-hover:rotate-90 transition-transform duration-200" />
                       <span>Add Row</span>
                     </button>
                   </td>
@@ -719,11 +757,12 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
 
           {/* Empty State */}
           {filteredAndSortedRows.length === 0 && data.rows.length > 0 && (
-            <div className="text-center py-8 text-gray-500 text-sm">
-              <div className="mb-2">🔍 No matching rows</div>
+            <div className="text-center py-12 text-white/40 text-sm">
+              <div className="mb-3 text-2xl">🔍</div>
+              <div className="mb-2">No matching rows</div>
               <button
                 onClick={() => setFilterText('')}
-                className="text-blue-400 hover:text-blue-300 transition-colors"
+                className="text-blue-400/80 hover:text-blue-400 transition-colors"
               >
                 Clear filter
               </button>
@@ -731,11 +770,12 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
           )}
 
           {filteredAndSortedRows.length === 0 && data.rows.length === 0 && (
-            <div className="text-center py-8 text-gray-500 text-sm">
-              <div className="mb-2">📊 No rows yet</div>
+            <div className="text-center py-12 text-white/40 text-sm">
+              <div className="mb-3 text-2xl">📊</div>
+              <div className="mb-2">No rows yet</div>
               <button
                 onClick={handleAddRow}
-                className="text-blue-400 hover:text-blue-300 transition-colors"
+                className="text-blue-400/80 hover:text-blue-400 transition-colors"
               >
                 Add your first row
               </button>
@@ -746,24 +786,29 @@ const DatabaseBlock: React.FC<DatabaseBlockProps> = ({ block }) => {
 
       {/* Gallery View */}
       {data.view === 'gallery' && (
-        <GalleryView
-          columns={data.columns}
-          rows={filteredAndSortedRows}
-          onEditCell={handleEditCell}
-          onDeleteRow={handleDeleteRow}
-          onAddRow={handleAddRow}
-        />
+        <div className="relative p-4">
+          <GalleryView
+            columns={data.columns}
+            rows={filteredAndSortedRows}
+            onEditCell={handleEditCell}
+            onDeleteRow={handleDeleteRow}
+            onAddRow={handleAddRow}
+          />
+        </div>
       )}
 
       {/* Calendar View */}
       {data.view === 'calendar' && (
-        <CalendarView
-          columns={data.columns}
-          rows={data.rows}
-          onEditCell={handleEditCell}
-          onAddRow={handleAddRow}
-        />
+        <div className="relative p-4">
+          <CalendarView
+            columns={data.columns}
+            rows={data.rows}
+            onEditCell={handleEditCell}
+            onAddRow={handleAddRow}
+          />
+        </div>
       )}
+      </div>
     </div>
   );
 };

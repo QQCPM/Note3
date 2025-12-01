@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -11,38 +11,49 @@ interface RichTextRendererProps {
 }
 
 /**
+ * Normalizes LaTeX in AI-generated content to ensure proper rendering
+ */
+function normalizeLatex(content: string): string {
+  let processed = content;
+  
+  // 1. Fix display math that spans multiple lines without proper delimiters
+  processed = processed.replace(/\$\$([^$]+)\$\$/g, (match, formula) => {
+    const trimmed = formula.trim();
+    if (trimmed.includes('\n')) {
+      return `\n$$\n${trimmed}\n$$\n`;
+    }
+    return `$$${trimmed}$$`;
+  });
+  
+  // 2. Fix cases where $$ is at end of line followed by text
+  processed = processed.replace(/\$\$\s*\n*where\s/gi, '$$\n\nwhere ');
+  
+  // 3. Fix LaTeX that uses [ ] instead of $$ for display math
+  processed = processed.replace(/\[\s*(\\[a-zA-Z]+[^[\]]*)\s*\]/g, (match, formula) => {
+    if (/\\(frac|int|sum|prod|sqrt|left|right|text|cdot|times|div|pm|mp|leq|geq|neq|approx|equiv|alpha|beta|gamma|delta|theta|phi|psi|omega|pi|sigma|mu|nu|lambda|epsilon|rho|tau|chi|eta|zeta|xi|kappa|nabla|partial|infty|forall|exists|in|notin|subset|supset|cup|cap|emptyset|mathbb|mathbf|mathrm|mathcal|vec|hat|bar|dot|ddot|tilde|overline|underline)/.test(formula)) {
+      return `$$${formula.trim()}$$`;
+    }
+    return match;
+  });
+  
+  return processed;
+}
+
+/**
  * Renders text with Markdown and LaTeX math formulas
  * Supports:
  * - Full GitHub-flavored Markdown (bold, italic, headers, lists, tables, code blocks, links)
  * - Inline math: $formula$
  * - Block math: $$formula$$
  */
-/**
- * Preprocess LaTeX content to ensure proper spacing and formatting
- * Fixes issues where block math ($$) is immediately followed by inline math ($)
- */
-const preprocessLatex = (content: string): string => {
-  let processed = content;
-
-  // Ensure block math has proper line breaks before and after
-  // Pattern: $$....$$ should be on its own line(s)
-  processed = processed.replace(/([^\n])((\$\$[\s\S]+?\$\$))/g, '$1\n\n$2');
-  processed = processed.replace(/((\$\$[\s\S]+?\$\$))([^\n])/g, '$1\n\n$3');
-
-  // Fix the specific issue: $$...$$$ (block math followed immediately by $)
-  // This happens when: $$equation$$$variable$: description
-  processed = processed.replace(/(\$\$[\s\S]+?\$\$)(\$)/g, '$1\n\n$2');
-
-  // Ensure proper spacing after closing $$
-  processed = processed.replace(/\$\$\n([^\n])/g, '$$\n\n$1');
-
-  return processed;
-};
 
 const RichTextRenderer: React.FC<RichTextRendererProps> = ({
   content,
   enableMarkdown = true
 }) => {
+  // Normalize LaTeX before rendering
+  const processedContent = useMemo(() => normalizeLatex(content), [content]);
+  
   // If markdown is disabled, render as plain text
   if (!enableMarkdown) {
     return (
@@ -52,15 +63,12 @@ const RichTextRenderer: React.FC<RichTextRendererProps> = ({
     );
   }
 
-  // Preprocess content to fix LaTeX spacing issues
-  const processedContent = preprocessLatex(content);
-
   return (
     <div className="rich-text-content markdown-content">
       <ReactMarkdown
         remarkPlugins={[
           remarkGfm,
-          [remarkMath, { singleDollarTextMath: true }] // Enable $...$ for inline math
+          [remarkMath, { singleDollarTextMath: true }]
         ]}
         rehypePlugins={[
           [rehypeKatex, {

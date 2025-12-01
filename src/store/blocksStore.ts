@@ -37,13 +37,12 @@ export const useBlocksStore = create<BlocksState>((set, get) => ({
     });
   },
 
-  updateBlock: (blockId, updates) => {
+  updateBlock: (id, updates) =>
     set((state) => ({
-      blocks: state.blocks.map(block =>
-        block.id === blockId ? { ...block, ...updates } : block
-      )
-    }));
-  },
+      blocks: state.blocks.map((block) =>
+        block.id === id ? { ...block, ...updates } : block
+      ),
+    })),
 
   deleteBlock: (blockId) => {
     set((state) => ({

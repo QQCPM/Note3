@@ -4,9 +4,10 @@ import { getNoteById, getBlocksByNote } from '@/utils/tauri';
 import CanvasHeader from './CanvasHeader';
 import CanvasContent from './CanvasContent';
 import InfiniteCanvas from './InfiniteCanvas';
+import StartingPage from '../StartingPage/StartingPage';
 
 const Canvas: React.FC = () => {
-  const { activeNoteId, setActiveNote: setActiveNoteId, addNote } = useNotesStore();
+  const { activeNoteId } = useNotesStore();
   const { setBlocks, blocks } = useBlocksStore();
   const { canvasMode } = useUIStore();
   const [activeNote, setActiveNote] = useState<any>(null);
@@ -109,19 +110,7 @@ const Canvas: React.FC = () => {
 
   // Note mode requires an active note
   if (!activeNoteId) {
-    return (
-      <main className="flex-1 flex flex-col overflow-hidden bg-bg-primary rounded-lg">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-6xl mb-4">📝</div>
-            <h2 className="text-xl font-semibold text-white mb-2">Welcome</h2>
-            <p className="text-text-secondary">
-              Select a note from the sidebar or create a new one to get started
-            </p>
-          </div>
-        </div>
-      </main>
-    );
+    return <StartingPage />;
   }
 
   if (loading) {

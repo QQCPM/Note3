@@ -12,7 +12,7 @@ interface CanvasElementProps {
   onClick?: (e: React.MouseEvent) => void;
 }
 
-const CanvasElement: React.FC<CanvasElementProps> = React.memo(({ element, isSelected, onClick }) => {
+const CanvasElement: React.FC<CanvasElementProps> = React.memo(({ element, isSelected: _isSelected, onClick }) => {
   const {
     selectedTool,
     updateElement,

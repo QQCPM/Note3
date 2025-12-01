@@ -1,0 +1,155 @@
+/* Diff View - Shows content changes with smooth animations */
+
+.diff-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Edit reason banner */
+.diff-reason {
+  padding: 1rem 1.25rem;
+  background: rgba(88, 166, 255, 0.08);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 8px;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.reason-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #58a6ff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.reason-text {
+  font-size: 0.85rem;
+  color: #e6edf3;
+  flex: 1;
+}
+
+/* Diff sections */
+.diff-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #7d8590;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.section-content {
+  padding: 1.25rem;
+  background: rgba(22, 27, 34, 0.4);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: #e6edf3;
+}
+
+/* Original section styling */
+.original-section .section-content {
+  color: #8b949e;
+  background: rgba(22, 27, 34, 0.2);
+  border-color: rgba(48, 54, 61, 0.5);
+}
+
+/* Proposed section with chunked animations */
+.proposed-section .section-content {
+  border-color: rgba(46, 160, 67, 0.3);
+  background: rgba(22, 27, 34, 0.6);
+}
+
+/* Diff chunks - appear one by one */
+.diff-chunks {
+  display: inline;
+}
+
+.diff-chunk {
+  display: inline;
+  background: linear-gradient(
+    to right,
+    rgba(46, 160, 67, 0.2) 0%,
+    rgba(46, 160, 67, 0.15) 50%,
+    rgba(46, 160, 67, 0.2) 100%
+  );
+  padding: 0.15rem 0.3rem;
+  border-radius: 3px;
+  animation: chunkAppear 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+  position: relative;
+}
+
+/* Chunk appear animation */
+@keyframes chunkAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+    background: rgba(46, 160, 67, 0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(0);
+    background: rgba(46, 160, 67, 0.25);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    background: rgba(46, 160, 67, 0.15);
+  }
+}
+
+/* When chunk is complete, fade highlight to subtle */
+.diff-chunk.complete {
+  animation: highlightFadeToSubtle 1.5s ease-out forwards;
+}
+
+@keyframes highlightFadeToSubtle {
+  0% {
+    background: rgba(46, 160, 67, 0.15);
+  }
+  100% {
+    background: rgba(46, 160, 67, 0.06);
+  }
+}
+
+/* Fade in animation for reason banner */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .diff-view-container {
+    gap: 1rem;
+  }
+
+  .section-content {
+    padding: 1rem;
+    font-size: 0.9rem;
+  }
+
+  .diff-reason {
+    padding: 0.875rem 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}

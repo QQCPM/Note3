@@ -138,10 +138,10 @@ export function createDefaultAIConfig(openaiApiKey: string): AIConfig {
     },
     agent: {
       provider: 'openai',
-      model: 'gpt-4o',
+      model: 'gpt-5.1',
       api_key: openaiApiKey,
-      temperature: 0.7,
-      max_tokens: 4096,
+      temperature: 0.3,
+      max_tokens: 16000,
     },
   };
 }
@@ -172,10 +172,10 @@ export function createMacM2UltraConfig(openaiApiKey: string): AIConfig {
     },
     agent: {
       provider: 'openai',
-      model: 'gpt-4o',
+      model: 'gpt-5.1',
       api_key: openaiApiKey,
-      temperature: 0.7,
-      max_tokens: 4096,
+      temperature: 0.3,
+      max_tokens: 16000,
     },
   };
 }
@@ -194,10 +194,10 @@ export function createAPIOnlyConfig(openaiApiKey: string): AIConfig {
     },
     agent: {
       provider: 'openai',
-      model: 'gpt-4o',
+      model: 'gpt-5.1',
       api_key: openaiApiKey,
-      temperature: 0.7,
-      max_tokens: 4096,
+      temperature: 0.3,
+      max_tokens: 16000,
     },
   };
 }

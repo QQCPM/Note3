@@ -10,6 +10,16 @@ import { invoke } from '@tauri-apps/api/core';
 // ========================================
 // TYPES
 // ========================================
+// 
+// NOTE: These types are duplicated in @/types/ai.ts with a more sophisticated
+// type system (includes provider discrimination). This duplication exists because:
+// 1. The Rust backend expects these simplified structures via Tauri IPC
+// 2. The types/ai.ts provides higher-level abstractions for TypeScript usage
+// 
+// TODO: Consolidate these types by either:
+//   a) Using types/ai.ts types and mapping them before sending to Rust
+//   b) Or updating Rust types to match the types/ai.ts structure
+//
 
 export interface AIConfig {
   embeddings: EmbeddingConfig;
@@ -401,9 +411,9 @@ export function createDefaultAIConfig(openaiKey: string = ''): AIConfig {
     },
     agent: {
       api_key: openaiKey,
-      model: 'gpt-4o',
-      temperature: 0.7,
-      max_tokens: 8192, // Increased for longer responses
+      model: 'gpt-5.1',
+      temperature: 0.3,
+      max_tokens: 16000,
     },
   };
 }

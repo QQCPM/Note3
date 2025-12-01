@@ -91,7 +91,6 @@ Configure in Weave Settings → AI Configuration.
 
 ## 📚 Documentation
 
-- **[Implementation Plan](./IMPLEMENTATION_PLAN.md)** - Complete development strategy
 - **[Architecture](./docs/ARCHITECTURE.md)** - System architecture and tech stack
 - **[Database Schema](./docs/DATABASE_SCHEMA.md)** - Data models and queries
 - **[AI Systems](./docs/AI_SYSTEMS.md)** - AI model configuration and integration
@@ -118,7 +117,6 @@ weave/
 │   └── migrations/         # Database migrations
 ├── docs/                   # Documentation
 ├── models/                 # AI models (gitignored)
-└── prototype/              # Original HTML prototype
 ```
 
 ## 🛠️ Technology Stack

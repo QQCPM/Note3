@@ -3,9 +3,11 @@ import { useNotesStore, useBlocksStore } from '@/store';
 import { useAIStore } from '@/store/aiStore';
 import { streamAIEditChat } from '@/services/aiEditService';
 import { createBlock } from '@/utils/tauri';
+import { ArrowUp, Paperclip, Globe, FileText, Loader2 } from 'lucide-react';
 
 const AIInput: React.FC = () => {
   const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const { activeNoteId, getNoteById } = useNotesStore();
   const { blocks, addBlock } = useBlocksStore();
   const { addMessage } = useAIStore();
@@ -41,14 +43,16 @@ const AIInput: React.FC = () => {
   };
 
   const handleSend = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || isLoading) return;
 
     const userMessage = message.trim();
     setMessage('');
+    setIsLoading(true);
 
     // Let AI handle everything intelligently with tools
     // The AI will decide whether to create artifacts, databases, or edit text
     await handleSmartAgent(userMessage);
+    setIsLoading(false);
   };
 
   const handleSmartAgent = async (userMessage: string) => {
@@ -60,7 +64,11 @@ const AIInput: React.FC = () => {
       return;
     }
 
-    // User message will be added by streamAIEditChat (avoid duplicates)
+    // Add user message to store first (caller is responsible)
+    addMessage({
+      role: 'user',
+      content: userMessage,
+    });
 
     // Get or create target block
     const targetBlock = await getTargetBlock();
@@ -74,16 +82,27 @@ const AIInput: React.FC = () => {
 
     // Use the enhanced AI editing service with all tools
     // This includes: read_block, read_note, edit_block, search_web, create_artifact, create_database
-    // Plus: 10 database tools + 10 artifact tools
-    // The AI will intelligently decide which tools to use based on the request
+    // Plus: 10 database tools
+    const currentBlock = targetBlock; // Renaming for clarity with the provided snippet's context
+
+    console.log('🚀 AIInput: Sending message to AI:', userMessage);
+    console.log('🎯 AIInput: Current block ID:', currentBlock?.id);
+
+    // Stream AI chat with edit capabilities
     await streamAIEditChat({
-      blockId: targetBlock.id,
-      userMessage,
+      blockId: currentBlock?.id || '',
+      userMessage: userMessage,
+      onStream: (chunk) => {
+        console.log('📥 AIInput: Received chunk:', chunk.substring(0, 50));
+      },
+      onToolCall: (toolName, args) => {
+        console.log('🔧 AIInput: Tool called:', toolName, args);
+      },
       onComplete: () => {
-        console.log('✅ Smart agent complete');
+        console.log('✅ AIInput: Stream completed');
       },
       onError: (error) => {
-        console.error('❌ Smart agent error:', error);
+        console.error('❌ AIInput: Stream error:', error);
         addMessage({
           role: 'assistant',
           content: `Error: ${error.message}`,
@@ -103,30 +122,60 @@ const AIInput: React.FC = () => {
   };
 
   return (
-    <div className="ai-input-unified">
-      {/* Context indicator */}
-      <div className="input-context">
-        <span className="context-icon">▣</span>
-        <span className="context-text">{activeNote?.title || 'No note selected'}</span>
-        <button className="context-action" title="Remove context">×</button>
-        <button className="context-action" title="Settings">⚙</button>
-      </div>
+    <div className="px-3 pb-3">
+      <div className="bg-[#0d1117] rounded-lg border border-[#21262d] p-3 flex flex-col gap-2 transition-all hover:border-[#30363d]">
+        {/* Context indicator - only show if note is selected */}
+        {activeNote && (
+          <div className="flex items-center gap-2 px-1 pb-1">
+            <FileText className="w-3 h-3 text-[#58a6ff]" />
+            <span className="text-xs text-[#7d8590] truncate flex-1">{activeNote.title}</span>
+          </div>
+        )}
 
-      {/* Text input */}
-      <textarea
-        className="input-field"
-        placeholder="what's on ur mind"
-        rows={2}
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyDown={handleKeyDown}
-      />
+        {/* Text input */}
+        <textarea
+          className="w-full bg-transparent border-none outline-none text-[#c9d1d9] text-sm placeholder-[#6e7681] resize-none min-h-[44px] max-h-[120px] px-1"
+          placeholder={activeNote ? "Ask about this note..." : "What's on your mind?"}
+          rows={2}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isLoading}
+        />
 
-      {/* Action row */}
-      <div className="input-actions">
-        <div className="action-buttons">
-          <button className="send-btn" title="Send message (Enter)" onClick={handleSend}>
-            ↗
+        {/* Action row */}
+        <div className="flex items-center justify-between pt-1 px-1">
+          <div className="flex items-center gap-1">
+            <button 
+              className="p-1.5 text-[#6e7681] hover:text-[#c9d1d9] hover:bg-[#21262d] rounded-md transition-colors" 
+              title="Attach file"
+            >
+              <Paperclip className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              className="flex items-center gap-1.5 px-2 py-1 text-[#6e7681] hover:text-[#c9d1d9] hover:bg-[#21262d] rounded-md transition-colors text-xs"
+              title="Web search"
+            >
+              <Globe className="w-3 h-3" />
+              <span className="hidden sm:inline">Search</span>
+            </button>
+          </div>
+
+          <button
+            onClick={handleSend}
+            disabled={!message.trim() || isLoading}
+            className={`p-1.5 rounded-full transition-all duration-200 ${
+              message.trim() && !isLoading
+                ? 'bg-[#238636] text-white hover:bg-[#2ea043]'
+                : 'bg-[#21262d] text-[#6e7681] cursor-not-allowed'
+            }`}
+            title="Send message (Enter)"
+          >
+            {isLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <ArrowUp className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
       </div>
