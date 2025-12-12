@@ -10,7 +10,7 @@ import RecommendationCard from './RecommendationCard';
 import NoteMentionInput from './NoteMentionInput';
 import './StartingPage.css';
 
-import { ArrowUp, Paperclip, Globe, Mic, Zap, ChevronDown, Hexagon, Loader2 } from 'lucide-react';
+import { ArrowUp, Paperclip, Globe, Mic, Zap, ChevronDown, Loader2 } from 'lucide-react';
 
 const StartingPage: React.FC = () => {
     const { setAISidebarCollapsed } = useUIStore();
@@ -83,10 +83,23 @@ const StartingPage: React.FC = () => {
                     showNotePanel(note.id);
 
                     // Strip @mention from the message before sending to AI
-                    // Handle titles with spaces by escaping special regex characters
-                    const escapedTitle = note.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const mentionRegex = new RegExp(`@${escapedTitle}\\s*`, 'i');
-                    const messageWithoutMention = value.replace(mentionRegex, '').trim();
+                    // Handle both simple titles and full paths like "Parent / Child"
+                    // First try to match the full path pattern, then fall back to title
+                    const mentionPatterns = [
+                        // Match full path with " / " separators
+                        /@[^@\n]+?(?=\s+[a-z]|\s*$)/i,
+                        // Match escaped title
+                        new RegExp(`@${note.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'),
+                    ];
+                    
+                    let messageWithoutMention = value;
+                    for (const pattern of mentionPatterns) {
+                        const newMessage = messageWithoutMention.replace(pattern, '').trim();
+                        if (newMessage !== messageWithoutMention) {
+                            messageWithoutMention = newMessage;
+                            break;
+                        }
+                    }
                     
                     console.log(`📤 Sending to AI: "${messageWithoutMention}"`);
 
@@ -288,32 +301,36 @@ const StartingPage: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 rounded-xl overflow-hidden">
+                                {/* Deep Learning */}
                                 <RecommendationCard
-                                    icon={<Zap className="w-5 h-5" />}
-                                    title="Test your Quantum Knowledge"
-                                    description="Based on 'Quantum Physics Basics', take a quick 5-question quiz."
-                                    action="Start Quiz"
+                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14v1a4 4 0 0 1-8 0v-1"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/><path d="M12 11v3"/></svg>}
+                                    title="Explain VAE vs DAG"
+                                    description="Compare Variational Autoencoders and DAG models from your Deep Learning notes."
+                                    action="Compare"
                                     className="border-b md:border-0 border-[#30363d] rounded-none bg-transparent hover:bg-[#1c2128]"
                                 />
+                                {/* Neuroscience 2 */}
                                 <RecommendationCard
-                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>}
-                                    title="Connect History to Psychology"
-                                    description="Analyze 'The Terror' through the lens of group conformity biases."
-                                    action="Analyze"
+                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V22h6v-4.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 10h.01M15 10h.01M9 14c.5.5 1.5 1 3 1s2.5-.5 3-1"/></svg>}
+                                    title="Quiz on Neural Pathways"
+                                    description="Test your understanding of synaptic plasticity from Neuroscience 2."
+                                    action="Start Quiz"
                                     className="border-b md:border-0 md:border-l border-[#30363d] rounded-none bg-transparent hover:bg-[#1c2128]"
                                 />
+                                {/* Quantum computing */}
                                 <RecommendationCard
-                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>}
-                                    title="Review React Patterns"
-                                    description="Generate a cheat sheet from your notes on Hooks."
+                                    icon={<Zap className="w-5 h-5" />}
+                                    title="Quantum Gates Cheatsheet"
+                                    description="Generate a quick reference for Hadamard, CNOT, and Pauli gates."
                                     action="Generate"
                                     className="border-b md:border-0 md:border-t border-[#30363d] rounded-none bg-transparent hover:bg-[#1c2128]"
                                 />
+                                {/* React Coding */}
                                 <RecommendationCard
-                                    icon={<Hexagon className="w-5 h-5" />}
-                                    title="Explore Benzene Rings"
-                                    description="Deep dive into aromaticity based on your Chem notes."
-                                    action="Deep Dive"
+                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>}
+                                    title="React Hooks Deep Dive"
+                                    description="Explain useEffect cleanup and dependency arrays from your React notes."
+                                    action="Explain"
                                     className="md:border-l md:border-t border-[#30363d] rounded-none bg-transparent hover:bg-[#1c2128]"
                                 />
                             </div>

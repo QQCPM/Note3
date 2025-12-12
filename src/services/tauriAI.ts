@@ -21,10 +21,16 @@ import { invoke } from '@tauri-apps/api/core';
 //   b) Or updating Rust types to match the types/ai.ts structure
 //
 
+export interface OllamaCloudConfig {
+  api_key: string;
+  model: string; // e.g., "glm-4.6", "qwen3-coder:480b"
+}
+
 export interface AIConfig {
   embeddings: EmbeddingConfig;
   reranker?: EmbeddingConfig;
   local_code_generation?: LocalModelConfig;
+  ollama_cloud?: OllamaCloudConfig;
   agent: OpenAIConfig;
   api_code_generation?: OpenAIConfig;
 }
@@ -426,7 +432,7 @@ export function createMacM2UltraConfig(openaiKey: string): AIConfig {
     embeddings: {
       endpoint: 'http://localhost:8081',
       model: 'qwen3-embedding-8b',
-      dimension: 8192,
+      dimension: 4096,
     },
     reranker: {
       endpoint: 'http://localhost:8082',
@@ -444,6 +450,35 @@ export function createMacM2UltraConfig(openaiKey: string): AIConfig {
       model: 'gpt-5.1', // Upgraded to GPT-5.1 with advanced reasoning
       temperature: 0.3, // Lower for more focused, accurate responses
       max_tokens: 16000, // Increased for longer, more detailed responses
+    },
+  };
+}
+
+/**
+ * Create Demo configuration using Ollama Cloud GLM-4.6 (no local models needed)
+ */
+export function createDemoConfig(openaiKey: string, ollamaKey: string): AIConfig {
+  return {
+    embeddings: {
+      endpoint: 'http://localhost:8081',
+      model: 'qwen3-embedding-8b',
+      dimension: 4096,
+    },
+    reranker: {
+      endpoint: 'http://localhost:8082',
+      model: 'qwen3-reranker-8b',
+      dimension: 8192,
+    },
+    // No local models - use Ollama Cloud for code generation
+    ollama_cloud: {
+      api_key: ollamaKey,
+      model: 'glm-4.6',
+    },
+    agent: {
+      api_key: openaiKey,
+      model: 'gpt-5.1',
+      temperature: 0.3,
+      max_tokens: 16000,
     },
   };
 }

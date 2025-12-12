@@ -23,12 +23,14 @@ interface ThinkingBlockProps {
 
 // Icon mapping for different step types
 const stepIcons: Record<ThinkingStepType, React.ElementType> = {
+  thought: Brain,
   search: Search,
   read: FileText,
   tool: Wrench,
   analyze: Brain,
   write: PenLine,
   create: Plus,
+  explore: Search,
 };
 
 // Status icon component

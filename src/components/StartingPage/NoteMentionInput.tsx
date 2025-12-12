@@ -1,5 +1,15 @@
-import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
+import React, { useState, useEffect, useRef, KeyboardEvent, useMemo } from 'react';
 import { useNotesStore } from '@/store';
+import { ChevronRight } from 'lucide-react';
+
+interface MentionItem {
+    id: string;
+    title: string;
+    displayTitle: string;  // Full path like "Parent / Child"
+    depth: number;
+    parentId: string | null;
+    icon: string;
+}
 
 interface NoteMentionInputProps {
     value: string;
@@ -17,12 +27,78 @@ const NoteMentionInput: React.FC<NoteMentionInputProps> = ({
     const { notes } = useNotesStore();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [showAutocomplete, setShowAutocomplete] = useState(false);
-    const [filteredNotes, setFilteredNotes] = useState<typeof notes>([]);
+    const [filteredItems, setFilteredItems] = useState<MentionItem[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
     
     // Track the selected note from autocomplete (persists until submission)
     const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
     const [selectedNoteTitle, setSelectedNoteTitle] = useState<string | null>(null);
+
+    // Flatten the tree structure to get all notes including children
+    const allNotes = useMemo(() => {
+        const flat: typeof notes = [];
+        const flatten = (noteList: typeof notes) => {
+            for (const note of noteList) {
+                flat.push(note);
+                if (note.children && note.children.length > 0) {
+                    flatten(note.children);
+                }
+            }
+        };
+        flatten(notes);
+        return flat;
+    }, [notes]);
+
+    // Build hierarchical mention items with full paths
+    const mentionItems = useMemo(() => {
+        const items: MentionItem[] = [];
+        const noteMap = new Map(allNotes.map(n => [n.id, n]));
+        
+        // Helper to get full path
+        const getPath = (noteId: string): string[] => {
+            const path: string[] = [];
+            let current = noteMap.get(noteId);
+            while (current) {
+                path.unshift(current.title);
+                current = current.parent_id ? noteMap.get(current.parent_id) : undefined;
+            }
+            return path;
+        };
+        
+        // Helper to get depth
+        const getDepth = (noteId: string): number => {
+            let depth = 0;
+            let current = noteMap.get(noteId);
+            while (current?.parent_id) {
+                depth++;
+                current = noteMap.get(current.parent_id);
+            }
+            return depth;
+        };
+        
+        // Sort notes: parents first, then children grouped under parents
+        const sortedNotes = [...allNotes].sort((a, b) => {
+            const pathA = getPath(a.id);
+            const pathB = getPath(b.id);
+            return pathA.join('/').localeCompare(pathB.join('/'));
+        });
+        
+        for (const note of sortedNotes) {
+            const path = getPath(note.id);
+            const depth = getDepth(note.id);
+            
+            items.push({
+                id: note.id,
+                title: note.title,
+                displayTitle: path.join(' / '),
+                depth,
+                parentId: note.parent_id,
+                icon: note.icon || '📄',
+            });
+        }
+        
+        return items;
+    }, [allNotes]);
 
     // Detect @ symbol and filter notes
     useEffect(() => {
@@ -33,16 +109,17 @@ const NoteMentionInput: React.FC<NoteMentionInputProps> = ({
         if (lastAtIndex !== -1 && lastAtIndex === textBeforeCursor.length - 1) {
             // Just typed '@'
             setShowAutocomplete(true);
-            setFilteredNotes(notes);
+            setFilteredItems(mentionItems);
             setSelectedIndex(0);
         } else if (lastAtIndex !== -1 && textBeforeCursor.lastIndexOf(' ') < lastAtIndex) {
             // Still typing after '@'
             const query = textBeforeCursor.substring(lastAtIndex + 1).toLowerCase();
 
-            const filtered = notes.filter(note =>
-                note.title.toLowerCase().includes(query)
+            const filtered = mentionItems.filter(item =>
+                item.title.toLowerCase().includes(query) ||
+                item.displayTitle.toLowerCase().includes(query)
             );
-            setFilteredNotes(filtered);
+            setFilteredItems(filtered);
             setSelectedIndex(0);
             setShowAutocomplete(filtered.length > 0);
         } else {
@@ -56,21 +133,21 @@ const NoteMentionInput: React.FC<NoteMentionInputProps> = ({
             setSelectedNoteId(null);
             setSelectedNoteTitle(null);
         }
-    }, [value, notes, selectedNoteTitle]);
+    }, [value, mentionItems, selectedNoteTitle]);
 
     const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (showAutocomplete) {
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 setSelectedIndex(prev =>
-                    prev < filteredNotes.length - 1 ? prev + 1 : prev
+                    prev < filteredItems.length - 1 ? prev + 1 : prev
                 );
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 setSelectedIndex(prev => prev > 0 ? prev - 1 : prev);
-            } else if (e.key === 'Enter' && filteredNotes.length > 0) {
+            } else if (e.key === 'Enter' && filteredItems.length > 0) {
                 e.preventDefault();
-                selectNote(filteredNotes[selectedIndex]);
+                selectItem(filteredItems[selectedIndex]);
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 setShowAutocomplete(false);
@@ -81,14 +158,17 @@ const NoteMentionInput: React.FC<NoteMentionInputProps> = ({
         }
     };
 
-    const selectNote = (note: typeof notes[0]) => {
+    const selectItem = (item: MentionItem) => {
         const cursorPos = textareaRef.current?.selectionStart || 0;
         const textBeforeCursor = value.substring(0, cursorPos);
         const lastAtIndex = textBeforeCursor.lastIndexOf('@');
 
+        // Use displayTitle for sub-pages (shows full path)
+        const mentionText = item.depth > 0 ? item.displayTitle : item.title;
+        
         const newValue =
             value.substring(0, lastAtIndex + 1) +
-            note.title +
+            mentionText +
             ' ' +
             value.substring(cursorPos);
 
@@ -96,9 +176,9 @@ const NoteMentionInput: React.FC<NoteMentionInputProps> = ({
         setShowAutocomplete(false);
         
         // Store the selected note for submission
-        setSelectedNoteId(note.id);
-        setSelectedNoteTitle(note.title);
-        console.log(`📌 Note selected from autocomplete: "${note.title}" (${note.id})`);
+        setSelectedNoteId(item.id);
+        setSelectedNoteTitle(mentionText);
+        console.log(`📌 Note selected from autocomplete: "${mentionText}" (${item.id})`);
 
         // Focus back on textarea
         setTimeout(() => {
@@ -116,37 +196,45 @@ const NoteMentionInput: React.FC<NoteMentionInputProps> = ({
             mentionedNoteId = selectedNoteId;
             console.log(`✅ Using autocomplete-selected note: "${selectedNoteTitle}" (${selectedNoteId})`);
         } else {
-            // Priority 2: Try to match @mention with full title (including spaces)
-            // Match @<anything until end of mention> - titles end at common delimiters or end of string
+            // Priority 2: Try to match @mention with full path or title
+            // Match @<anything until end of mention> - handles paths like "Parent / Child"
             const mentionRegex = /@([^@\n]+?)(?=\s+[a-z]|\s*$)/i;
             const mentionMatch = value.match(mentionRegex);
             
             if (mentionMatch) {
-                const mentionedTitle = mentionMatch[1].trim();
-                console.log(`🔍 Looking for note with title: "${mentionedTitle}"`);
+                const mentionedPath = mentionMatch[1].trim();
+                console.log(`🔍 Looking for note with path/title: "${mentionedPath}"`);
                 
-                // Try exact match first
-                let note = notes.find(n =>
-                    n.title.toLowerCase() === mentionedTitle.toLowerCase()
+                // Try to find by full path first (for sub-pages)
+                let foundItem = mentionItems.find(item =>
+                    item.displayTitle.toLowerCase() === mentionedPath.toLowerCase()
                 );
                 
-                // If no exact match, try partial match (title starts with mention)
-                if (!note) {
-                    note = notes.find(n =>
-                        n.title.toLowerCase().startsWith(mentionedTitle.toLowerCase())
+                // Try exact title match
+                if (!foundItem) {
+                    foundItem = mentionItems.find(item =>
+                        item.title.toLowerCase() === mentionedPath.toLowerCase()
                     );
                 }
                 
-                // If still no match, try if mention contains note title
-                if (!note) {
-                    note = notes.find(n =>
-                        mentionedTitle.toLowerCase().includes(n.title.toLowerCase())
+                // Try partial match (title starts with mention)
+                if (!foundItem) {
+                    foundItem = mentionItems.find(item =>
+                        item.title.toLowerCase().startsWith(mentionedPath.toLowerCase()) ||
+                        item.displayTitle.toLowerCase().startsWith(mentionedPath.toLowerCase())
                     );
                 }
                 
-                mentionedNoteId = note?.id;
-                if (note) {
-                    console.log(`✅ Found note by regex: "${note.title}" (${note.id})`);
+                // Try if mention contains note title
+                if (!foundItem) {
+                    foundItem = mentionItems.find(item =>
+                        mentionedPath.toLowerCase().includes(item.title.toLowerCase())
+                    );
+                }
+                
+                mentionedNoteId = foundItem?.id;
+                if (foundItem) {
+                    console.log(`✅ Found note by regex: "${foundItem.displayTitle}" (${foundItem.id})`);
                 }
             }
         }
@@ -172,18 +260,32 @@ const NoteMentionInput: React.FC<NoteMentionInputProps> = ({
             />
 
             {/* Autocomplete Dropdown */}
-            {showAutocomplete && filteredNotes.length > 0 && (
-                <div className="absolute bottom-full left-0 mb-2 w-full max-w-[300px] bg-[#161b22] border border-[#30363d] rounded-xl shadow-2xl overflow-hidden z-50">
-                    {filteredNotes.map((note, index) => (
+            {showAutocomplete && filteredItems.length > 0 && (
+                <div className="absolute bottom-full left-0 mb-2 w-full max-w-[350px] bg-[#161b22] border border-[#30363d] rounded-xl shadow-2xl overflow-hidden z-50 max-h-[300px] overflow-y-auto">
+                    {filteredItems.map((item, index) => (
                         <button
-                            key={note.id}
-                            onClick={() => selectNote(note)}
-                            className={`w-full px-4 py-2 text-left text-sm transition-colors ${index === selectedIndex
+                            key={item.id}
+                            onClick={() => selectItem(item)}
+                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 ${index === selectedIndex
                                     ? 'bg-[#1f6feb]/20 text-[#58a6ff]'
                                     : 'text-[#e6edf3] hover:bg-[#1c2128]'
                                 }`}
+                            style={{ paddingLeft: `${16 + item.depth * 16}px` }}
                         >
-                            {note.title}
+                            <span className="flex-shrink-0">{item.icon}</span>
+                            <span className="flex-1 truncate">
+                                {item.depth > 0 ? (
+                                    <span className="flex items-center gap-1">
+                                        <span className="text-[#7d8590] text-xs">
+                                            {item.displayTitle.split(' / ').slice(0, -1).join(' / ')}
+                                        </span>
+                                        <ChevronRight className="w-3 h-3 text-[#7d8590]" />
+                                        <span>{item.title}</span>
+                                    </span>
+                                ) : (
+                                    item.title
+                                )}
+                            </span>
                         </button>
                     ))}
                 </div>

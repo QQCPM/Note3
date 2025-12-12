@@ -844,6 +844,7 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                 blockId,
                 originalContent: (block.data as any).content || '',
                 proposedContent: parsedArgs.new_content,
+                diffHunks: [], // Simplified - no granular diff for now
                 reason: parsedArgs.reason || 'AI-generated content',
               });
               // Update thinking step
@@ -1219,6 +1220,7 @@ async function streamWithMock(options: StreamChatOptions): Promise<void> {
       blockId,
       originalContent: (block.data as any).content || '',
       proposedContent: generatedContent,
+      diffHunks: [], // Simplified - no granular diff for now
       reason: `Added information about "${searchQuery}"`,
     });
 
@@ -1262,6 +1264,7 @@ async function streamWithMock(options: StreamChatOptions): Promise<void> {
       blockId,
       originalContent: (block.data as any).content || '',
       proposedContent: content,
+      diffHunks: [], // Simplified - no granular diff for now
       reason: 'AI-generated content',
     });
 
@@ -1308,7 +1311,7 @@ async function generateContentFromSearch(query: string, results: SearchResult[])
         .replace(/[\s\-:|]+$/, '')
         .trim() || `Source ${idx + 1}`;
 
-      return `## ${sectionTitle}\n\n${result.snippet}\n\n*Source: ${result.source || new URL(result.url).hostname}${result.publishedDate ? ` | ${result.publishedDate}` : ''}*\n`;
+      return `## ${sectionTitle}\n\n${result.snippet}\n\n*Source: ${result.source || new URL(result.url).hostname}${result.published_date ? ` | ${result.published_date}` : ''}*\n`;
     })
     .join('\n');
 

@@ -156,8 +156,7 @@ pub async fn ai_generate_embeddings_batch(
     manager.embedding_service.generate_batch(texts).await
 }
 
-/// Generate artifact using LOCAL Qwen3-30B-Coder (if available)
-/// Falls back to OpenAI if local model not configured
+/// Generate artifact using LOCAL Qwen3-30B-Coder, Ollama Cloud (GLM-4.6), or OpenAI
 #[tauri::command]
 pub async fn ai_generate_artifact(
     prompt: String,
@@ -174,7 +173,17 @@ pub async fn ai_generate_artifact(
         match service.generate_artifact(&prompt).await {
             Ok(result) => return Ok(result),
             Err(e) => {
-                eprintln!("Local code generation failed, falling back to API: {}", e);
+                eprintln!("Local code generation failed: {}", e);
+            }
+        }
+    }
+
+    // Try Ollama Cloud (GLM-4.6) if configured
+    if let Some(ref service) = manager.ollama_cloud_service {
+        match service.generate_artifact(&prompt).await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                eprintln!("Ollama Cloud (GLM-4.6) failed, falling back to OpenAI: {}", e);
             }
         }
     }
@@ -183,7 +192,7 @@ pub async fn ai_generate_artifact(
     manager.api_code_service.generate_artifact(&prompt).await
 }
 
-/// Generate database schema using LOCAL or API
+/// Generate database schema using LOCAL, Ollama Cloud (GLM-4.6), or OpenAI
 #[tauri::command]
 pub async fn ai_generate_database(
     prompt: String,
@@ -200,7 +209,27 @@ pub async fn ai_generate_database(
         match service.generate_database(&prompt).await {
             Ok(result) => result,
             Err(e) => {
-                eprintln!("Local database generation failed, falling back to API: {}", e);
+                eprintln!("Local database generation failed: {}", e);
+                // Try Ollama Cloud next
+                if let Some(ref ollama) = manager.ollama_cloud_service {
+                    match ollama.generate_database(&prompt).await {
+                        Ok(result) => result,
+                        Err(e2) => {
+                            eprintln!("Ollama Cloud failed: {}", e2);
+                            manager.agent_service.generate_database(&prompt).await?
+                        }
+                    }
+                } else {
+                    manager.agent_service.generate_database(&prompt).await?
+                }
+            }
+        }
+    } else if let Some(ref service) = manager.ollama_cloud_service {
+        // Try Ollama Cloud (GLM-4.6)
+        match service.generate_database(&prompt).await {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("Ollama Cloud failed, falling back to OpenAI: {}", e);
                 manager.agent_service.generate_database(&prompt).await?
             }
         }

@@ -9,8 +9,7 @@ import AISidebar from '@/components/AISidebar/AISidebar';
 import NotePreviewPanel from '@/components/NotePreview/NotePreviewPanel';
 import ContextMenu from '@/components/ContextMenu/ContextMenu';
 import GlobalDragLayer from '@/components/GlobalDragLayer/GlobalDragLayer';
-import { tauriAI, createMacM2UltraConfig } from '@/services/tauriAI';
-
+import { AISystem } from '@/services/AISystem';
 
 import HeaderDock from '@/components/CommandDock/HeaderDock';
 
@@ -42,46 +41,46 @@ function App() {
       }
     };
 
-    // Initialize AI system
+    // Initialize AI system using unified AISystem
     const initializeAI = async () => {
       try {
-        let openaiKey = '';
-
-        // Try to load persisted config first
-        const persistedConfig = await tauriAI.loadPersistedConfig();
-
-        if (persistedConfig && persistedConfig.openai_api_key) {
-          console.log('📂 Loading persisted AI configuration');
-          openaiKey = persistedConfig.openai_api_key;
-        } else {
-          console.log('📝 No persisted config found, using .env defaults');
-          openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
-        }
+        // Get API keys from environment
+        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
+        const ollamaKey = import.meta.env.VITE_OLLAMA_API_KEY || '';
 
         if (!openaiKey) {
-          console.warn('⚠️ No OpenAI API key found. Please set it in Settings.');
+          console.warn('⚠️ No OpenAI API key in env. AISystem will check persisted config.');
         }
 
-        // Create Mac M2 Ultra config (all 3 local models)
-        const config = createMacM2UltraConfig(openaiKey);
-
-        console.log('🚀 Initializing AI system with config:', config);
-        await tauriAI.initialize(config);
-        setAiInitialized(true);
-        console.log('✅ AI system initialized successfully');
+        // Initialize unified AI system with GLM-4.6 (Ollama Cloud)
+        console.log('🚀 Initializing unified AI system with GLM-4.6...');
+        const health = await AISystem.initialize({ 
+          openaiApiKey: openaiKey,
+          ollamaApiKey: ollamaKey,
+          useGlm46: true,  // Use GLM-4.6 for code generation
+        });
+        
+        setAiInitialized(AISystem.isReady);
+        console.log('✅ AI system initialized - Status:', AISystem.status);
 
         // Check health of all services
-        const health = await tauriAI.healthCheck();
         console.log('🏥 AI Health Check:', health);
 
-        const allHealthy = health.embedding_service &&
-          health.local_code_service &&
-          health.reranker_service;
+        const allHealthy = health.services.embedding &&
+          health.services.localCode &&
+          health.services.reranker;
         setAiHealthy(allHealthy);
 
         if (!allHealthy) {
-          console.warn('⚠️ Some AI services are not healthy:', health);
+          console.warn('⚠️ Some AI services are not healthy:', health.services);
         }
+
+        // Subscribe to AI status changes
+        AISystem.on('status-change', ({ oldStatus, newStatus }) => {
+          console.log(`📊 AI Status changed: ${oldStatus} → ${newStatus}`);
+          setAiInitialized(AISystem.isReady);
+        });
+
       } catch (error) {
         console.error('❌ Failed to initialize AI:', error);
         setAiInitialized(false);

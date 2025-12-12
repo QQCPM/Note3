@@ -1,12 +1,14 @@
 pub mod embedding;
 pub mod openai;
 pub mod local;
+pub mod ollama_cloud;
 pub mod config_persistence;
 pub mod tools;
 
 pub use embedding::{EmbeddingConfig, LocalEmbeddingService};
 pub use openai::{OpenAIConfig, OpenAIService, Message, Tool, ToolCall, FunctionDefinition};
 pub use local::{LocalModelConfig, LocalModelService};
+pub use ollama_cloud::OllamaCloudService;
 pub use config_persistence::PersistedConfig;
 pub use tools::{ToolDefinition, ToolResult, get_all_tools, get_database_tools, get_artifact_tools};
 
@@ -46,6 +48,13 @@ fn generate_column_id() -> String {
     Uuid::new_v4().to_string()
 }
 
+/// Ollama Cloud configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaCloudConfig {
+    pub api_key: String,
+    pub model: String,  // e.g., "glm-4.6", "qwen3-coder:480b"
+}
+
 /// Complete AI configuration for the hybrid system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIConfig {
@@ -57,6 +66,9 @@ pub struct AIConfig {
 
     /// Optional: local code generation model (Qwen3-30B-Coder)
     pub local_code_generation: Option<LocalModelConfig>,
+
+    /// Optional: Ollama Cloud for code generation (GLM-4.6, etc)
+    pub ollama_cloud: Option<OllamaCloudConfig>,
 
     /// OpenAI config for agent tasks (reasoning, tool use)
     pub agent: OpenAIConfig,
@@ -75,6 +87,7 @@ impl AIConfig {
             },
             reranker: None,
             local_code_generation: None,
+            ollama_cloud: None,
             agent: OpenAIConfig {
                 api_key: String::new(), // User must provide
                 model: "gpt-4o".to_string(),
@@ -104,6 +117,31 @@ impl AIConfig {
                 max_tokens: 4096,
                 temperature: 0.7,
             }),
+            ollama_cloud: None,
+            agent: OpenAIConfig {
+                api_key: openai_key,
+                model: "gpt-4o".to_string(),
+                temperature: 0.7,
+                max_tokens: Some(4096),
+            },
+            api_code_generation: None,
+        }
+    }
+
+    /// Demo mode: Use Ollama Cloud GLM-4.6 for code generation (no local models needed)
+    pub fn demo_mode(openai_key: String, ollama_key: String) -> Self {
+        Self {
+            embeddings: EmbeddingConfig {
+                endpoint: "http://localhost:8081".to_string(),
+                model: "qwen3-embedding-8b".to_string(),
+                dimension: 8192,
+            },
+            reranker: None,
+            local_code_generation: None,
+            ollama_cloud: Some(OllamaCloudConfig {
+                api_key: ollama_key,
+                model: "glm-4.6".to_string(),
+            }),
             agent: OpenAIConfig {
                 api_key: openai_key,
                 model: "gpt-4o".to_string(),
@@ -127,6 +165,7 @@ pub struct AIManager {
     pub embedding_service: LocalEmbeddingService,
     pub reranker_service: Option<LocalEmbeddingService>,
     pub local_code_service: Option<LocalModelService>,
+    pub ollama_cloud_service: Option<OllamaCloudService>,
     pub agent_service: OpenAIService,
     pub api_code_service: OpenAIService,
 }
@@ -141,6 +180,9 @@ impl AIManager {
         let local_code_service = config.local_code_generation.as_ref()
             .map(|cfg| LocalModelService::new(cfg.clone()));
 
+        let ollama_cloud_service = config.ollama_cloud.as_ref()
+            .map(|cfg| OllamaCloudService::new(cfg.api_key.clone(), cfg.model.clone()));
+
         let agent_service = OpenAIService::new(config.agent.clone());
 
         let api_code_service = if let Some(ref code_config) = config.api_code_generation {
@@ -154,6 +196,7 @@ impl AIManager {
             embedding_service,
             reranker_service,
             local_code_service,
+            ollama_cloud_service,
             agent_service,
             api_code_service,
         }
@@ -172,7 +215,12 @@ impl AIManager {
         let local_code_ok = if let Some(ref service) = self.local_code_service {
             service.health_check().await.is_ok()
         } else {
-            false
+            // Check Ollama Cloud as alternative
+            if let Some(ref service) = self.ollama_cloud_service {
+                service.health_check().await.is_ok()
+            } else {
+                false
+            }
         };
 
         // Simple check for OpenAI - we'll validate API key on first use
