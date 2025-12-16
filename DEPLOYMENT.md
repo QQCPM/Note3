@@ -31,6 +31,8 @@ npm run tauri:build:linux      # Linux
 - Windows: `src-tauri/target/release/bundle/msi/*.msi`
 - Linux: `src-tauri/target/release/bundle/deb/*.deb`
 
+**Note**: Cross-platform builds may fail. It's recommended to build on the target platform or use GitHub Actions.
+
 ### Option 2: GitHub Releases (Easiest)
 
 Download pre-built releases from GitHub:

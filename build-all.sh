@@ -18,7 +18,7 @@ npm install
 
 # Build for current platform first
 echo "🏗️ Building for current platform..."
-npm run tauri:build
+npm run tauri:build || echo "Current platform build failed - continuing with cross-platform builds..."
 
 # Check if we have the required tools for cross-compilation
 if command -v cargo &> /dev/null; then
