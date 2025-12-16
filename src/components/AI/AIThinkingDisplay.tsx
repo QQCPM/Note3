@@ -1,4 +1,3 @@
-import React from 'react';
 import { CheckCircle2, Loader2, FileText, Plus, Minus } from 'lucide-react';
 
 interface AIThinkingDisplayProps {

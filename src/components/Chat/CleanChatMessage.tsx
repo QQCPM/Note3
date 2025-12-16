@@ -96,7 +96,7 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
     
     // 1. Fix display math that spans multiple lines without proper delimiters
     // Convert inline $$ that spans lines to proper block format
-    processed = processed.replace(/\$\$([^$]+)\$\$/g, (match, formula) => {
+    processed = processed.replace(/\$\$([^$]+)\$\$/g, (_match, formula) => {
       // If formula contains newlines, ensure it's properly formatted
       const trimmed = formula.trim();
       if (trimmed.includes('\n')) {
@@ -111,12 +111,12 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
     
     // 3. Fix LaTeX that uses [ ] instead of $$ for display math (common AI mistake)
     // Match [ formula ] that looks like LaTeX (contains \frac, \int, etc.)
-    processed = processed.replace(/\[\s*(\\[a-zA-Z]+[^[\]]*)\s*\]/g, (match, formula) => {
+    processed = processed.replace(/\[\s*(\\[a-zA-Z]+[^[\]]*)\s*\]/g, (_match, formula) => {
       // Only convert if it looks like LaTeX (has backslash commands)
       if (/\\(frac|int|sum|prod|sqrt|left|right|text|cdot|times|div|pm|mp|leq|geq|neq|approx|equiv|alpha|beta|gamma|delta|theta|phi|psi|omega|pi|sigma|mu|nu|lambda|epsilon|rho|tau|chi|eta|zeta|xi|kappa|nabla|partial|infty|forall|exists|in|notin|subset|supset|cup|cap|emptyset|mathbb|mathbf|mathrm|mathcal|vec|hat|bar|dot|ddot|tilde|overline|underline)/.test(formula)) {
         return `$$${formula.trim()}$$`;
       }
-      return match;
+      return _match;
     });
     
     // 4. Fix incomplete display math (starts with $$ but doesn't end properly)
@@ -225,7 +225,7 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
                   </a>
                 ),
                 // Code blocks
-                code: ({ className, children, ...props }: any) => (
+                code: ({ className, children }: any) => (
                   <CodeBlock className={className}>{children}</CodeBlock>
                 ),
                 // Pre wrapper (for code blocks)

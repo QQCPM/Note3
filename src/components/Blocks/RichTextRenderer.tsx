@@ -17,7 +17,7 @@ function normalizeLatex(content: string): string {
   let processed = content;
   
   // 1. Fix display math that spans multiple lines without proper delimiters
-  processed = processed.replace(/\$\$([^$]+)\$\$/g, (match, formula) => {
+  processed = processed.replace(/\$\$([^$]+)\$\$/g, (_match, formula) => {
     const trimmed = formula.trim();
     if (trimmed.includes('\n')) {
       return `\n$$\n${trimmed}\n$$\n`;

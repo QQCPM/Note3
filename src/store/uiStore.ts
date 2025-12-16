@@ -26,7 +26,7 @@ interface UIState {
   aiSidebarTab: 'agent' | 'recommend' | 'settings';
 
   // Canvas Mode
-  canvasMode: 'note' | 'canvas';
+  canvasMode: 'note' | 'canvas' | 'dashboard' | 'graph';
 
   // Menus & Modals
   contextMenu: ContextMenuState;
@@ -40,7 +40,7 @@ interface UIState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   setAISidebarCollapsed: (collapsed: boolean) => void;
   setAISidebarTab: (tab: 'agent' | 'recommend' | 'settings') => void;
-  setCanvasMode: (mode: 'note' | 'canvas') => void;
+  setCanvasMode: (mode: 'note' | 'canvas' | 'dashboard' | 'graph') => void;
 
   // Context Menu
   showContextMenu: (x: number, y: number, noteId: string) => void;
@@ -97,6 +97,22 @@ export const useUIStore = create<UIState>((set) => ({
       return {
         canvasMode: mode,
         sidebarCollapsed: false, // KEEP OPEN so drag-and-drop works
+        aiSidebarCollapsed: true,
+      };
+    }
+    // Dashboard mode: collapse AI sidebar for clean focus
+    if (mode === 'dashboard') {
+      return {
+        canvasMode: mode,
+        sidebarCollapsed: false,
+        aiSidebarCollapsed: true,
+      };
+    }
+    // Graph mode: immersive 3D view, collapse sidebars for full focus
+    if (mode === 'graph') {
+      return {
+        canvasMode: mode,
+        sidebarCollapsed: true,
         aiSidebarCollapsed: true,
       };
     }

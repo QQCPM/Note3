@@ -76,6 +76,9 @@ export interface PendingEdit {
   reason: string;
   timestamp: Date;
   status: 'pending' | 'accepted' | 'rejected';
+  // For generated notes (localStorage-based)
+  noteId?: string;
+  isGeneratedNote?: boolean;
 }
 
 interface AIStore {

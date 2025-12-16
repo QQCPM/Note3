@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { updateBlock, createBlock } from '@/utils/tauri';
 import { useBlocksStore, useNotesStore, useAIStore } from '@/store';
 import type { Block, TextBlockData } from '@/types';
@@ -58,7 +58,7 @@ const TextBlock: React.FC<TextBlockProps> = React.memo(({ block }) => {
 
   // Auto-focus ONLY on newly created empty blocks (not all empty blocks on load)
   // This prevents lag when loading notes with many blocks
-  const isNewBlock = useRef(content === '' && block.data.content === '');
+  const isNewBlock = useRef(content === '' && (block.data as TextBlockData).content === '');
   useEffect(() => {
     if (isNewBlock.current && content === '') {
       setIsEditing(true);

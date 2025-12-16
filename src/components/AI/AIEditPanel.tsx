@@ -60,23 +60,6 @@ const AIEditPanel: React.FC<AIEditPanelProps> = ({ blockId, onClose }) => {
     });
   };
 
-  const handleAcceptEdit = async (editId: string) => {
-    try {
-      await applyEdit(editId);
-      // If no more pending edits, close panel
-      const remaining = useAIStore.getState().pendingEdits.filter((e) => e.status === 'pending');
-      if (remaining.length <= 1) {
-        handleClose();
-      }
-    } catch (error) {
-      console.error('Failed to apply edit:', error);
-    }
-  };
-
-  const handleRejectEdit = (editId: string) => {
-    rejectEdit(editId);
-  };
-
   const handleClose = () => {
     exitEditMode();
     onClose();

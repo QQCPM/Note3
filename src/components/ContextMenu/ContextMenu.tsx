@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useNotesStore, useUIStore } from '@/store';
+import { useProjectStore } from '@/store/projectStore';
 import { createNote, updateNote, deleteNote } from '@/utils/tauri';
 import { ask } from '@tauri-apps/plugin-dialog';
 
@@ -7,6 +8,7 @@ const ContextMenu: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const { contextMenu, hideContextMenu } = useUIStore();
   const { addNote, updateNote: updateNoteInStore, deleteNote: deleteNoteInStore, getNoteById, expandNote } = useNotesStore();
+  const { projects, activeProjectId, addTreeItem, deleteTreeItem, treeItems } = useProjectStore();
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -42,6 +44,17 @@ const ContextMenu: React.FC = () => {
         parent_id: contextMenu.noteId,
       });
       addNote(newNote);
+      
+      // Also add to project tree
+      const parentTreeItem = treeItems.find(item => item.noteId === contextMenu.noteId);
+      addTreeItem({
+        projectId: parentTreeItem?.projectId || activeProjectId || projects[0]?.id || 'default-notes',
+        parentId: parentTreeItem?.id || null,
+        name: newNote.title,
+        type: 'note',
+        noteId: newNote.id,
+      });
+      
       expandNote(contextMenu.noteId); // Expand parent to show new child
       hideContextMenu();
     } catch (error) {
@@ -82,6 +95,17 @@ const ContextMenu: React.FC = () => {
         parent_id: note.parent_id,
       });
       addNote(duplicated);
+      
+      // Also add to project tree
+      const originalTreeItem = treeItems.find(item => item.noteId === contextMenu.noteId);
+      addTreeItem({
+        projectId: originalTreeItem?.projectId || activeProjectId || projects[0]?.id || 'default-notes',
+        parentId: originalTreeItem?.parentId || null,
+        name: duplicated.title,
+        type: 'note',
+        noteId: duplicated.id,
+      });
+      
       hideContextMenu();
     } catch (error) {
       console.error('Failed to duplicate note:', error);
@@ -103,6 +127,13 @@ const ContextMenu: React.FC = () => {
       if (confirmed) {
         await deleteNote(contextMenu.noteId);
         deleteNoteInStore(contextMenu.noteId);
+        
+        // Also remove from project tree
+        const treeItem = treeItems.find(item => item.noteId === contextMenu.noteId);
+        if (treeItem) {
+          deleteTreeItem(treeItem.id);
+        }
+        
         hideContextMenu();
       } else {
         hideContextMenu();

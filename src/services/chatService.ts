@@ -124,7 +124,7 @@ export async function sendChatMessage(
 }
 
 /**
- * Chat with note context (@mention)
+ * Chat with note context (@mention) for DATABASE notes
  * This triggers AI editing of the mentioned note by creating a new block and using AI tools
  */
 export async function chatWithNoteEdit(
@@ -202,6 +202,80 @@ Remember: Create ONLY new content. The highlighted text is just for reference - 
     });
   } catch (error) {
     console.error('❌ Note context chat failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Chat with generated note context (@mention) for GENERATED notes (localStorage only)
+ * This creates a pending edit for review before applying to the note
+ */
+export async function chatWithGeneratedNote(
+  noteId: string,
+  noteName: string,
+  noteContent: string,
+  userMessage: string
+): Promise<{ response: string; newContent: string | null }> {
+  try {
+    console.log(`📝 Chat with generated note: "${noteName}" (${noteId})`);
+    console.log(`📄 Note content length: ${noteContent.length} chars`);
+
+    // Build a prompt that includes the note content and asks AI to generate/update
+    const systemPrompt = `${CHAT_SYSTEM_PROMPT}
+
+You are helping the user with a note titled "${noteName}".
+
+CURRENT NOTE CONTENT:
+---
+${noteContent}
+---
+
+The user wants you to help with this note. Based on their request:
+1. If they ask to add content, generate the NEW content to add
+2. If they ask to modify, provide the UPDATED version
+3. If they ask questions about the note, answer based on the content
+
+Format your response as follows:
+- First, provide a brief explanation of what you did
+- Then, if you generated new content, include it in a section marked with:
+  ===NEW CONTENT START===
+  (your generated content here)
+  ===NEW CONTENT END===
+
+This allows the content to be automatically added to the note.`;
+
+    const messages: Message[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage }
+    ];
+
+    console.log('🤖 Sending to AI...');
+    const response = await tauriAI.chat(messages);
+    console.log('✅ AI response received');
+
+    // Extract new content if present
+    let newContent: string | null = null;
+    const newContentMatch = response.match(/===NEW CONTENT START===([\s\S]*?)===NEW CONTENT END===/);
+    
+    if (newContentMatch) {
+      newContent = newContentMatch[1].trim();
+      console.log(`📝 New content extracted: ${newContent.length} chars`);
+      
+      // DON'T save yet - create a pending edit instead
+      // The pending edit will be created by the caller and shown in preview panel
+    }
+
+    // Clean response for display (remove the markers)
+    const cleanResponse = response
+      .replace(/===NEW CONTENT START===[\s\S]*?===NEW CONTENT END===/, '')
+      .trim();
+
+    return {
+      response: cleanResponse || `I've prepared new content for "${noteName}". Review the changes in the preview panel and click Accept to apply.`,
+      newContent
+    };
+  } catch (error) {
+    console.error('❌ Generated note chat failed:', error);
     throw error;
   }
 }

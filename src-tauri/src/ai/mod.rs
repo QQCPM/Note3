@@ -6,7 +6,12 @@ pub mod config_persistence;
 pub mod tools;
 
 pub use embedding::{EmbeddingConfig, LocalEmbeddingService};
-pub use openai::{OpenAIConfig, OpenAIService, Message, Tool, ToolCall, FunctionDefinition};
+pub use openai::{
+    OpenAIConfig, OpenAIService, Message, Tool, ToolCall, FunctionDefinition,
+    // GPT-5.x Responses API types
+    ReasoningEffort, BuiltInTool, CodeInterpreterContainer,
+    ResponsesInput, ResponsesResult, ResponsesUsageInfo, ResponsesToolCall, WebSearchResult,
+};
 pub use local::{LocalModelConfig, LocalModelService};
 pub use ollama_cloud::OllamaCloudService;
 pub use config_persistence::PersistedConfig;
@@ -90,9 +95,11 @@ impl AIConfig {
             ollama_cloud: None,
             agent: OpenAIConfig {
                 api_key: String::new(), // User must provide
-                model: "gpt-4o".to_string(),
+                model: "gpt-5.2".to_string(), // GPT-5.2 with Responses API
                 temperature: 0.7,
-                max_tokens: Some(4096),
+                max_tokens: Some(8192),
+                reasoning_effort: ReasoningEffort::Medium,
+                use_responses_api: true,
             },
             api_code_generation: None, // Will use agent config if not specified
         }
@@ -120,9 +127,11 @@ impl AIConfig {
             ollama_cloud: None,
             agent: OpenAIConfig {
                 api_key: openai_key,
-                model: "gpt-4o".to_string(),
+                model: "gpt-5.2".to_string(),
                 temperature: 0.7,
-                max_tokens: Some(4096),
+                max_tokens: Some(8192),
+                reasoning_effort: ReasoningEffort::Medium,
+                use_responses_api: true,
             },
             api_code_generation: None,
         }
@@ -144,9 +153,11 @@ impl AIConfig {
             }),
             agent: OpenAIConfig {
                 api_key: openai_key,
-                model: "gpt-4o".to_string(),
+                model: "gpt-5.2".to_string(),
                 temperature: 0.7,
-                max_tokens: Some(4096),
+                max_tokens: Some(8192),
+                reasoning_effort: ReasoningEffort::Medium,
+                use_responses_api: true,
             },
             api_code_generation: None,
         }

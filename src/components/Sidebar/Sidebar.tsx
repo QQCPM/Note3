@@ -1,11 +1,13 @@
 import React from 'react';
 import { useNotesStore, useUIStore } from '@/store';
+import { useProjectStore } from '@/store/projectStore';
 import { createNote } from '@/utils/tauri';
 import NoteTree from './NoteTree';
 
 const Sidebar: React.FC = () => {
   const { notes, setActiveNote, addNote } = useNotesStore();
   const { sidebarCollapsed } = useUIStore();
+  const { projects, activeProjectId, addTreeItem } = useProjectStore();
 
   const handleNewPage = async () => {
     try {
@@ -15,6 +17,15 @@ const Sidebar: React.FC = () => {
         parent_id: null,
       });
       addNote(newNote);
+      
+      // Also add to project tree
+      addTreeItem({
+        projectId: activeProjectId || projects[0]?.id || 'default-notes',
+        name: newNote.title,
+        type: 'note',
+        noteId: newNote.id,
+      });
+      
       setActiveNote(newNote.id);
     } catch (error) {
       console.error('Failed to create note:', error);

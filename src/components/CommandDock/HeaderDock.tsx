@@ -1,6 +1,6 @@
 import React from 'react';
 import { useUIStore, useNotesStore } from '@/store';
-import { Home, FileText, LayoutGrid } from 'lucide-react';
+import { Home, FileText, LayoutGrid, CalendarDays } from 'lucide-react';
 
 const HeaderDock: React.FC = () => {
     const {
@@ -30,9 +30,16 @@ const HeaderDock: React.FC = () => {
         </svg>
     );
 
+    // Fixed dock position - stays consistent regardless of sidebar state
+    // Position at 40px to avoid AI status dot when collapsed, and looks good when open
+    const dockLeft = 40;
+
     return (
-        // Centered relative to the 240px sidebar
-        <div className="fixed top-4 left-[120px] -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none">
+        // Fixed position dock
+        <div
+            className="fixed top-3 z-50 flex flex-col gap-2 pointer-events-none"
+            style={{ left: dockLeft }}
+        >
             {/* Compact Dock */}
             <div className="pointer-events-auto flex items-center gap-1 p-1 rounded-lg backdrop-blur-xl bg-[#0d1117]/90 border border-white/10 shadow-xl ring-1 ring-black/50">
 
@@ -48,17 +55,19 @@ const HeaderDock: React.FC = () => {
                     <IconSidebarLeft active={!sidebarCollapsed} />
                 </button>
 
-                {/* 2. Note Mode */}
-                <button
-                    onClick={() => setCanvasMode('note')}
-                    className={`p-1.5 rounded-md transition-all duration-200 ${canvasMode === 'note'
-                        ? 'text-green-400 bg-green-500/10 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                        }`}
-                    title="Note Mode"
-                >
-                    <FileText size={16} />
-                </button>
+                {/* 2. Note Mode - only show when sidebar is open */}
+                {!sidebarCollapsed && (
+                    <button
+                        onClick={() => setCanvasMode('note')}
+                        className={`p-1.5 rounded-md transition-all duration-200 ${canvasMode === 'note'
+                            ? 'text-green-400 bg-green-500/10 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                            }`}
+                        title="Note Mode"
+                    >
+                        <FileText size={16} />
+                    </button>
+                )}
 
                 {/* 3. Canvas Mode */}
                 <button
@@ -72,7 +81,19 @@ const HeaderDock: React.FC = () => {
                     <LayoutGrid size={16} />
                 </button>
 
-                {/* 4. Right Sidebar Toggle */}
+                {/* 4. Dashboard Mode */}
+                <button
+                    onClick={() => setCanvasMode('dashboard')}
+                    className={`p-1.5 rounded-md transition-all duration-200 ${canvasMode === 'dashboard'
+                        ? 'text-purple-400 bg-purple-500/10 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                        }`}
+                    title="Dashboard"
+                >
+                    <CalendarDays size={16} />
+                </button>
+
+                {/* 5. Right Sidebar Toggle */}
                 <button
                     onClick={toggleAISidebar}
                     className={`p-1.5 rounded-md transition-all duration-200 ${!aiSidebarCollapsed
@@ -87,7 +108,7 @@ const HeaderDock: React.FC = () => {
                 {/* Divider */}
                 <div className="w-px h-4 bg-white/10 mx-0.5"></div>
 
-                {/* 5. Home */}
+                {/* 7. Home */}
                 <button
                     onClick={() => {
                         setActiveNote(null);

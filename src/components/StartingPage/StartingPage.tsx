@@ -1,32 +1,54 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useUIStore, useNotesStore } from '@/store';
+import { useProjectStore } from '@/store/projectStore';
 import { useLayoutStore } from '@/store/layoutStore';
 import { useTransitionStore } from '@/store/transitionStore';
 import { useAIStore } from '@/store/aiStore';
-import { sendChatMessage, chatWithNoteEdit } from '@/services/chatService';
+import { sendChatMessage, chatWithNoteEdit, chatWithGeneratedNote } from '@/services/chatService';
+import { extractPDFText, PDFExtractResult } from '@/services/pdfExtractor';
+import { generateProjectFromPDF, analyzePDFForPreview } from '@/services/projectGenerator';
 import CleanChatMessage from '../Chat/CleanChatMessage';
 import ThinkingBlock from '../Chat/ThinkingBlock';
 import RecommendationCard from './RecommendationCard';
 import NoteMentionInput from './NoteMentionInput';
 import './StartingPage.css';
 
-import { ArrowUp, Paperclip, Globe, Mic, Zap, ChevronDown, Loader2 } from 'lucide-react';
+import { ArrowUp, Paperclip, Globe, Mic, Zap, ChevronDown, Loader2, FileText, X } from 'lucide-react';
+import { NoteWithChildren } from '@/types';
+
+// Helper to find note by ID recursively through all subnotes
+const findNoteRecursively = (notes: NoteWithChildren[], noteId: string): NoteWithChildren | null => {
+    for (const note of notes) {
+        if (note.id === noteId) return note;
+        if (note.children && note.children.length > 0) {
+            const found = findNoteRecursively(note.children, noteId);
+            if (found) return found;
+        }
+    }
+    return null;
+};
+
+// Helper to get note content from localStorage (for generated notes)
+const getNoteContent = (noteId: string): string | null => {
+    return localStorage.getItem(`note-content-${noteId}`);
+};
 
 const StartingPage: React.FC = () => {
     const { setAISidebarCollapsed } = useUIStore();
     const { notes } = useNotesStore();
+    const { treeItems } = useProjectStore();
     const { showNotePanel, notePanelVisible } = useLayoutStore();
     const { addHighlight } = useTransitionStore();
     
     // Use shared AI store for messages (synced with AgentTab)
-    const { 
-        messages, 
+    const {
+        messages,
         isLoading,
         currentThinkingSteps,
-        addMessage, 
+        addMessage,
         setLoading,
-        toggleThinkingExpanded,
         clearCurrentThinking,
+        addPendingEdit,
     } = useAIStore();
     
     const [inputValue, setInputValue] = useState('');
@@ -34,6 +56,12 @@ const StartingPage: React.FC = () => {
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [isRecommendationsExiting, setIsRecommendationsExiting] = useState(false);
+    
+    // PDF upload state
+    const [uploadedPDF, setUploadedPDF] = useState<{ file: File; extracted: PDFExtractResult } | null>(null);
+    const [isExtractingPDF, setIsExtractingPDF] = useState(false);
+    const [generationProgress, setGenerationProgress] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Auto-collapse AI sidebar when entering this page to focus on the center chat
     useEffect(() => {
@@ -47,6 +75,19 @@ const StartingPage: React.FC = () => {
 
     const handleSubmit = async (value: string, mentionedNoteId?: string) => {
         if (!value.trim()) return;
+
+        // If PDF is uploaded, generate project instead of regular chat
+        if (uploadedPDF) {
+            if (messages.length === 0) {
+                setIsRecommendationsExiting(true);
+                setTimeout(() => {
+                    handleGenerateProject(value);
+                }, 300);
+            } else {
+                handleGenerateProject(value);
+            }
+            return;
+        }
 
         // Trigger fade-out animation if this is the first message
         if (messages.length === 0) {
@@ -73,23 +114,37 @@ const StartingPage: React.FC = () => {
         try {
             // Check if we have a mentioned note from the input component
             if (mentionedNoteId) {
-                // User mentioned a note - show note panel on the right
-                const note = notes.find(n => n.id === mentionedNoteId);
-
-                if (note) {
-                    console.log(`📝 @mention detected: "${note.title}" (${note.id})`);
+                // Find note recursively (including subnotes) or in project tree
+                let note = findNoteRecursively(notes, mentionedNoteId);
+                let noteTitle = note?.title || '';
+                let noteContent: string | null = null;
+                
+                // If not found in notes store, check if it's a project tree item
+                if (!note) {
+                    const treeItem = treeItems.find(t => t.noteId === mentionedNoteId || t.id === mentionedNoteId);
+                    if (treeItem) {
+                        noteTitle = treeItem.name;
+                        console.log(`📝 Found in project tree: "${noteTitle}"`);
+                    }
+                }
+                
+                // Get note content from localStorage (for generated notes)
+                noteContent = getNoteContent(mentionedNoteId);
+                
+                if (note || noteContent) {
+                    console.log(`📝 @mention detected: "${noteTitle}" (${mentionedNoteId})`);
+                    console.log(`📄 Note content available: ${noteContent ? 'Yes (' + noteContent.length + ' chars)' : 'No'}`);
 
                     // Show note preview panel (slides in from right)
-                    showNotePanel(note.id);
+                    showNotePanel(mentionedNoteId);
 
                     // Strip @mention from the message before sending to AI
                     // Handle both simple titles and full paths like "Parent / Child"
-                    // First try to match the full path pattern, then fall back to title
                     const mentionPatterns = [
                         // Match full path with " / " separators
                         /@[^@\n]+?(?=\s+[a-z]|\s*$)/i,
                         // Match escaped title
-                        new RegExp(`@${note.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'),
+                        new RegExp(`@${noteTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'),
                     ];
                     
                     let messageWithoutMention = value;
@@ -101,21 +156,71 @@ const StartingPage: React.FC = () => {
                         }
                     }
                     
-                    console.log(`📤 Sending to AI: "${messageWithoutMention}"`);
+                    // Build message with note content context for AI
+                    let messageWithContext = messageWithoutMention;
+                    if (noteContent) {
+                        messageWithContext = `The user is referencing a note titled "${noteTitle}" with the following content:
 
-                    // Call AI with note context
-                    const response = await chatWithNoteEdit(
-                        note.id,
-                        note.title,
-                        messageWithoutMention,
-                        []
-                    );
+---NOTE CONTENT START---
+${noteContent}
+---NOTE CONTENT END---
 
-                    // Add AI response to shared store
-                    addMessage({
-                        role: 'assistant',
-                        content: response,
-                    });
+User's request: ${messageWithoutMention}
+
+Please use the note content as context to fulfill the user's request.`;
+                    }
+                    
+                    console.log(`📤 Sending to AI with note context`);
+
+                    // Determine if this is a generated note (localStorage) or database note
+                    const isGeneratedNote = noteContent !== null && noteContent.length > 0;
+                    
+                    if (isGeneratedNote && noteContent) {
+                        // Use chatWithGeneratedNote for localStorage notes
+                        console.log('📝 Using generated note flow (localStorage)');
+                        const result = await chatWithGeneratedNote(
+                            mentionedNoteId,
+                            noteTitle,
+                            noteContent,
+                            messageWithoutMention
+                        );
+
+                        // Add AI response to shared store
+                        addMessage({
+                            role: 'assistant',
+                            content: result.response,
+                        });
+
+                        // If AI generated new content, create a pending edit for review
+                        if (result.newContent) {
+                            console.log('📝 Creating pending edit for review');
+                            addPendingEdit({
+                                blockId: `generated-${mentionedNoteId}`, // Fake blockId for generated notes
+                                originalContent: noteContent,
+                                proposedContent: noteContent + '\n\n' + result.newContent,
+                                diffHunks: [],
+                                reason: `Add content to "${noteTitle}"`,
+                                noteId: mentionedNoteId,
+                                isGeneratedNote: true,
+                            });
+                        }
+                    } else {
+                        // Use chatWithNoteEdit for database notes
+                        console.log('📝 Using database note flow');
+                        const response = await chatWithNoteEdit(
+                            mentionedNoteId,
+                            noteTitle,
+                            messageWithContext,
+                            []
+                        );
+
+                        // Add AI response to shared store
+                        addMessage({
+                            role: 'assistant',
+                            content: response,
+                        });
+                    }
+                    
                     setLoading(false);
                     return;
                 }
@@ -157,6 +262,86 @@ const StartingPage: React.FC = () => {
         }
     };
 
+    // Handle PDF file upload
+    const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
+            return;
+        }
+
+        setIsExtractingPDF(true);
+        try {
+            console.log(`📄 Extracting PDF: ${file.name}`);
+            const extracted = await extractPDFText(file);
+            setUploadedPDF({ file, extracted });
+            
+            // Show preview in chat
+            const preview = await analyzePDFForPreview(extracted);
+            addMessage({
+                role: 'assistant',
+                content: preview,
+            });
+            
+            console.log(`✅ PDF extracted: ${extracted.totalPages} pages, ${extracted.wordCount} words`);
+        } catch (error) {
+            console.error('Failed to extract PDF:', error);
+            addMessage({
+                role: 'assistant',
+                content: '❌ Failed to read the PDF file. Please make sure it\'s a valid PDF.',
+            });
+        } finally {
+            setIsExtractingPDF(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    }, [addMessage]);
+
+    // Handle project generation from PDF
+    const handleGenerateProject = useCallback(async (userPrompt: string) => {
+        if (!uploadedPDF) return;
+
+        setLoading(true);
+        setGenerationProgress('Starting...');
+        
+        addMessage({
+            role: 'user',
+            content: userPrompt,
+        });
+
+        try {
+            const result = await generateProjectFromPDF(
+                uploadedPDF.extracted,
+                userPrompt,
+                (progress) => {
+                    setGenerationProgress(progress.message);
+                }
+            );
+
+            addMessage({
+                role: 'assistant',
+                content: result,
+            });
+
+            // Clear uploaded PDF after successful generation
+            setUploadedPDF(null);
+        } catch (error) {
+            console.error('Project generation failed:', error);
+            addMessage({
+                role: 'assistant',
+                content: '❌ Failed to generate project. Please try again.',
+            });
+        } finally {
+            setLoading(false);
+            setGenerationProgress(null);
+        }
+    }, [uploadedPDF, addMessage, setLoading]);
+
+    // Clear uploaded PDF
+    const clearUploadedPDF = useCallback(() => {
+        setUploadedPDF(null);
+    }, []);
+
     return (
         <div
             className="flex-1 flex flex-col bg-[#0d1117] transition-all duration-400 overflow-visible"
@@ -169,20 +354,20 @@ const StartingPage: React.FC = () => {
                     {/* Chat mode: messages at top, input at bottom */}
                     <div className="flex-1 overflow-y-auto overflow-x-visible p-8">
                         <div className="w-full max-w-[640px] mx-auto space-y-6">
-                            {messages.map((message, idx) => (
+                            {messages
+                                .filter((message) => message.role !== 'system')
+                                .map((message, idx, filteredMessages) => (
                                 <div
                                     key={message.id}
                                     onMouseUp={() => handleTextSelection(message.id)}
                                 >
                                     <CleanChatMessage
-                                        role={message.role}
+                                        role={message.role as 'user' | 'assistant'}
                                         content={message.content}
-                                        isLatest={idx === messages.length - 1}
+                                        isLatest={idx === filteredMessages.length - 1}
                                         messageId={message.id}
                                         thinkingSteps={message.thinkingSteps}
                                         citations={message.citations}
-                                        isThinkingExpanded={message.isThinkingExpanded}
-                                        onToggleThinking={() => toggleThinkingExpanded(message.id)}
                                     />
                                 </div>
                             ))}
@@ -200,7 +385,7 @@ const StartingPage: React.FC = () => {
                             {isLoading && currentThinkingSteps.length === 0 && (
                                 <div className="flex items-center gap-2 text-[#7d8590] text-sm py-4">
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>AI is thinking...</span>
+                                    <span>{generationProgress || 'AI is thinking...'}</span>
                                 </div>
                             )}
                             <div ref={messagesEndRef} />
@@ -221,9 +406,32 @@ const StartingPage: React.FC = () => {
 
                                     <div className="flex items-center justify-between pt-2 px-2">
                                         <div className="flex items-center gap-2">
-                                            <button className="p-2 text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d] rounded-full transition-colors" title="Attach file">
-                                                <Paperclip className="w-4 h-4" />
+                                            {/* Hidden file input */}
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept=".pdf"
+                                                onChange={handleFileUpload}
+                                                className="hidden"
+                                            />
+                                            <button 
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className={`p-2 rounded-full transition-colors ${uploadedPDF ? 'text-[#58a6ff] bg-[#58a6ff]/10' : 'text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d]'}`}
+                                                title={uploadedPDF ? `PDF: ${uploadedPDF.file.name}` : "Attach PDF"}
+                                                disabled={isExtractingPDF}
+                                            >
+                                                {isExtractingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                                             </button>
+                                            {/* Show uploaded PDF indicator */}
+                                            {uploadedPDF && (
+                                                <div className="flex items-center gap-1 px-2 py-1 bg-[#58a6ff]/10 rounded-full">
+                                                    <FileText className="w-3 h-3 text-[#58a6ff]" />
+                                                    <span className="text-xs text-[#58a6ff] max-w-[100px] truncate">{uploadedPDF.file.name}</span>
+                                                    <button onClick={clearUploadedPDF} className="p-0.5 hover:bg-[#30363d] rounded">
+                                                        <X className="w-3 h-3 text-[#7d8590]" />
+                                                    </button>
+                                                </div>
+                                            )}
                                             <button className="p-2 text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d] rounded-full transition-colors" title="Voice input">
                                                 <Mic className="w-4 h-4" />
                                             </button>
@@ -349,7 +557,32 @@ const StartingPage: React.FC = () => {
 
                                     <div className="flex items-center justify-between pt-2 px-2">
                                         <div className="flex items-center gap-2">
-                                            <button className="p-2 text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d] rounded-full transition-colors" title="Attach file"><Paperclip className="w-4 h-4" /></button>
+                                            {/* Hidden file input for empty state */}
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept=".pdf"
+                                                onChange={handleFileUpload}
+                                                className="hidden"
+                                            />
+                                            <button 
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className={`p-2 rounded-full transition-colors ${uploadedPDF ? 'text-[#58a6ff] bg-[#58a6ff]/10' : 'text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d]'}`}
+                                                title={uploadedPDF ? `PDF: ${uploadedPDF.file.name}` : "Attach PDF"}
+                                                disabled={isExtractingPDF}
+                                            >
+                                                {isExtractingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                                            </button>
+                                            {/* Show uploaded PDF indicator */}
+                                            {uploadedPDF && (
+                                                <div className="flex items-center gap-1 px-2 py-1 bg-[#58a6ff]/10 rounded-full">
+                                                    <FileText className="w-3 h-3 text-[#58a6ff]" />
+                                                    <span className="text-xs text-[#58a6ff] max-w-[100px] truncate">{uploadedPDF.file.name}</span>
+                                                    <button onClick={clearUploadedPDF} className="p-0.5 hover:bg-[#30363d] rounded">
+                                                        <X className="w-3 h-3 text-[#7d8590]" />
+                                                    </button>
+                                                </div>
+                                            )}
                                             <button className="p-2 text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d] rounded-full transition-colors" title="Voice input"><Mic className="w-4 h-4" /></button>
                                             <div className="h-5 w-[1px] bg-[#30363d] mx-1"></div>
                                             <div className="relative">
@@ -371,7 +604,7 @@ const StartingPage: React.FC = () => {
                                             </div>
                                             <button className="flex items-center gap-2 px-3 py-1.5 text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d] rounded-full transition-colors text-xs font-medium"><Globe className="w-3 h-3" /> Research</button>
                                         </div>
-                                        <button className={`p-2 rounded-full transition-all duration-200 ${inputValue.trim() ? 'bg-[#58a6ff] text-white shadow-md hover:bg-[#4f98e8]' : 'bg-[#30363d] text-[#7d8590] cursor-not-allowed'}`} disabled={!inputValue.trim()}><ArrowUp className="w-4 h-4" /></button>
+                                        <button className={`p-2 rounded-full transition-all duration-200 ${inputValue.trim() || uploadedPDF ? 'bg-[#58a6ff] text-white shadow-md hover:bg-[#4f98e8]' : 'bg-[#30363d] text-[#7d8590] cursor-not-allowed'}`} disabled={!inputValue.trim() && !uploadedPDF}><ArrowUp className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                             </div>

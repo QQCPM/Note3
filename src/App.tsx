@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { useNotesStore } from '@/store';
+import { useEffect, useState, useRef } from 'react';
+import { useNotesStore, useFileStore } from '@/store';
 import { useLayoutStore } from '@/store/layoutStore';
+import { useProjectStore } from '@/store/projectStore';
 import { getAllNotes } from '@/utils/tauri';
-import Sidebar from '@/components/Sidebar/Sidebar';
+import UnifiedSidebar from '@/components/Sidebar/UnifiedSidebar';
 import Canvas from '@/components/Canvas/Canvas';
 import AISidebar from '@/components/AISidebar/AISidebar';
 import NotePreviewPanel from '@/components/NotePreview/NotePreviewPanel';
@@ -25,17 +26,75 @@ const queryClient = new QueryClient({
 });
 
 function App() {
-  const { setNotes, activeNoteId } = useNotesStore();
+  const { setNotes, addNote } = useNotesStore();
+  const { initializeFromStorage } = useFileStore();
   const { notePanelVisible } = useLayoutStore();
+  const { addTreeItem } = useProjectStore();
   const [aiInitialized, setAiInitialized] = useState(false);
   const [aiHealthy, setAiHealthy] = useState(false);
+  const hasLoadedNotes = useRef(false);
 
   useEffect(() => {
-    // Load notes on mount
+    // Load files from IndexedDB on mount
+    const loadFiles = async () => {
+      try {
+        await initializeFromStorage();
+        console.log('📁 Files loaded from IndexedDB');
+      } catch (error) {
+        console.error('Failed to load files:', error);
+      }
+    };
+    loadFiles();
+  }, [initializeFromStorage]);
+
+  // Separate effect for notes - runs only once
+  useEffect(() => {
+    if (hasLoadedNotes.current) return;
+    hasLoadedNotes.current = true;
+
+    // Load notes on mount - merge with existing persisted notes and sync to project tree
     const loadNotes = async () => {
       try {
-        const notes = await getAllNotes();
-        setNotes(notes);
+        const dbNotes = await getAllNotes();
+        const currentNotes = useNotesStore.getState().notes;
+        const currentTreeItems = useProjectStore.getState().treeItems;
+        const currentProjects = useProjectStore.getState().projects;
+
+        // Get IDs of notes already in store (from localStorage persistence)
+        const existingIds = new Set<string>();
+        const collectIds = (notes: typeof currentNotes) => {
+          notes.forEach(note => {
+            existingIds.add(note.id);
+            if (note.children) collectIds(note.children);
+          });
+        };
+        collectIds(currentNotes);
+
+        if (existingIds.size === 0) {
+          // No persisted notes, just set from database
+          setNotes(dbNotes);
+        } else {
+          // Merge: add only database notes that don't exist in localStorage
+          const newDbNotes = dbNotes.filter(note => !existingIds.has(note.id));
+          newDbNotes.forEach(note => addNote(note));
+          console.log(`📝 Merged ${newDbNotes.length} DB notes with ${existingIds.size} persisted notes`);
+        }
+
+        // Sync notes to project tree - add any notes not already in tree
+        const allNotes = existingIds.size === 0 ? dbNotes : [...dbNotes];
+        const existingNoteIds = new Set(currentTreeItems.filter(item => item.noteId).map(item => item.noteId));
+        const targetProjectId = currentProjects[0]?.id || 'default-notes';
+
+        allNotes.forEach(note => {
+          if (!existingNoteIds.has(note.id)) {
+            addTreeItem({
+              projectId: targetProjectId,
+              name: note.title || 'Untitled',
+              type: 'note',
+              noteId: note.id,
+            });
+          }
+        });
       } catch (error) {
         console.error('Failed to load notes:', error);
       }
@@ -90,7 +149,7 @@ function App() {
 
     loadNotes();
     initializeAI();
-  }, [setNotes]);
+  }, [setNotes, addNote, addTreeItem]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -117,23 +176,17 @@ function App() {
         {/* Header Dock - Persistent Top Left */}
         <HeaderDock />
 
-        {/* Left Sidebar - Note Tree */}
-        <Sidebar />
+        {/* Left Sidebar - Unified Project Tree */}
+        <UnifiedSidebar />
 
         {/* Main Canvas Area */}
-        {activeNoteId ? (
-          // User clicked a note from sidebar - show normal Canvas editor + AISidebar
-          <>
-            <Canvas />
-            <AISidebar />
-          </>
-        ) : (
-          // Default: StartingPage mode (chat interface)
-          <>
-            <Canvas /> {/* Canvas will show StartingPage when activeNoteId is null */}
-            {notePanelVisible && <NotePreviewPanel />}
-          </>
-        )}
+        <Canvas />
+
+        {/* Right Side - AI Sidebar (always visible) */}
+        <AISidebar />
+
+        {/* Note Preview Panel (overlay when visible) */}
+        {notePanelVisible && <NotePreviewPanel />}
 
         {/* Context Menu (global) */}
         <ContextMenu />

@@ -5,6 +5,8 @@ export * from './ai';
 export * from './mcp';
 export * from './skill';
 export * from './canvas';
+export * from './project';
+export * from './dashboard';
 
 // UI State types
 export interface UIState {

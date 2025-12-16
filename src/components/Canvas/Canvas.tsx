@@ -1,17 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { useNotesStore, useBlocksStore, useUIStore } from '@/store';
+import { useNotesStore, useBlocksStore, useUIStore, useFileStore, useProjectStore } from '@/store';
 import { getNoteById, getBlocksByNote } from '@/utils/tauri';
 import CanvasHeader from './CanvasHeader';
 import CanvasContent from './CanvasContent';
 import InfiniteCanvas from './InfiniteCanvas';
+import KnowledgeGraph3D from './KnowledgeGraph3D';
 import StartingPage from '../StartingPage/StartingPage';
+import { FilePreview } from '../FileViewer';
+import { Dashboard } from '../Dashboard';
 
 const Canvas: React.FC = () => {
   const { activeNoteId } = useNotesStore();
   const { setBlocks, blocks } = useBlocksStore();
   const { canvasMode } = useUIStore();
+  const { getActiveFile } = useFileStore();
+  const { selectedItemId, getTreeItemById } = useProjectStore();
   const [activeNote, setActiveNote] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+
+  // Get selected item info
+  const selectedItem = selectedItemId ? getTreeItemById(selectedItemId) : null;
+  const isFileSelected = selectedItem && ['pdf', 'video', 'audio', 'image'].includes(selectedItem.type);
+  const activeFile = getActiveFile();
 
   useEffect(() => {
     if (activeNoteId) {
@@ -24,6 +34,37 @@ const Canvas: React.FC = () => {
       setBlocks([]);
       setActiveNote(null);
       setLoading(true);
+
+      // Check if this is a generated note (stored in zustand/localStorage)
+      const generatedNoteContent = localStorage.getItem(`note-content-${activeNoteId}`);
+      if (generatedNoteContent) {
+        console.log(`📝 [PERF] Loading generated note from localStorage`);
+        // This is a generated note - load from store
+        const notesStore = useNotesStore.getState();
+        const storeNote = notesStore.getNoteById(activeNoteId);
+        
+        if (storeNote) {
+          setActiveNote({
+            id: storeNote.id,
+            title: storeNote.title,
+            icon: storeNote.icon,
+            content: generatedNoteContent,
+          });
+          // Create a text block for the content
+          setBlocks([{
+            id: `block-${activeNoteId}`,
+            note_id: activeNoteId,
+            type: 'text',
+            data: { type: 'text', content: generatedNoteContent },
+            position: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }]);
+          setLoading(false);
+          console.log(`✅ [PERF] Generated note loaded in: ${(performance.now() - startTime).toFixed(2)}ms`);
+          return;
+        }
+      }
 
       const fetchStart = performance.now();
       Promise.all([
@@ -99,11 +140,43 @@ const Canvas: React.FC = () => {
     }
   }, [activeNoteId, setBlocks]);
 
+  // Dashboard mode - AI Secretary view
+  if (canvasMode === 'dashboard') {
+    return (
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
+        <Dashboard />
+      </main>
+    );
+  }
+
+  // 3D Knowledge Graph mode - immersive visualization
+  if (canvasMode === 'graph') {
+    return (
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0f] rounded-lg">
+        <KnowledgeGraph3D />
+      </main>
+    );
+  }
+
   // Canvas mode doesn't require an active note
   if (canvasMode === 'canvas') {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
         <InfiniteCanvas />
+      </main>
+    );
+  }
+
+  // File preview mode - when a file (PDF, video, audio, image) is selected
+  if (isFileSelected && activeFile) {
+    return (
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
+        <FilePreview
+          file={activeFile.file}
+          fileUrl={activeFile.objectUrl}
+          fileType={activeFile.type as 'pdf' | 'video' | 'audio' | 'image'}
+          fileName={activeFile.name}
+        />
       </main>
     );
   }

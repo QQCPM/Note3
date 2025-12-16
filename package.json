@@ -41,11 +41,14 @@
     "react": "^18.3.1",
     "react-diff-view": "^3.3.2",
     "react-dom": "^18.3.1",
+    "react-force-graph-3d": "^1.29.0",
     "react-katex": "^3.1.0",
     "react-markdown": "^10.1.0",
+    "react-pdf": "^10.2.0",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "three": "^0.182.0",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
@@ -55,6 +58,7 @@
     "@types/katex": "^0.16.7",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.182.0",
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
     "@vitejs/plugin-react": "^4.2.1",

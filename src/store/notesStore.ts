@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { Note, NoteWithChildren } from '@/types';
 
 interface NotesState {
@@ -25,7 +26,9 @@ interface NotesState {
   buildNoteTree: () => NoteWithChildren[];
 }
 
-export const useNotesStore = create<NotesState>((set, get) => ({
+export const useNotesStore = create<NotesState>()(
+  persist(
+    (set, get) => ({
   notes: [],
   activeNoteId: null,
   expandedNoteIds: new Set(),
@@ -193,4 +196,20 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   buildNoteTree: () => {
     return get().notes;
   },
-}));
+    }),
+    {
+      name: 'note3-notes-storage',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        notes: state.notes,
+        activeNoteId: state.activeNoteId,
+        expandedNoteIds: Array.from(state.expandedNoteIds),
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.expandedNoteIds = new Set(state.expandedNoteIds as unknown as string[]);
+        }
+      },
+    }
+  )
+);

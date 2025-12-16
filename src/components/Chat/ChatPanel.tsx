@@ -49,7 +49,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
 
         // Import and call AI edit service
         const { streamAIEditChat } = await import('@/services/aiEditService');
-        const { capturedHighlights } = useTransitionStore.getState();
 
         // Start AI editing with context
         await streamAIEditChat({
@@ -143,15 +142,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ className = '' }) => {
 
         {/* Chat messages */}
         <div className="messages-list">
-          {messages.map((message, idx) => (
+          {messages
+            .filter((message) => message.role !== 'system')
+            .map((message, idx, filteredMessages) => (
             <div
               key={message.id}
               onMouseUp={() => handleTextSelection(message.id)}
             >
               <CleanChatMessage
-                role={message.role}
+                role={message.role as 'user' | 'assistant'}
                 content={message.content}
-                isLatest={idx === messages.length - 1}
+                isLatest={idx === filteredMessages.length - 1}
                 messageId={message.id}
               />
             </div>
