@@ -31,6 +31,8 @@ const stepIcons: Record<ThinkingStepType, React.ElementType> = {
   write: PenLine,
   create: Plus,
   explore: Search,
+  reasoning: Brain,
+  reasoning_summary: Brain,
 };
 
 // Status icon component

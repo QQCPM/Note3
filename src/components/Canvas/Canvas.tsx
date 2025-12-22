@@ -10,6 +10,7 @@ import { FilePreview } from '../FileViewer';
 import { Dashboard } from '../Dashboard';
 
 const Canvas: React.FC = () => {
+  // Single source of truth: activeNoteId determines what note is displayed
   const { activeNoteId } = useNotesStore();
   const { setBlocks, blocks } = useBlocksStore();
   const { canvasMode } = useUIStore();
@@ -18,28 +19,28 @@ const Canvas: React.FC = () => {
   const [activeNote, setActiveNote] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  // Get selected item info
+  // Get selected item info for file preview
   const selectedItem = selectedItemId ? getTreeItemById(selectedItemId) : null;
   const isFileSelected = selectedItem && ['pdf', 'video', 'audio', 'image'].includes(selectedItem.type);
   const activeFile = getActiveFile();
 
+  // Load note when activeNoteId changes
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/035c0fba-b1bf-4c61-a637-d95f11522c3b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Canvas.tsx:useEffect',message:'activeNoteId changed',data:{activeNoteId,selectedItemId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    
     if (activeNoteId) {
-      // 🔍 PERFORMANCE TRACKING START
       const startTime = performance.now();
-      console.log(`📝 [PERF] Starting to load note: ${activeNoteId}`);
+      console.log(`📝 Loading note: ${activeNoteId}`);
 
-      // 🚀 CRITICAL FIX: Clear old blocks immediately to prevent lag
-      // This prevents React from updating/unmounting all old blocks
       setBlocks([]);
       setActiveNote(null);
       setLoading(true);
 
-      // Check if this is a generated note (stored in zustand/localStorage)
+      // Check if this is a generated note (stored in localStorage)
       const generatedNoteContent = localStorage.getItem(`note-content-${activeNoteId}`);
       if (generatedNoteContent) {
-        console.log(`📝 [PERF] Loading generated note from localStorage`);
-        // This is a generated note - load from store
         const notesStore = useNotesStore.getState();
         const storeNote = notesStore.getNoteById(activeNoteId);
         
@@ -50,7 +51,6 @@ const Canvas: React.FC = () => {
             icon: storeNote.icon,
             content: generatedNoteContent,
           });
-          // Create a text block for the content
           setBlocks([{
             id: `block-${activeNoteId}`,
             note_id: activeNoteId,
@@ -61,77 +61,27 @@ const Canvas: React.FC = () => {
             updated_at: new Date().toISOString(),
           }]);
           setLoading(false);
-          console.log(`✅ [PERF] Generated note loaded in: ${(performance.now() - startTime).toFixed(2)}ms`);
+          console.log(`✅ Generated note loaded in: ${(performance.now() - startTime).toFixed(2)}ms`);
           return;
         }
       }
 
-      const fetchStart = performance.now();
+      // Fetch from database
       Promise.all([
         getNoteById(activeNoteId),
         getBlocksByNote(activeNoteId),
       ])
         .then(([note, noteBlocks]) => {
-          const fetchEnd = performance.now();
-          console.log(`⏱️ [PERF] Database fetch took: ${(fetchEnd - fetchStart).toFixed(2)}ms`);
-          console.log(`📊 [PERF] Fetched ${noteBlocks.length} blocks`);
-
-          const setNoteStart = performance.now();
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/035c0fba-b1bf-4c61-a637-d95f11522c3b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Canvas.tsx:fetchNote',message:'Note fetched from DB',data:{noteId:activeNoteId,fetchedNoteTitle:note?.title,fetchedNoteId:note?.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H'})}).catch(()=>{});
+          // #endregion
+          console.log(`📊 Fetched note and ${noteBlocks.length} blocks`);
           setActiveNote(note);
-          console.log(`📄 [PERF] setActiveNote took: ${(performance.now() - setNoteStart).toFixed(2)}ms`);
-
-          const setBlocksStart = performance.now();
-
-          // Progressive loading: Load blocks in batches to prevent UI freeze
-          if (noteBlocks.length > 10) {
-            console.log(`🔄 [PERF] Using progressive loading for ${noteBlocks.length} blocks`);
-
-            // First batch: Load first 10 blocks immediately for faster initial render
-            setBlocks(noteBlocks.slice(0, 10));
-            setLoading(false);
-
-            console.log(`✅ [PERF] First 10 blocks loaded in: ${(performance.now() - setBlocksStart).toFixed(2)}ms`);
-            console.log(`⏱️ [PERF] Total time to first render: ${(performance.now() - startTime).toFixed(2)}ms`);
-
-            // Remaining batches: Load in chunks of 10 with small delays
-            let currentIndex = 10;
-            const batchSize = 10;
-            let batchCount = 1;
-
-            const loadNextBatch = () => {
-              if (currentIndex < noteBlocks.length) {
-                const batchStart = performance.now();
-                const nextBatch = noteBlocks.slice(0, currentIndex + batchSize);
-                setBlocks(nextBatch);
-                currentIndex += batchSize;
-                batchCount++;
-
-                console.log(`🔄 [PERF] Batch ${batchCount} loaded (${currentIndex} total blocks) in: ${(performance.now() - batchStart).toFixed(2)}ms`);
-
-                // Use requestIdleCallback for non-blocking updates
-                if ('requestIdleCallback' in window) {
-                  requestIdleCallback(loadNextBatch);
-                } else {
-                  setTimeout(loadNextBatch, 16); // ~60fps fallback
-                }
-              } else {
-                console.log(`✅ [PERF] All blocks loaded. Total time: ${(performance.now() - startTime).toFixed(2)}ms`);
-              }
-            };
-
-            // Start loading remaining batches after a short delay
-            requestIdleCallback(loadNextBatch);
-          } else {
-            // Small notes: Load all at once
-            setBlocks(noteBlocks);
-            setLoading(false);
-            console.log(`✅ [PERF] All ${noteBlocks.length} blocks loaded in: ${(performance.now() - setBlocksStart).toFixed(2)}ms`);
-            console.log(`⏱️ [PERF] Total time: ${(performance.now() - startTime).toFixed(2)}ms`);
-          }
+          setBlocks(noteBlocks);
+          setLoading(false);
         })
         .catch((error) => {
-          console.error('❌ [PERF] Failed to load note:', error);
-          console.error(`⏱️ [PERF] Failed after: ${(performance.now() - startTime).toFixed(2)}ms`);
+          console.error('❌ Failed to load note:', error);
           setLoading(false);
         });
     } else {
@@ -140,7 +90,7 @@ const Canvas: React.FC = () => {
     }
   }, [activeNoteId, setBlocks]);
 
-  // Dashboard mode - AI Secretary view
+  // Dashboard mode
   if (canvasMode === 'dashboard') {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
@@ -149,7 +99,7 @@ const Canvas: React.FC = () => {
     );
   }
 
-  // 3D Knowledge Graph mode - immersive visualization
+  // 3D Knowledge Graph mode
   if (canvasMode === 'graph') {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0f] rounded-lg">
@@ -158,7 +108,7 @@ const Canvas: React.FC = () => {
     );
   }
 
-  // Canvas mode doesn't require an active note
+  // Canvas mode
   if (canvasMode === 'canvas') {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
@@ -167,7 +117,7 @@ const Canvas: React.FC = () => {
     );
   }
 
-  // File preview mode - when a file (PDF, video, audio, image) is selected
+  // File preview mode
   if (isFileSelected && activeFile) {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
@@ -181,11 +131,12 @@ const Canvas: React.FC = () => {
     );
   }
 
-  // Note mode requires an active note
+  // No active note - show starting page
   if (!activeNoteId) {
     return <StartingPage />;
   }
 
+  // Loading state
   if (loading) {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
@@ -199,6 +150,7 @@ const Canvas: React.FC = () => {
     );
   }
 
+  // Display note
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
       <CanvasHeader note={activeNote} />

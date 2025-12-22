@@ -1,4 +1,3 @@
-use crate::ai::AIManager;
 use crate::agentic::*;
 use crate::commands::ai::AIState;
 use tauri::State;

@@ -1,7 +1,17 @@
-import React, { useState, useRef, KeyboardEvent } from 'react';
+import React, { useState, useRef, KeyboardEvent, useCallback } from 'react';
 import { useNotesStore } from '@/store';
-import { ArrowUp } from 'lucide-react';
+import { useRootNodeStore } from '@/store/rootNodeStore';
+import { ArrowUp, BookMarked } from 'lucide-react';
+import type { RootNode } from '@/types/rootNode';
 import './ChatInput.css';
+
+interface MentionItem {
+  type: 'note' | 'root_node';
+  id: string;
+  title: string;
+  icon: string;
+  rootNode?: RootNode;
+}
 
 interface ChatInputProps {
   onSubmit: (input: string) => void;
@@ -11,12 +21,32 @@ interface ChatInputProps {
 const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled = false }) => {
   const [input, setInput] = useState('');
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
-  const [filteredNotes, setFilteredNotes] = useState<any[]>([]);
+  const [filteredItems, setFilteredItems] = useState<MentionItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { notes } = useNotesStore();
+  const { searchRootNodes } = useRootNodeStore();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleInputChange = (value: string) => {
+  const flattenNotes = useCallback((notesList: any[]): MentionItem[] => {
+    const flat: MentionItem[] = [];
+    const traverse = (items: any[]) => {
+      items.forEach((item) => {
+        flat.push({
+          type: 'note',
+          id: item.id,
+          title: item.title,
+          icon: item.icon || '📄',
+        });
+        if (item.children) {
+          traverse(item.children);
+        }
+      });
+    };
+    traverse(notesList);
+    return flat;
+  }, []);
+
+  const handleInputChange = async (value: string) => {
     setInput(value);
 
     // Detect @mention
@@ -28,42 +58,46 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled = false }) => 
       // User is typing after '@'
       const query = textBeforeCursor.substring(lastAtIndex + 1).toLowerCase();
 
-      // Flatten notes tree for search
+      // Search notes
       const flatNotes = flattenNotes(notes);
-      const filtered = flatNotes.filter((note) =>
-        note.title.toLowerCase().includes(query)
+      const filteredNotes = flatNotes.filter((item) =>
+        item.title.toLowerCase().includes(query)
       );
 
-      setFilteredNotes(filtered);
-      setShowMentionDropdown(filtered.length > 0);
+      // Search root nodes
+      let rootNodeItems: MentionItem[] = [];
+      try {
+        const rootNodes = await searchRootNodes(query);
+        rootNodeItems = rootNodes.map((node) => ({
+          type: 'root_node' as const,
+          id: node.id,
+          title: node.term,
+          icon: '📌',
+          rootNode: node,
+        }));
+      } catch (error) {
+        console.error('Failed to search root nodes:', error);
+      }
+
+      // Combine: root nodes first, then notes
+      const combined = [...rootNodeItems, ...filteredNotes].slice(0, 10);
+
+      setFilteredItems(combined);
+      setShowMentionDropdown(combined.length > 0);
       setSelectedIndex(0);
     } else {
       setShowMentionDropdown(false);
     }
   };
 
-  const flattenNotes = (notesList: any[]): any[] => {
-    const flat: any[] = [];
-    const traverse = (items: any[]) => {
-      items.forEach((item) => {
-        flat.push(item);
-        if (item.children) {
-          traverse(item.children);
-        }
-      });
-    };
-    traverse(notesList);
-    return flat;
-  };
-
-  const selectNote = (note: any) => {
+  const selectItem = (item: MentionItem) => {
     const cursorPos = inputRef.current?.selectionStart || 0;
     const textBeforeCursor = input.substring(0, cursorPos);
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
 
     const newValue =
       input.substring(0, lastAtIndex + 1) +
-      note.title +
+      item.title +
       ' ' +
       input.substring(cursorPos);
 
@@ -82,14 +116,14 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled = false }) => 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedIndex((prev) =>
-          prev < filteredNotes.length - 1 ? prev + 1 : prev
+          prev < filteredItems.length - 1 ? prev + 1 : prev
         );
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
-      } else if (e.key === 'Enter' && filteredNotes.length > 0) {
+      } else if (e.key === 'Enter' && filteredItems.length > 0) {
         e.preventDefault();
-        selectNote(filteredNotes[selectedIndex]);
+        selectItem(filteredItems[selectedIndex]);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         setShowMentionDropdown(false);
@@ -113,16 +147,23 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled = false }) => 
   return (
     <div className="chat-input-container">
       {/* Mention Dropdown */}
-      {showMentionDropdown && filteredNotes.length > 0 && (
+      {showMentionDropdown && filteredItems.length > 0 && (
         <div className="mention-dropdown">
-          {filteredNotes.map((note, idx) => (
+          {filteredItems.map((item, idx) => (
             <button
-              key={note.id}
-              onClick={() => selectNote(note)}
+              key={`${item.type}-${item.id}`}
+              onClick={() => selectItem(item)}
               className={`mention-item ${idx === selectedIndex ? 'selected' : ''}`}
             >
-              <span className="note-icon">{note.icon || '📄'}</span>
-              <span className="note-title">{note.title}</span>
+              {item.type === 'root_node' ? (
+                <BookMarked className="mention-icon definition-icon" size={14} />
+              ) : (
+                <span className="note-icon">{item.icon}</span>
+              )}
+              <span className="note-title">{item.title}</span>
+              {item.type === 'root_node' && (
+                <span className="mention-type-badge">Definition</span>
+              )}
             </button>
           ))}
         </div>
@@ -136,7 +177,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled = false }) => 
           onChange={(e) => handleInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="Ask anything, or @mention a note..."
+          placeholder="Ask anything, or @mention a note or definition..."
           className="input-field"
           rows={1}
         />
@@ -152,7 +193,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled = false }) => 
       {/* Helper text */}
       <div className="input-helper">
         <span className="helper-text">
-          Type <code>@</code> to mention a note • <code>Enter</code> to send • <code>Shift+Enter</code> for new line
+          Type <code>@</code> to mention a note or definition • <code>Enter</code> to send • <code>Shift+Enter</code> for new line
         </span>
       </div>
     </div>

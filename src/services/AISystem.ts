@@ -13,7 +13,7 @@
  * - webSearch (web search)
  */
 
-import { tauriAI, createMacM2UltraConfig, createDemoConfig, type AIConfig, type Message } from './tauriAI';
+import { tauriAI, createMacM2UltraConfig, createMacM2ProConfig, createMacM2ProHybridConfig, createCloudOnlyConfig, createDemoConfig, type AIConfig, type Message } from './tauriAI';
 import { streamAIEditChat, applyEdit, rejectEdit } from './aiEditService';
 import { aiToolsService } from './aiTools';
 import { sendChatMessage, chatWithNoteEdit, type ChatMessage } from './chatService';
@@ -51,10 +51,18 @@ export interface AISystemHealth {
   lastCheck: Date;
 }
 
+export type AISystemMode = 
+  | 'm2-ultra'      // Mac M2 Ultra 64GB+ - full local models
+  | 'm2-pro'        // Mac M2 Pro 16GB - minimal local (embedding only) + cloud
+  | 'm2-pro-hybrid' // Mac M2 Pro 16GB - local embedding + reranker + cloud
+  | 'cloud-only'    // No local models - everything via OpenAI API
+  | 'demo';         // GLM-4.6 via Ollama Cloud
+
 export interface AISystemConfig {
   openaiApiKey: string;
   ollamaApiKey?: string;  // For GLM-4.6 cloud code generation
-  useGlm46?: boolean;     // Force GLM-4.6 instead of local models
+  useGlm46?: boolean;     // Force GLM-4.6 instead of local models (legacy, use mode: 'demo')
+  mode?: AISystemMode;    // Machine-specific configuration mode
   autoInitialize?: boolean;
 }
 
@@ -124,15 +132,31 @@ class AISystemService {
       }
 
       // Step 2: Create config based on mode
-      if (config.ollamaApiKey || config.useGlm46) {
-        // Use GLM-4.6 via Ollama Cloud for code generation
-        const ollamaKey = config.ollamaApiKey || '';
-        console.log('🌩️ [AISystem] Using GLM-4.6 (Ollama Cloud) for code generation');
-        this._config = createDemoConfig(openaiKey, ollamaKey);
-      } else {
-        // Use local Mac M2 Ultra optimized config
-        console.log('💻 [AISystem] Using local models (Mac M2 Ultra config)');
-        this._config = createMacM2UltraConfig(openaiKey);
+      const ollamaKey = config.ollamaApiKey || '';
+      const mode = config.mode || (ollamaKey || config.useGlm46 ? 'demo' : 'm2-ultra');
+      
+      switch (mode) {
+        case 'm2-pro':
+          console.log('💻 [AISystem] Using M2 Pro 16GB config (minimal local + cloud)');
+          this._config = createMacM2ProConfig(openaiKey, ollamaKey);
+          break;
+        case 'm2-pro-hybrid':
+          console.log('💻 [AISystem] Using M2 Pro 16GB hybrid config (local embed+rerank + cloud)');
+          this._config = createMacM2ProHybridConfig(openaiKey, ollamaKey);
+          break;
+        case 'cloud-only':
+          console.log('☁️ [AISystem] Using cloud-only config (no local models)');
+          this._config = createCloudOnlyConfig(openaiKey, ollamaKey);
+          break;
+        case 'demo':
+          console.log('🌩️ [AISystem] Using GLM-4.6 (Ollama Cloud) for code generation');
+          this._config = createDemoConfig(openaiKey, ollamaKey);
+          break;
+        case 'm2-ultra':
+        default:
+          console.log('💻 [AISystem] Using M2 Ultra config (full local models - requires 64GB+ RAM)');
+          this._config = createMacM2UltraConfig(openaiKey, ollamaKey);
+          break;
       }
 
       // Step 3: Initialize Tauri AI backend

@@ -57,31 +57,67 @@ function completeThoughtStep(
 }
 
 /**
- * Get human-readable description for a tool call
+ * Complete all running thinking steps (called when conversation ends)
+ */
+function completeAllRunningSteps(aiStore: ReturnType<typeof useAIStore.getState>) {
+  const runningSteps = aiStore.currentThinkingSteps.filter(s => s.status === 'running');
+  for (const step of runningSteps) {
+    aiStore.updateThinkingStep(step.id, {
+      status: 'complete',
+    });
+  }
+}
+
+/**
+ * Get human-readable description for a tool call (IDE-style)
  */
 function getToolDescription(toolName: string, args: any): string {
   switch (toolName) {
     case 'search_web':
-      return `Searching the web for "${args.query}"`;
+      const query = args.query?.substring(0, 40) || 'query';
+      return `Searching: "${query}${args.query?.length > 40 ? '...' : ''}"`;
     case 'read_block':
-      return 'Reading block content';
+      const blockId = args.block_id?.substring(0, 8) || 'block';
+      return `Reading block ${blockId}...`;
     case 'read_note':
-      return 'Reading full note context';
+      const noteId = args.note_id?.substring(0, 8) || 'note';
+      return `Reading note ${noteId}...`;
     case 'edit_block':
-      return 'Preparing content changes';
+      const contentLen = args.new_content?.length || 0;
+      const lineCount = args.new_content?.split('\n').length || 0;
+      return `Editing block (${lineCount} lines, ${contentLen} chars)`;
     case 'create_database':
-      return `Creating database: "${args.prompt?.substring(0, 50)}..."`;
+      const dbTitle = args.prompt?.substring(0, 30) || 'database';
+      return `Creating table: ${dbTitle}${args.prompt?.length > 30 ? '...' : ''}`;
     case 'create_artifact':
-      return `Creating artifact: "${args.prompt?.substring(0, 50)}..."`;
+      const artTitle = args.prompt?.substring(0, 30) || 'artifact';
+      return `Creating artifact: ${artTitle}${args.prompt?.length > 30 ? '...' : ''}`;
     case 'db_add_row':
-      return 'Adding row to database';
+      const rowKeys = Object.keys(args.row_data || {}).length;
+      return `Adding row (${rowKeys} columns)`;
     case 'db_update_rows':
-      return 'Updating database rows';
+      return `Updating rows in database`;
     case 'db_delete_rows':
-      return 'Deleting database rows';
+      return `Deleting rows from database`;
+    case 'db_query_rows':
+      return `Querying database rows`;
+    case 'db_get_schema':
+      return `Reading database schema`;
+    case 'artifact_modify_html':
+      return `Modifying HTML structure`;
+    case 'artifact_modify_css':
+      return `Updating CSS styles`;
+    case 'artifact_modify_js':
+      return `Updating JavaScript code`;
     default:
-      if (toolName.startsWith('db_')) return `Database operation: ${toolName}`;
-      if (toolName.startsWith('artifact_')) return `Artifact operation: ${toolName}`;
+      if (toolName.startsWith('db_')) {
+        const opName = toolName.replace('db_', '').replace(/_/g, ' ');
+        return `Database: ${opName}`;
+      }
+      if (toolName.startsWith('artifact_')) {
+        const opName = toolName.replace('artifact_', '').replace(/_/g, ' ');
+        return `Artifact: ${opName}`;
+      }
       return `Executing: ${toolName}`;
   }
 }
@@ -301,6 +337,8 @@ export async function streamAIEditChat(options: StreamChatOptions): Promise<void
       content: `❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
     });
   } finally {
+    // Ensure all running steps are marked complete before finishing
+    completeAllRunningSteps(aiStore);
     aiStore.setLoading(false);
     aiStore.setCurrentRequest(null);
   }
@@ -403,10 +441,10 @@ AI: "I've filled your table with three rows: Jupiter – Gas giant, Mean Radius 
 
 
 ===========================================
-GPT-5.1 REASONING INSTRUCTIONS:
+GPT-5.2 REASONING INSTRUCTIONS:
 ===========================================
 
-You are using GPT-5.1 with ADVANCED REASONING capabilities. Use step-by-step thinking:
+You are using GPT-5.2 with ADVANCED REASONING capabilities. Use step-by-step thinking:
 
 **FOR TABLE CREATION & FILLING:**
 1. ANALYZE: Identify ALL columns needed (not just 2-3, think of ALL relevant data points)
@@ -1149,8 +1187,13 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
     if (currentTurn >= maxTurns) {
       console.warn('⚠️ Max turns reached, ending conversation');
     }
+
+    // Complete any remaining running steps before finishing
+    completeAllRunningSteps(aiStore);
   } catch (error) {
     console.error('❌ TauriAI error:', error);
+    // Complete any running steps even on error
+    completeAllRunningSteps(aiStore);
     throw error;
   }
 }

@@ -292,7 +292,7 @@ pub struct ChatWithToolsResponse {
     pub tool_calls: Vec<ToolCall>,
 }
 
-/// Rerank search results using local Qwen3-Reranker-8B
+/// Rerank search results using local Qwen3-Reranker-4B
 #[tauri::command]
 pub async fn ai_rerank(
     query: String,
@@ -306,7 +306,7 @@ pub async fn ai_rerank(
         .ok_or("AI not initialized")?;
 
     let reranker = manager.reranker_service.as_ref()
-        .ok_or("Reranker not configured. Enable Qwen3-Reranker-8B in settings.")?;
+        .ok_or("Reranker not configured. Enable Qwen3-Reranker-4B in settings.")?;
 
     // Generate embeddings for query + each document
     let mut scores = Vec::new();

@@ -7,6 +7,8 @@ export * from './skill';
 export * from './canvas';
 export * from './project';
 export * from './dashboard';
+export * from './rootNode';
+export * from './memory';
 
 // UI State types
 export interface UIState {

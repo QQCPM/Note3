@@ -247,6 +247,9 @@ export async function generateProjectFromPDF(
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         is_deleted: false,
+        project_id: project.id,
+        type: 'note',
+        is_pinned: false,
       });
 
       // Store content (we'll need to handle this with the content system)

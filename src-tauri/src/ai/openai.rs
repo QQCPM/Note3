@@ -192,7 +192,7 @@ pub struct FunctionCall {
 }
 
 // ============================================================================
-// CHAT COMPLETIONS API (Legacy, for GPT-4o and older)
+// CHAT COMPLETIONS API (for GPT-5.2 and all models)
 // ============================================================================
 
 #[derive(Debug, Serialize)]
@@ -304,20 +304,56 @@ struct ResponsesUsage {
     reasoning_tokens: Option<u32>,
 }
 
+/// Stream chunk from OpenAI Responses API
+/// Handles multiple event types including reasoning tokens
 #[derive(Debug, Deserialize)]
 struct ResponsesStreamChunk {
     #[serde(rename = "type")]
     event_type: String,
     #[serde(default)]
-    delta: Option<ResponsesStreamDelta>,
+    delta: Option<String>,
+    #[serde(default)]
+    item_id: Option<String>,
+    #[serde(default)]
+    output_index: Option<u32>,
+    #[serde(default)]
+    content_index: Option<u32>,
+    #[serde(default)]
+    summary_index: Option<u32>,
+    #[serde(default)]
+    sequence_number: Option<u32>,
 }
 
-#[derive(Debug, Deserialize)]
-struct ResponsesStreamDelta {
-    #[serde(rename = "type")]
-    delta_type: Option<String>,
-    #[serde(default)]
-    text: Option<String>,
+/// Enum to represent different types of streamed content
+#[derive(Debug, Clone)]
+pub enum StreamedContent {
+    /// Regular output text delta
+    OutputText(String),
+    /// Reasoning/thinking text delta (chain of thought)
+    ReasoningText(String),
+    /// Reasoning summary text delta
+    ReasoningSummary(String),
+    /// Stream completed
+    Done,
+    /// Empty/no content
+    Empty,
+}
+
+impl StreamedContent {
+    /// Check if this is reasoning content
+    pub fn is_reasoning(&self) -> bool {
+        matches!(self, StreamedContent::ReasoningText(_) | StreamedContent::ReasoningSummary(_))
+    }
+    
+    /// Get the text content if any
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            StreamedContent::OutputText(t) => Some(t),
+            StreamedContent::ReasoningText(t) => Some(t),
+            StreamedContent::ReasoningSummary(t) => Some(t),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -677,13 +713,36 @@ Return ONLY the JSON, no explanations."#;
         self.responses(input, instructions, Some(tools)).await
     }
 
-    /// Stream response using the Responses API
+    /// Stream response using the Responses API (returns only output text)
+    /// For reasoning tokens, use responses_stream_with_reasoning instead
     pub async fn responses_stream(
         &self,
         input: Vec<ResponsesInput>,
         instructions: Option<String>,
         tools: Option<Vec<BuiltInTool>>,
     ) -> Result<impl futures_core::Stream<Item = Result<String, String>>, String> {
+        let stream = self.responses_stream_with_reasoning(input, instructions, tools).await?;
+        
+        // Filter to only output text for backward compatibility
+        Ok(stream.filter_map(|result| async move {
+            match result {
+                Ok(content) => match content {
+                    StreamedContent::OutputText(text) => Some(Ok(text)),
+                    _ => None,
+                },
+                Err(e) => Some(Err(e)),
+            }
+        }))
+    }
+
+    /// Stream response using the Responses API with full reasoning token support
+    /// Returns StreamedContent which differentiates between output text and reasoning
+    pub async fn responses_stream_with_reasoning(
+        &self,
+        input: Vec<ResponsesInput>,
+        instructions: Option<String>,
+        tools: Option<Vec<BuiltInTool>>,
+    ) -> Result<impl futures_core::Stream<Item = Result<StreamedContent, String>>, String> {
         let url = "https://api.openai.com/v1/responses";
 
         let reasoning = if self.supports_responses_api() {
@@ -725,24 +784,51 @@ Return ONLY the JSON, no explanations."#;
                 Ok(bytes) => {
                     let text = String::from_utf8_lossy(&bytes);
                     // Parse SSE format for Responses API
+                    // Handle multiple events in a single chunk
                     for line in text.lines() {
                         if line.starts_with("data: ") {
                             let json_str = &line[6..];
                             if json_str == "[DONE]" {
-                                continue;
+                                return Ok(StreamedContent::Done);
                             }
                             if let Ok(chunk) = serde_json::from_str::<ResponsesStreamChunk>(json_str) {
-                                if chunk.event_type == "response.output_text.delta" {
-                                    if let Some(delta) = chunk.delta {
-                                        if let Some(text) = delta.text {
-                                            return Ok(text);
+                                // Handle different event types from OpenAI Responses API
+                                match chunk.event_type.as_str() {
+                                    // Regular output text delta
+                                    "response.output_text.delta" => {
+                                        if let Some(delta) = chunk.delta {
+                                            if !delta.is_empty() {
+                                                return Ok(StreamedContent::OutputText(delta));
+                                            }
                                         }
                                     }
+                                    // Reasoning/thinking text delta (chain of thought)
+                                    "response.reasoning_text.delta" => {
+                                        if let Some(delta) = chunk.delta {
+                                            if !delta.is_empty() {
+                                                return Ok(StreamedContent::ReasoningText(delta));
+                                            }
+                                        }
+                                    }
+                                    // Reasoning summary text delta
+                                    "response.reasoning_summary_text.delta" => {
+                                        if let Some(delta) = chunk.delta {
+                                            if !delta.is_empty() {
+                                                return Ok(StreamedContent::ReasoningSummary(delta));
+                                            }
+                                        }
+                                    }
+                                    // Response completed
+                                    "response.completed" | "response.done" => {
+                                        return Ok(StreamedContent::Done);
+                                    }
+                                    // Other events we don't need to handle
+                                    _ => {}
                                 }
                             }
                         }
                     }
-                    Ok(String::new())
+                    Ok(StreamedContent::Empty)
                 }
                 Err(e) => Err(format!("Stream error: {}", e)),
             }

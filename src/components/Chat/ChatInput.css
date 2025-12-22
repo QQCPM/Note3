@@ -206,6 +206,25 @@
   font-weight: 500;
 }
 
+.mention-icon {
+  flex-shrink: 0;
+}
+
+.definition-icon {
+  color: #3b82f6;
+}
+
+.mention-type-badge {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border-radius: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 /* Scrollbar for dropdown */
 .mention-dropdown::-webkit-scrollbar {
   width: 6px;

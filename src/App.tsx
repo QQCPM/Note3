@@ -2,9 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState, useRef } from 'react';
 import { useNotesStore, useFileStore } from '@/store';
 import { useLayoutStore } from '@/store/layoutStore';
-import { useProjectStore } from '@/store/projectStore';
 import { getAllNotes } from '@/utils/tauri';
-import UnifiedSidebar from '@/components/Sidebar/UnifiedSidebar';
+import NoteSidebar from '@/components/Sidebar/NoteSidebar';
 import Canvas from '@/components/Canvas/Canvas';
 import AISidebar from '@/components/AISidebar/AISidebar';
 import NotePreviewPanel from '@/components/NotePreview/NotePreviewPanel';
@@ -29,7 +28,6 @@ function App() {
   const { setNotes, addNote } = useNotesStore();
   const { initializeFromStorage } = useFileStore();
   const { notePanelVisible } = useLayoutStore();
-  const { addTreeItem } = useProjectStore();
   const [aiInitialized, setAiInitialized] = useState(false);
   const [aiHealthy, setAiHealthy] = useState(false);
   const hasLoadedNotes = useRef(false);
@@ -52,13 +50,11 @@ function App() {
     if (hasLoadedNotes.current) return;
     hasLoadedNotes.current = true;
 
-    // Load notes on mount - merge with existing persisted notes and sync to project tree
+    // Load notes on mount - merge with existing persisted notes
     const loadNotes = async () => {
       try {
         const dbNotes = await getAllNotes();
         const currentNotes = useNotesStore.getState().notes;
-        const currentTreeItems = useProjectStore.getState().treeItems;
-        const currentProjects = useProjectStore.getState().projects;
 
         // Get IDs of notes already in store (from localStorage persistence)
         const existingIds = new Set<string>();
@@ -80,21 +76,14 @@ function App() {
           console.log(`📝 Merged ${newDbNotes.length} DB notes with ${existingIds.size} persisted notes`);
         }
 
-        // Sync notes to project tree - add any notes not already in tree
-        const allNotes = existingIds.size === 0 ? dbNotes : [...dbNotes];
-        const existingNoteIds = new Set(currentTreeItems.filter(item => item.noteId).map(item => item.noteId));
-        const targetProjectId = currentProjects[0]?.id || 'default-notes';
-
-        allNotes.forEach(note => {
-          if (!existingNoteIds.has(note.id)) {
-            addTreeItem({
-              projectId: targetProjectId,
-              name: note.title || 'Untitled',
-              type: 'note',
-              noteId: note.id,
-            });
-          }
-        });
+        // Notes section and Projects section are now separate:
+        // - Notes section: All your notes (from database/localStorage)
+        // - Projects section: Project-specific items (can include notes created within projects)
+        // 
+        // When you create a note in Projects via "Add sub note", it:
+        // 1. Creates a real note in the database
+        // 2. Links the tree item to that note
+        // 3. The note also appears in Notes section (they're linked)
       } catch (error) {
         console.error('Failed to load notes:', error);
       }
@@ -149,7 +138,7 @@ function App() {
 
     loadNotes();
     initializeAI();
-  }, [setNotes, addNote, addTreeItem]);
+  }, [setNotes, addNote]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -176,8 +165,8 @@ function App() {
         {/* Header Dock - Persistent Top Left */}
         <HeaderDock />
 
-        {/* Left Sidebar - Unified Project Tree */}
-        <UnifiedSidebar />
+        {/* Left Sidebar - Notes & Projects */}
+        <NoteSidebar />
 
         {/* Main Canvas Area */}
         <Canvas />

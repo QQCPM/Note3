@@ -1,0 +1,527 @@
+/* ============================================================================
+   IDE Thinking Panel - Professional IDE-style AI operations display
+   Inspired by VS Code, Cursor, and Windsurf IDE interfaces
+   ============================================================================ */
+
+.ide-thinking-panel {
+  background: linear-gradient(180deg, rgba(22, 27, 34, 0.95) 0%, rgba(13, 17, 23, 0.98) 100%);
+  border: 1px solid rgba(48, 54, 61, 0.6);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.ide-thinking-panel.live {
+  border-color: rgba(88, 166, 255, 0.4);
+  box-shadow: 0 0 20px rgba(88, 166, 255, 0.1);
+}
+
+/* ============================================================================
+   Panel Header
+   ============================================================================ */
+
+.ide-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background: rgba(13, 17, 23, 0.8);
+  border: none;
+  border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ide-panel-header:hover {
+  background: rgba(22, 27, 34, 0.9);
+}
+
+.ide-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ide-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.ide-collapse-icon {
+  width: 14px;
+  height: 14px;
+  color: #6e7681;
+  transition: transform 0.2s ease;
+}
+
+.ide-collapse-icon.collapsed {
+  transform: rotate(-90deg);
+}
+
+.ide-brain-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b949e;
+}
+
+.ide-brain-icon.active {
+  color: #58a6ff;
+}
+
+.ide-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(88, 166, 255, 0.4);
+  animation: pulse 1.5s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.ide-panel-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #c9d1d9;
+}
+
+.ide-progress {
+  font-size: 0.75rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #6e7681;
+  background: rgba(48, 54, 61, 0.5);
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+}
+
+/* Type badges */
+.ide-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: rgba(48, 54, 61, 0.4);
+}
+
+.ide-type-badge.search {
+  color: #a371f7;
+  background: rgba(163, 113, 247, 0.1);
+}
+
+.ide-type-badge.read {
+  color: #58a6ff;
+  background: rgba(88, 166, 255, 0.1);
+}
+
+.ide-type-badge.write {
+  color: #3fb950;
+  background: rgba(63, 185, 80, 0.1);
+}
+
+.ide-type-badge.create {
+  color: #56d364;
+  background: rgba(86, 211, 100, 0.1);
+}
+
+.ide-total-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #6e7681;
+}
+
+.ide-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #58a6ff;
+  padding: 0.125rem 0.5rem;
+  background: rgba(88, 166, 255, 0.1);
+  border-radius: 4px;
+}
+
+.ide-live-dot {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #58a6ff;
+}
+
+.ide-live-dot::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: rgba(88, 166, 255, 0.5);
+  animation: livePulse 1.5s ease-out infinite;
+}
+
+@keyframes livePulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
+   Operations List
+   ============================================================================ */
+
+.ide-operations-list {
+  padding: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ide-operations-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ide-operations-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ide-operations-list::-webkit-scrollbar-thumb {
+  background: rgba(110, 118, 129, 0.4);
+  border-radius: 3px;
+}
+
+.ide-operations-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(110, 118, 129, 0.6);
+}
+
+/* ============================================================================
+   Operation Row
+   ============================================================================ */
+
+.ide-operation {
+  border-radius: 6px;
+  margin-bottom: 2px;
+  transition: background 0.15s ease;
+}
+
+.ide-operation:hover {
+  background: rgba(48, 54, 61, 0.3);
+}
+
+.ide-operation.running {
+  background: rgba(88, 166, 255, 0.05);
+}
+
+.ide-operation-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ide-step-number {
+  font-size: 0.6875rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #484f58;
+  min-width: 1.25rem;
+}
+
+.ide-operation-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ide-operation-desc {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: #c9d1d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ide-file-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #8b949e;
+  background: rgba(48, 54, 61, 0.5);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ide-line-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.ide-lines-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  color: #58a6ff;
+}
+
+.ide-lines-added {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  color: #3fb950;
+}
+
+.ide-lines-removed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  color: #f85149;
+}
+
+.ide-duration {
+  font-size: 0.6875rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #6e7681;
+}
+
+/* Status indicators */
+.ide-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ide-status.running {
+  color: #58a6ff;
+}
+
+.ide-status.complete {
+  color: #3fb950;
+}
+
+.ide-status.error {
+  color: #f85149;
+}
+
+.ide-chevron {
+  width: 12px;
+  height: 12px;
+  color: #6e7681;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ide-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+/* ============================================================================
+   Operation Details (expanded)
+   ============================================================================ */
+
+.ide-operation-details {
+  padding: 0.5rem 0.75rem 0.75rem 2.5rem;
+  animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ide-details-content {
+  font-size: 0.75rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #8b949e;
+  background: rgba(13, 17, 23, 0.6);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  border-left: 2px solid rgba(48, 54, 61, 0.8);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+/* ============================================================================
+   Current Action (typing indicator)
+   ============================================================================ */
+
+.ide-current-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  margin-top: 0.25rem;
+  background: rgba(88, 166, 255, 0.05);
+  border-radius: 6px;
+  border: 1px dashed rgba(88, 166, 255, 0.2);
+}
+
+.ide-typing-text {
+  font-size: 0.8125rem;
+  color: #8b949e;
+}
+
+.ide-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: #58a6ff;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+/* ============================================================================
+   Reasoning Display - Special styling for AI reasoning/thinking tokens
+   ============================================================================ */
+
+.ide-operation.reasoning,
+.ide-operation.reasoning_summary {
+  background: linear-gradient(90deg, rgba(236, 72, 153, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
+  border-left: 2px solid rgba(236, 72, 153, 0.4);
+  margin-left: 0.25rem;
+}
+
+.ide-operation.reasoning .ide-operation-desc,
+.ide-operation.reasoning_summary .ide-operation-desc {
+  font-style: italic;
+  color: #d1d5db;
+}
+
+.ide-reasoning-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(236, 72, 153, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+  color: #f472b6;
+}
+
+.ide-reasoning-content {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  background: rgba(13, 17, 23, 0.6);
+  padding: 0.75rem;
+  border-radius: 6px;
+  border-left: 3px solid rgba(236, 72, 153, 0.4);
+  margin: 0.5rem 0 0.5rem 1.5rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.ide-reasoning-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ide-reasoning-content::-webkit-scrollbar-thumb {
+  background: rgba(236, 72, 153, 0.3);
+  border-radius: 2px;
+}
+
+/* Reasoning type badges */
+.ide-type-badge.reasoning {
+  color: #f472b6;
+  background: rgba(236, 72, 153, 0.15);
+}
+
+.ide-type-badge.reasoning_summary {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.15);
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  .ide-panel-header {
+    padding: 0.5rem 0.625rem;
+  }
+
+  .ide-panel-title {
+    font-size: 0.75rem;
+  }
+
+  .ide-type-badge {
+    display: none;
+  }
+
+  .ide-operation-header {
+    padding: 0.375rem 0.5rem;
+  }
+
+  .ide-operation-desc {
+    font-size: 0.75rem;
+  }
+
+  .ide-file-badge {
+    display: none;
+  }
+
+  .ide-reasoning-content {
+    margin-left: 0.5rem;
+    padding: 0.5rem;
+  }
+}

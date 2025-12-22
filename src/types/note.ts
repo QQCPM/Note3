@@ -1,5 +1,7 @@
 // Note types matching database schema
 
+export type NoteType = 'note' | 'folder';
+
 export interface Note {
   id: string;
   parent_id: string | null;
@@ -9,6 +11,10 @@ export interface Note {
   created_at: string;
   updated_at: string;
   is_deleted: boolean;
+  // New fields for unified sidebar
+  project_id: string | null;  // null = standalone, otherwise belongs to project
+  type: NoteType;             // 'note' or 'folder' (folders can have children)
+  is_pinned: boolean;         // appears in pinned section
 }
 
 export interface NoteContent {
@@ -29,6 +35,9 @@ export interface CreateNoteInput {
   title: string;
   icon?: string;
   position?: number;
+  project_id?: string | null;
+  type?: NoteType;
+  is_pinned?: boolean;
 }
 
 export interface UpdateNoteInput {
@@ -37,4 +46,7 @@ export interface UpdateNoteInput {
   icon?: string;
   position?: number;
   parent_id?: string | null;
+  project_id?: string | null;
+  type?: NoteType;
+  is_pinned?: boolean;
 }

@@ -8,7 +8,7 @@ import { sendChatMessage, chatWithNoteEdit, chatWithGeneratedNote } from '@/serv
 import { extractPDFText, PDFExtractResult } from '@/services/pdfExtractor';
 import { generateProjectFromPDF, analyzePDFForPreview } from '@/services/projectGenerator';
 import CleanChatMessage from '../Chat/CleanChatMessage';
-import ThinkingBlock from '../Chat/ThinkingBlock';
+import ActionLog from '../Chat/ActionLog';
 import RecommendationCard from './RecommendationCard';
 import NoteMentionInput from './NoteMentionInput';
 import './StartingPage.css';
@@ -374,11 +374,7 @@ Please use the note content as context to fulfill the user's request.`;
 
                             {/* Live thinking display while AI is processing */}
                             {isLoading && currentThinkingSteps.length > 0 && (
-                                <ThinkingBlock
-                                    steps={currentThinkingSteps}
-                                    isExpanded={true}
-                                    isLive={true}
-                                />
+                                <ActionLog logs={currentThinkingSteps} />
                             )}
 
                             {/* AI typing indicator */}
@@ -443,10 +439,10 @@ Please use the note content as context to fulfill the user's request.`;
                                                 >
                                                     <img
                                                         src={selectedModel === 'gpt' ? "/src/assets/gpt-logo.svg" : "/src/assets/gemini-logo.png"}
-                                                        alt={selectedModel === 'gpt' ? "GPT-5.1" : "Gemini 2.5 Pro"}
+                                                        alt={selectedModel === 'gpt' ? "GPT-5.2" : "Gemini 2.5 Pro"}
                                                         className="w-3.5 h-3.5 object-contain"
                                                     />
-                                                    {selectedModel === 'gpt' ? 'GPT-5.1' : 'Gemini 2.5 Pro'}
+                                                    {selectedModel === 'gpt' ? 'GPT-5.2' : 'Gemini 2.5 Pro'}
                                                     <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isModelDropdownOpen ? 'rotate-180' : ''}`} />
                                                 </button>
 
@@ -459,8 +455,8 @@ Please use the note content as context to fulfill the user's request.`;
                                                             }}
                                                             className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors ${selectedModel === 'gpt' ? 'bg-[#1f6feb]/10 text-[#58a6ff]' : 'text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d]'}`}
                                                         >
-                                                            <img src="/src/assets/gpt-logo.svg" alt="GPT-5.1" className="w-3.5 h-3.5 object-contain" />
-                                                            GPT-5.1
+                                                            <img src="/src/assets/gpt-logo.svg" alt="GPT-5.2" className="w-3.5 h-3.5 object-contain" />
+                                                            GPT-5.2
                                                         </button>
                                                         <button
                                                             onClick={() => {
@@ -587,14 +583,14 @@ Please use the note content as context to fulfill the user's request.`;
                                             <div className="h-5 w-[1px] bg-[#30363d] mx-1"></div>
                                             <div className="relative">
                                                 <button onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)} className="flex items-center gap-2 px-3 py-1.5 text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d] rounded-full transition-colors text-xs font-medium">
-                                                    <img src={selectedModel === 'gpt' ? "/src/assets/gpt-logo.svg" : "/src/assets/gemini-logo.png"} alt={selectedModel === 'gpt' ? "GPT-5.1" : "Gemini 2.5 Pro"} className="w-3.5 h-3.5 object-contain" />
-                                                    {selectedModel === 'gpt' ? 'GPT-5.1' : 'Gemini 2.5 Pro'}
+                                                    <img src={selectedModel === 'gpt' ? "/src/assets/gpt-logo.svg" : "/src/assets/gemini-logo.png"} alt={selectedModel === 'gpt' ? "GPT-5.2" : "Gemini 2.5 Pro"} className="w-3.5 h-3.5 object-contain" />
+                                                    {selectedModel === 'gpt' ? 'GPT-5.2' : 'Gemini 2.5 Pro'}
                                                     <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isModelDropdownOpen ? 'rotate-180' : ''}`} />
                                                 </button>
                                                 {isModelDropdownOpen && (
                                                     <div className="absolute top-full left-0 mt-2 w-40 bg-[#161b22] border border-[#30363d] rounded-lg shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
                                                         <button onClick={() => { setSelectedModel('gpt'); setIsModelDropdownOpen(false); }} className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors ${selectedModel === 'gpt' ? 'bg-[#1f6feb]/10 text-[#58a6ff]' : 'text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d]'}`}>
-                                                            <img src="/src/assets/gpt-logo.svg" alt="GPT-5.1" className="w-3.5 h-3.5 object-contain" />GPT-5.1
+                                                            <img src="/src/assets/gpt-logo.svg" alt="GPT-5.2" className="w-3.5 h-3.5 object-contain" />GPT-5.2
                                                         </button>
                                                         <button onClick={() => { setSelectedModel('gemini'); setIsModelDropdownOpen(false); }} className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors ${selectedModel === 'gemini' ? 'bg-[#1f6feb]/10 text-[#58a6ff]' : 'text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d]'}`}>
                                                             <img src="/src/assets/gemini-logo.png" alt="Gemini 2.5 Pro" className="w-3.5 h-3.5 object-contain opacity-80" />Gemini 2.5 Pro

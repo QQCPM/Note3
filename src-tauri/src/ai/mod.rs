@@ -8,9 +8,7 @@ pub mod tools;
 pub use embedding::{EmbeddingConfig, LocalEmbeddingService};
 pub use openai::{
     OpenAIConfig, OpenAIService, Message, Tool, ToolCall, FunctionDefinition,
-    // GPT-5.x Responses API types
-    ReasoningEffort, BuiltInTool, CodeInterpreterContainer,
-    ResponsesInput, ResponsesResult, ResponsesUsageInfo, ResponsesToolCall, WebSearchResult,
+    ReasoningEffort, BuiltInTool, ResponsesInput, ResponsesResult, ResponsesToolCall,
 };
 pub use local::{LocalModelConfig, LocalModelService};
 pub use ollama_cloud::OllamaCloudService;
@@ -20,7 +18,7 @@ pub use tools::{ToolDefinition, ToolResult, get_all_tools, get_database_tools, g
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
-// SHARED TYPES (used by both local and OpenAI services)
+// SHARED TYPES
 // ============================================================================
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,113 +47,95 @@ pub struct DatabaseColumn {
 }
 
 fn generate_column_id() -> String {
-    use uuid::Uuid;
-    Uuid::new_v4().to_string()
+    uuid::Uuid::new_v4().to_string()
 }
 
-/// Ollama Cloud configuration
+// ============================================================================
+// AI CONFIGURATION
+// - Agent: GPT-5.2 (OpenAI)
+// - Code Gen: MiniMax-M2 (Ollama cloud) - #1 open-source for coding
+// - Embeddings: text-embedding-3-large (OpenAI)
+// - Reranker: Qwen3-Reranker-4B (Ollama local)
+// ============================================================================
+
+/// Ollama configuration for local/cloud models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaConfig {
+    pub endpoint: String,
+    pub model: String,
+}
+
+/// Legacy Ollama Cloud configuration (kept for backward compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OllamaCloudConfig {
     pub api_key: String,
-    pub model: String,  // e.g., "glm-4.6", "qwen3-coder:480b"
+    pub model: String,
 }
 
-/// Complete AI configuration for the hybrid system
+/// AI configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIConfig {
-    /// Local embedding model (privacy, speed, cost)
     pub embeddings: EmbeddingConfig,
-
-    /// Optional: local reranking model
     pub reranker: Option<EmbeddingConfig>,
-
-    /// Optional: local code generation model (Qwen3-30B-Coder)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub local_code_generation: Option<LocalModelConfig>,
-
-    /// Optional: Ollama Cloud for code generation (GLM-4.6, etc)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ollama_code_generation: Option<OllamaConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ollama_cloud: Option<OllamaCloudConfig>,
-
-    /// OpenAI config for agent tasks (reasoning, tool use)
     pub agent: OpenAIConfig,
-
-    /// Optional: separate OpenAI config for code generation (fallback)
     pub api_code_generation: Option<OpenAIConfig>,
 }
 
 impl AIConfig {
-    pub fn default() -> Self {
-        Self {
-            embeddings: EmbeddingConfig {
-                endpoint: "http://localhost:8081".to_string(),
-                model: "qwen3-embedding-0.6b".to_string(),
-                dimension: 1024,
-            },
-            reranker: None,
-            local_code_generation: None,
-            ollama_cloud: None,
-            agent: OpenAIConfig {
-                api_key: String::new(), // User must provide
-                model: "gpt-5.2".to_string(), // GPT-5.2 with Responses API
-                temperature: 0.7,
-                max_tokens: Some(8192),
-                reasoning_effort: ReasoningEffort::Medium,
-                use_responses_api: true,
-            },
-            api_code_generation: None, // Will use agent config if not specified
-        }
+    /// Create unified AI config
+    /// - Agent: GPT-5.2 (OpenAI)
+    /// - Code Gen: MiniMax-M2 (Ollama cloud) - #1 open-source for coding
+    /// - Embeddings: text-embedding-3-large (OpenAI)
+    /// - Reranker: Qwen3-Reranker-4B (Ollama local)
+    pub fn new(openai_key: String) -> Self {
+        Self::new_with_ollama(openai_key, String::new())
+    }
+    
+    /// Create config with Ollama API key
+    pub fn new_with_ollama(openai_key: String, ollama_key: String) -> Self {
+        Self::new_with_options(openai_key, ollama_key, "gpt-5.2".to_string(), 0.3, Some(32768))
     }
 
-    /// Mac M2 Ultra optimized configuration
-    pub fn mac_m2_ultra(openai_key: String) -> Self {
+    /// Create config with full customization options
+    pub fn new_with_options(
+        openai_key: String,
+        ollama_key: String,
+        model: String,
+        temperature: f32,
+        max_tokens: Option<u32>,
+    ) -> Self {
         Self {
             embeddings: EmbeddingConfig {
-                endpoint: "http://localhost:8081".to_string(),
-                model: "qwen3-embedding-8b".to_string(),
-                dimension: 8192,
+                endpoint: "https://api.openai.com/v1/embeddings".to_string(),
+                model: "text-embedding-3-large".to_string(),
+                dimension: 3072,
             },
             reranker: Some(EmbeddingConfig {
-                endpoint: "http://localhost:8082".to_string(),
-                model: "qwen3-reranker-8b".to_string(),
-                dimension: 8192,
+                endpoint: "http://localhost:11434".to_string(),
+                model: "dengcao/Qwen3-Reranker-4B".to_string(),
+                dimension: 2048,
             }),
-            local_code_generation: Some(LocalModelConfig {
-                endpoint: "http://localhost:8080".to_string(),
-                model: "qwen3-coder-30b".to_string(),
-                max_tokens: 4096,
-                temperature: 0.7,
-            }),
-            ollama_cloud: None,
-            agent: OpenAIConfig {
-                api_key: openai_key,
-                model: "gpt-5.2".to_string(),
-                temperature: 0.7,
-                max_tokens: Some(8192),
-                reasoning_effort: ReasoningEffort::Medium,
-                use_responses_api: true,
-            },
-            api_code_generation: None,
-        }
-    }
-
-    /// Demo mode: Use Ollama Cloud GLM-4.6 for code generation (no local models needed)
-    pub fn demo_mode(openai_key: String, ollama_key: String) -> Self {
-        Self {
-            embeddings: EmbeddingConfig {
-                endpoint: "http://localhost:8081".to_string(),
-                model: "qwen3-embedding-8b".to_string(),
-                dimension: 8192,
-            },
-            reranker: None,
             local_code_generation: None,
-            ollama_cloud: Some(OllamaCloudConfig {
-                api_key: ollama_key,
-                model: "glm-4.6".to_string(),
-            }),
+            ollama_code_generation: None,
+            ollama_cloud: if !ollama_key.is_empty() {
+                Some(OllamaCloudConfig {
+                    api_key: ollama_key,
+                    model: "glm-4.6".to_string(),  // Z.ai GLM-4.6: 355B MoE, excellent for coding
+                })
+            } else {
+                None
+            },
             agent: OpenAIConfig {
                 api_key: openai_key,
-                model: "gpt-5.2".to_string(),
-                temperature: 0.7,
-                max_tokens: Some(8192),
+                model,
+                temperature,
+                max_tokens,
                 reasoning_effort: ReasoningEffort::Medium,
                 use_responses_api: true,
             },
@@ -163,13 +143,27 @@ impl AIConfig {
         }
     }
 
-    /// Get the OpenAI config for code generation (artifact creation fallback)
+    pub fn default() -> Self {
+        Self::new(String::new())
+    }
+
+    pub fn mac_m2_ultra(openai_key: String) -> Self {
+        Self::new(openai_key)
+    }
+
+    pub fn demo_mode(openai_key: String, _ollama_key: String) -> Self {
+        Self::new(openai_key)
+    }
+
     pub fn get_api_code_generation_config(&self) -> &OpenAIConfig {
         self.api_code_generation.as_ref().unwrap_or(&self.agent)
     }
 }
 
-/// Manages both local and cloud AI services
+// ============================================================================
+// AI MANAGER
+// ============================================================================
+
 #[derive(Clone)]
 pub struct AIManager {
     pub config: AIConfig,
@@ -191,6 +185,7 @@ impl AIManager {
         let local_code_service = config.local_code_generation.as_ref()
             .map(|cfg| LocalModelService::new(cfg.clone()));
 
+        // Use GLM-4.6 via Ollama Cloud API (https://ollama.com/api/chat)
         let ollama_cloud_service = config.ollama_cloud.as_ref()
             .map(|cfg| OllamaCloudService::new(cfg.api_key.clone(), cfg.model.clone()));
 
@@ -213,36 +208,31 @@ impl AIManager {
         }
     }
 
-    /// Health check for all services
     pub async fn health_check(&self) -> Result<HealthStatus, String> {
         let embedding_ok = self.embedding_service.health_check().await.is_ok();
 
+        // Check reranker service asynchronously (avoid block_on which can deadlock)
         let reranker_ok = if let Some(ref service) = self.reranker_service {
             service.health_check().await.is_ok()
         } else {
             false
         };
 
+        // Check local code service or ollama cloud service asynchronously
         let local_code_ok = if let Some(ref service) = self.local_code_service {
             service.health_check().await.is_ok()
+        } else if let Some(ref service) = self.ollama_cloud_service {
+            service.health_check().await.is_ok()
         } else {
-            // Check Ollama Cloud as alternative
-            if let Some(ref service) = self.ollama_cloud_service {
-                service.health_check().await.is_ok()
-            } else {
-                false
-            }
+            false
         };
-
-        // Simple check for OpenAI - we'll validate API key on first use
-        let agent_ok = true;
 
         Ok(HealthStatus {
             embedding_service: embedding_ok,
             reranker_service: reranker_ok,
             local_code_service: local_code_ok,
-            agent_service: agent_ok,
-            api_code_service: agent_ok,
+            agent_service: true,
+            api_code_service: true,
         })
     }
 }

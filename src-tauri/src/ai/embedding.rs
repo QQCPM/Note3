@@ -100,16 +100,26 @@ impl LocalEmbeddingService {
     }
 
     /// Check if the embedding service is available
+    /// For OpenAI endpoints, we do a lightweight embedding test since there's no /health endpoint
+    /// For local endpoints (Ollama, llama.cpp), we try the /health endpoint first
     pub async fn health_check(&self) -> Result<(), String> {
-        let url = format!("{}/health", self.config.endpoint);
-
-        self.client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| format!("Health check failed: {}", e))?;
-
-        Ok(())
+        // Check if this is an OpenAI endpoint (no /health endpoint available)
+        if self.config.endpoint.contains("api.openai.com") {
+            // For OpenAI, do a minimal embedding test to verify the API key works
+            // This is more expensive but OpenAI doesn't have a health endpoint
+            self.generate("test").await.map(|_| ())
+        } else {
+            // For local endpoints, try /health first, fall back to embedding test
+            let url = format!("{}/health", self.config.endpoint);
+            
+            match self.client.get(&url).send().await {
+                Ok(response) if response.status().is_success() => Ok(()),
+                _ => {
+                    // Health endpoint not available, try a minimal embedding test
+                    self.generate("test").await.map(|_| ())
+                }
+            }
+        }
     }
 }
 

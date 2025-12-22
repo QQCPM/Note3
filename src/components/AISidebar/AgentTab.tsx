@@ -3,7 +3,7 @@ import { useAIStore } from '@/store/aiStore';
 import { applyEdit, rejectEdit } from '@/services/aiEditService';
 import DiffPreview from '@/components/AI/DiffPreview';
 import CleanChatMessage from '@/components/Chat/CleanChatMessage';
-import ProgressTimeline from '@/components/Chat/ProgressTimeline';
+import ActionLog from '@/components/Chat/ActionLog';
 import { Search, Loader2 } from 'lucide-react';
 
 const AgentTab: React.FC = () => {
@@ -105,13 +105,10 @@ const AgentTab: React.FC = () => {
             ))}
         </div>
 
-        {/* Live progress timeline while AI is processing */}
+        {/* Live action log while AI is processing */}
         {isLoading && currentThinkingSteps.length > 0 && (
           <div className="px-4 mt-4">
-            <ProgressTimeline
-              steps={currentThinkingSteps}
-              isLive={true}
-            />
+            <ActionLog logs={currentThinkingSteps} />
           </div>
         )}
 

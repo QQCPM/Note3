@@ -9,7 +9,11 @@ pub struct PersistedConfig {
     /// OpenAI API Key
     pub openai_api_key: String,
 
-    /// OpenAI Model (e.g., "gpt-4o", "gpt-4o-mini")
+    /// Ollama API Key (for cloud models like minimax-m2:cloud)
+    #[serde(default)]
+    pub ollama_api_key: Option<String>,
+
+    /// OpenAI Model (e.g., "gpt-5.2", "gpt-4o-mini")
     #[serde(default = "default_model")]
     pub openai_model: String,
 
@@ -23,7 +27,7 @@ pub struct PersistedConfig {
 }
 
 fn default_model() -> String {
-    "gpt-4o".to_string()
+    "gpt-5.2".to_string()
 }
 
 fn default_temperature() -> f32 {
@@ -31,13 +35,14 @@ fn default_temperature() -> f32 {
 }
 
 fn default_max_tokens() -> Option<u32> {
-    Some(8192) // Increased from 4096 - GPT-4o supports up to 16384
+    Some(32768) // GPT-5.2 supports up to 32K output tokens
 }
 
 impl Default for PersistedConfig {
     fn default() -> Self {
         Self {
             openai_api_key: String::new(),
+            ollama_api_key: None,
             openai_model: default_model(),
             temperature: default_temperature(),
             max_tokens: default_max_tokens(),
@@ -85,15 +90,23 @@ impl PersistedConfig {
         app_data_dir.join("ai_config.json")
     }
 
-    /// Convert to full AIConfig (Mac M2 Ultra setup)
+    /// Convert to full AIConfig
+    /// Uses the saved model, temperature, and max_tokens settings
     pub fn to_ai_config(&self) -> AIConfig {
-        AIConfig::mac_m2_ultra(self.openai_api_key.clone())
+        AIConfig::new_with_options(
+            self.openai_api_key.clone(),
+            self.ollama_api_key.clone().unwrap_or_default(),
+            self.openai_model.clone(),
+            self.temperature,
+            self.max_tokens,
+        )
     }
 
     /// Create from AIConfig
     pub fn from_ai_config(config: &AIConfig) -> Self {
         Self {
             openai_api_key: config.agent.api_key.clone(),
+            ollama_api_key: None,
             openai_model: config.agent.model.clone(),
             temperature: config.agent.temperature,
             max_tokens: config.agent.max_tokens,

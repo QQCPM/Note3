@@ -44,7 +44,8 @@ const SettingsTab: React.FC = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('gpt-4o');
+  const [ollamaApiKey, setOllamaApiKey] = useState('');
+  const [model, setModel] = useState('gpt-5.2');
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(8192); // Increased default
 
@@ -65,7 +66,8 @@ const SettingsTab: React.FC = () => {
       const config = await tauriAI.loadPersistedConfig();
       if (config) {
         setApiKey(config.openai_api_key || '');
-        setModel(config.openai_model || 'gpt-4o');
+        setOllamaApiKey(config.ollama_api_key || '');
+        setModel(config.openai_model || 'gpt-5.2');
         setTemperature(config.temperature || 0.7);
         setMaxTokens(config.max_tokens || 4096);
       }
@@ -82,6 +84,7 @@ const SettingsTab: React.FC = () => {
     try {
       const config = {
         openai_api_key: apiKey,
+        ollama_api_key: ollamaApiKey || undefined,
         openai_model: model,
         temperature,
         max_tokens: maxTokens,
@@ -253,7 +256,7 @@ const SettingsTab: React.FC = () => {
             onChange={(e) => setModel(e.target.value)}
             className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-sm text-gray-300 focus:border-purple-500 focus:outline-none"
           >
-            <option value="gpt-4o">GPT-4o (Recommended)</option>
+            <option value="gpt-5.2">GPT-5.2 (Latest)</option>
             <option value="gpt-4o-mini">GPT-4o Mini (Faster, Cheaper)</option>
             <option value="o1-preview">O1 Preview (Best Reasoning)</option>
             <option value="o1-mini">O1 Mini (Fast Reasoning)</option>
@@ -265,7 +268,7 @@ const SettingsTab: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-xs text-gray-400 mb-1">API Key</label>
+          <label className="block text-xs text-gray-400 mb-1">OpenAI API Key</label>
           <input
             type="password"
             value={apiKey}
@@ -274,7 +277,21 @@ const SettingsTab: React.FC = () => {
             className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-sm text-gray-300 focus:border-purple-500 focus:outline-none"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Your API key is saved securely and persists across app restarts
+            Required for Agent (GPT-5.2) and Embeddings
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Ollama API Key (for MiniMax-M2:cloud)</label>
+          <input
+            type="password"
+            value={ollamaApiKey}
+            onChange={(e) => setOllamaApiKey(e.target.value)}
+            placeholder="ollama_..."
+            className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-sm text-gray-300 focus:border-purple-500 focus:outline-none"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Get from <a href="https://ollama.com" target="_blank" rel="noopener" className="text-purple-400 hover:underline">ollama.com</a> → Account Settings → API Keys
           </p>
         </div>
 
@@ -296,7 +313,7 @@ const SettingsTab: React.FC = () => {
             <span>16K (maximum)</span>
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Higher values allow longer responses but cost more. GPT-4o supports up to 16K output tokens.
+            Higher values allow longer responses but cost more. GPT-5.2 supports up to 32K output tokens.
           </p>
         </div>
 
@@ -335,33 +352,32 @@ const SettingsTab: React.FC = () => {
         )}
       </div>
 
-      {/* Local Models */}
+      {/* Model Configuration */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-400">Local Models</h3>
+        <h3 className="text-sm font-semibold text-gray-400">Model Configuration</h3>
 
         <div className="bg-[#0d1117] border border-[#30363d] rounded p-3 space-y-2 text-xs">
           <div className="flex justify-between">
-            <span className="text-gray-400">Embedding Model</span>
-            <span className="text-gray-300">Qwen3-8B (8192-dim)</span>
+            <span className="text-gray-400">Agent Model</span>
+            <span className="text-gray-300">GPT-5.2 (OpenAI)</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Code Generation</span>
-            <span className="text-gray-300">Qwen3-30B (Q8_0)</span>
+            <span className="text-gray-300">MiniMax-M2 (Ollama)</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">Embedding Model</span>
+            <span className="text-gray-300">text-embedding-3-large (3072-dim)</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Reranker</span>
-            <span className="text-gray-300">Qwen3-8B</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">Total Memory</span>
-            <span className="text-gray-300">~46GB / 128GB</span>
+            <span className="text-gray-300">Qwen3-Reranker-4B (Ollama)</span>
           </div>
         </div>
 
         <div className="text-xs text-gray-500">
-          <div>• Port 8081: Embeddings</div>
-          <div>• Port 8080: Code Generation</div>
-          <div>• Port 8082: Reranking</div>
+          <div>• Ollama: localhost:11434 (Reranker)</div>
+          <div>• OpenAI API: Embeddings + Chat</div>
         </div>
       </div>
 
@@ -397,7 +413,7 @@ const SettingsTab: React.FC = () => {
             <div className="text-xs text-gray-400 space-y-1">
               <div>• Embeddings: $0 (local)</div>
               <div>• Code Gen: $0 (local with fallback)</div>
-              <div>• Chat: ~$5-20/month (GPT-4o)</div>
+              <div>• Chat: ~$8-30/month (GPT-5.2)</div>
               <div className="pt-2 border-t border-purple-700/30 text-purple-300">
                 Total: ~$5-20/month vs $50-100 all-API
               </div>

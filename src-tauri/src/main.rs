@@ -92,6 +92,24 @@ fn main() {
             agentic_verify_data,
             // Web Search (CORS proxy)
             search_web,
+            // Root Nodes (in-place definitions)
+            get_all_root_nodes,
+            get_root_node_by_id,
+            get_root_nodes_by_note,
+            get_root_nodes_by_project,
+            search_root_nodes,
+            create_root_node,
+            update_root_node,
+            delete_root_node,
+            get_root_node_by_term,
+            // Memory files (Secretary system)
+            get_memory_base_path,
+            get_project_path,
+            read_memory_file,
+            write_memory_file,
+            memory_file_exists,
+            delete_memory_file,
+            list_memory_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

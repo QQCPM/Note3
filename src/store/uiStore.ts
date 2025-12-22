@@ -4,6 +4,7 @@ interface ContextMenuState {
   visible: boolean;
   position: { x: number; y: number } | null;
   noteId: string | null;
+  treeItemId: string | null; // For project tree items (folders, files, notes in project)
 }
 
 interface SlashMenuState {
@@ -43,7 +44,7 @@ interface UIState {
   setCanvasMode: (mode: 'note' | 'canvas' | 'dashboard' | 'graph') => void;
 
   // Context Menu
-  showContextMenu: (x: number, y: number, noteId: string) => void;
+  showContextMenu: (x: number, y: number, noteId: string | null, treeItemId?: string | null) => void;
   hideContextMenu: () => void;
 
   // Slash Menu
@@ -67,6 +68,7 @@ export const useUIStore = create<UIState>((set) => ({
     visible: false,
     position: null,
     noteId: null,
+    treeItemId: null,
   },
 
   slashMenu: {
@@ -124,12 +126,12 @@ export const useUIStore = create<UIState>((set) => ({
     };
   }),
 
-  showContextMenu: (x, y, noteId) => set({
-    contextMenu: { visible: true, position: { x, y }, noteId }
+  showContextMenu: (x, y, noteId, treeItemId = null) => set({
+    contextMenu: { visible: true, position: { x, y }, noteId, treeItemId }
   }),
 
   hideContextMenu: () => set({
-    contextMenu: { visible: false, position: null, noteId: null }
+    contextMenu: { visible: false, position: null, noteId: null, treeItemId: null }
   }),
 
   showSlashMenu: (x, y, blockId) => set({

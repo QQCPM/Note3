@@ -1,14 +1,24 @@
 import React, { useEffect, useRef } from 'react';
 import { useNotesStore, useUIStore } from '@/store';
-import { useProjectStore } from '@/store/projectStore';
 import { createNote, updateNote, deleteNote } from '@/utils/tauri';
 import { ask } from '@tauri-apps/plugin-dialog';
 
 const ContextMenu: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const { contextMenu, hideContextMenu } = useUIStore();
-  const { addNote, updateNote: updateNoteInStore, deleteNote: deleteNoteInStore, getNoteById, expandNote } = useNotesStore();
-  const { projects, activeProjectId, addTreeItem, deleteTreeItem, treeItems } = useProjectStore();
+  const { 
+    addNote, 
+    updateNote: updateNoteInStore, 
+    deleteNote: deleteNoteInStore, 
+    getNoteById, 
+    expandNote, 
+    setActiveNote,
+    togglePinned 
+  } = useNotesStore();
+
+  // In the new unified model, we only deal with notes
+  const isNoteContext = contextMenu.noteId != null && contextMenu.noteId !== '';
+  const note = isNoteContext ? getNoteById(contextMenu.noteId!) : null;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -24,8 +34,16 @@ const ContextMenu: React.FC = () => {
     };
 
     if (contextMenu.visible) {
-      document.addEventListener('mousedown', handleClickOutside);
+      const timeoutId = setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+      }, 0);
       document.addEventListener('keydown', handleEscape);
+
+      return () => {
+        clearTimeout(timeoutId);
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleEscape);
+      };
     }
 
     return () => {
@@ -34,44 +52,79 @@ const ContextMenu: React.FC = () => {
     };
   }, [contextMenu.visible, hideContextMenu]);
 
+  // ============================================================================
+  // NOTE ACTIONS (unified for all notes)
+  // ============================================================================
+
   const handleAddSubPage = async () => {
-    if (!contextMenu.noteId) return;
+    if (!contextMenu.noteId || !note) return;
 
     try {
-      const newNote = await createNote({
+      // Create in database (backend doesn't know new fields)
+      const dbNote = await createNote({
         title: 'Untitled',
         icon: '📝',
         parent_id: contextMenu.noteId,
       });
-      addNote(newNote);
       
-      // Also add to project tree
-      const parentTreeItem = treeItems.find(item => item.noteId === contextMenu.noteId);
-      addTreeItem({
-        projectId: parentTreeItem?.projectId || activeProjectId || projects[0]?.id || 'default-notes',
-        parentId: parentTreeItem?.id || null,
-        name: newNote.title,
-        type: 'note',
-        noteId: newNote.id,
-      });
+      // Merge with new fields - inherit project from parent
+      const subPage = {
+        ...dbNote,
+        project_id: note.project_id,
+        type: 'note' as const,
+        is_pinned: false,
+      };
       
-      expandNote(contextMenu.noteId); // Expand parent to show new child
+      addNote(subPage);
+      expandNote(contextMenu.noteId);
+      setActiveNote(subPage.id);
       hideContextMenu();
     } catch (error) {
       console.error('Failed to create sub page:', error);
     }
   };
 
-  const handleRename = async () => {
-    if (!contextMenu.noteId) return;
+  const handleAddFolder = async () => {
+    if (!contextMenu.noteId || !note) return;
 
-    const note = getNoteById(contextMenu.noteId);
-    if (!note) return;
+    const folderName = prompt('Enter folder name:', 'New Folder');
+    if (!folderName || !folderName.trim()) {
+      hideContextMenu();
+      return;
+    }
+
+    try {
+      // Create in database
+      const dbFolder = await createNote({
+        title: folderName.trim(),
+        icon: '📁',
+        parent_id: contextMenu.noteId,
+      });
+      
+      // Merge with new fields - inherit project from parent
+      const folder = {
+        ...dbFolder,
+        project_id: note.project_id,
+        type: 'folder' as const,
+        is_pinned: false,
+      };
+      
+      addNote(folder);
+      expandNote(contextMenu.noteId);
+      hideContextMenu();
+    } catch (error) {
+      console.error('Failed to create folder:', error);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!contextMenu.noteId || !note) return;
 
     const newTitle = prompt('Enter new title:', note.title);
     if (newTitle && newTitle.trim() !== note.title) {
       try {
-        const updated = await updateNote(contextMenu.noteId, { title: newTitle.trim() });
+        const trimmedTitle = newTitle.trim();
+        const updated = await updateNote(contextMenu.noteId, { title: trimmedTitle });
         updateNoteInStore(contextMenu.noteId, updated);
         hideContextMenu();
       } catch (error) {
@@ -83,40 +136,39 @@ const ContextMenu: React.FC = () => {
   };
 
   const handleDuplicate = async () => {
-    if (!contextMenu.noteId) return;
-
-    const note = getNoteById(contextMenu.noteId);
-    if (!note) return;
+    if (!contextMenu.noteId || !note) return;
 
     try {
-      const duplicated = await createNote({
+      // Create in database
+      const dbNote = await createNote({
         title: `${note.title} (Copy)`,
         icon: note.icon,
         parent_id: note.parent_id,
       });
+      
+      // Merge with new fields - keep same project as original
+      const duplicated = {
+        ...dbNote,
+        project_id: note.project_id,
+        type: note.type,
+        is_pinned: false,
+      };
+      
       addNote(duplicated);
-      
-      // Also add to project tree
-      const originalTreeItem = treeItems.find(item => item.noteId === contextMenu.noteId);
-      addTreeItem({
-        projectId: originalTreeItem?.projectId || activeProjectId || projects[0]?.id || 'default-notes',
-        parentId: originalTreeItem?.parentId || null,
-        name: duplicated.title,
-        type: 'note',
-        noteId: duplicated.id,
-      });
-      
       hideContextMenu();
     } catch (error) {
       console.error('Failed to duplicate note:', error);
     }
   };
 
-  const handleDelete = async () => {
+  const handleTogglePin = () => {
     if (!contextMenu.noteId) return;
+    togglePinned(contextMenu.noteId);
+    hideContextMenu();
+  };
 
-    const note = getNoteById(contextMenu.noteId);
-    if (!note) return;
+  const handleDelete = async () => {
+    if (!contextMenu.noteId || !note) return;
 
     try {
       const confirmed = await ask(`Are you sure you want to delete "${note.title}"?`, {
@@ -127,13 +179,6 @@ const ContextMenu: React.FC = () => {
       if (confirmed) {
         await deleteNote(contextMenu.noteId);
         deleteNoteInStore(contextMenu.noteId);
-        
-        // Also remove from project tree
-        const treeItem = treeItems.find(item => item.noteId === contextMenu.noteId);
-        if (treeItem) {
-          deleteTreeItem(treeItem.id);
-        }
-        
         hideContextMenu();
       } else {
         hideContextMenu();
@@ -155,23 +200,40 @@ const ContextMenu: React.FC = () => {
         top: `${contextMenu.position.y}px`,
       }}
     >
-      <div className="context-menu-item" onClick={handleAddSubPage}>
-        <span>➕</span>
-        <span>Add sub page</span>
-      </div>
-      <div className="context-menu-item" onClick={handleRename}>
-        <span>✏️</span>
-        <span>Rename</span>
-      </div>
-      <div className="context-menu-item" onClick={handleDuplicate}>
-        <span>📋</span>
-        <span>Duplicate</span>
-      </div>
-      <div className="context-menu-divider"></div>
-      <div className="context-menu-item danger" onClick={handleDelete}>
-        <span>🗑️</span>
-        <span>Delete</span>
-      </div>
+      {isNoteContext && note ? (
+        <>
+          <div className="context-menu-item" onClick={handleAddSubPage}>
+            <span>📝</span>
+            <span>Add sub page</span>
+          </div>
+          <div className="context-menu-item" onClick={handleAddFolder}>
+            <span>📁</span>
+            <span>Add folder</span>
+          </div>
+          <div className="context-menu-divider"></div>
+          <div className="context-menu-item" onClick={handleRename}>
+            <span>✏️</span>
+            <span>Rename</span>
+          </div>
+          <div className="context-menu-item" onClick={handleDuplicate}>
+            <span>📋</span>
+            <span>Duplicate</span>
+          </div>
+          <div className="context-menu-item" onClick={handleTogglePin}>
+            <span>{note.is_pinned ? '📌' : '📍'}</span>
+            <span>{note.is_pinned ? 'Unpin' : 'Pin'}</span>
+          </div>
+          <div className="context-menu-divider"></div>
+          <div className="context-menu-item danger" onClick={handleDelete}>
+            <span>🗑️</span>
+            <span>Delete</span>
+          </div>
+        </>
+      ) : (
+        <div className="context-menu-item text-gray-500">
+          <span>No actions available</span>
+        </div>
+      )}
     </div>
   );
 };

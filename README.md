@@ -54,38 +54,84 @@ npm run tauri dev
 
 ### AI Models Setup
 
-Weave supports both **local models** (free, private) and **API-based models** (easier, paid).
+Weave supports multiple configurations based on your hardware:
 
-#### Option 1: Local Models (Recommended)
+| Configuration | RAM Required | Best For |
+|---------------|-------------|----------|
+| **M2 Pro 16GB** | ~2GB local | MacBook Pro M2 16GB |
+| **M2 Ultra** | ~46GB local | Mac Studio M2 Ultra 64GB+ |
+| **Cloud Only** | 0 local | Any machine, uses OpenAI API |
+
+---
+
+#### Option 1: Mac M2 Pro 16GB (Recommended for your setup)
+
+Uses a lightweight local embedding model + cloud APIs for code generation.
+
+```bash
+# Install llama-cpp-python with Metal support
+CMAKE_ARGS="-DLLAMA_METAL=on" pip3 install llama-cpp-python --force-reinstall --no-cache-dir
+
+# Download small embedding model (~600MB)
+pip install huggingface-hub
+huggingface-cli download Qwen/Qwen3-Embedding-0.6B-GGUF \
+  qwen3-embedding-0.6b-q8_0.gguf --local-dir ./models
+
+# Start lightweight AI (uses ~2GB RAM)
+npm run ai:m2pro
+
+# In another terminal, start the app
+npm run tauri:dev
+```
+
+**Memory Usage:** ~2GB for embedding model, leaving 14GB for system + app.
+
+---
+
+#### Option 2: Cloud Only (Zero Local Setup)
+
+Uses OpenAI API for everything - no local models needed.
+
+```bash
+# Just start the app - no AI servers needed
+npm run tauri:dev
+```
+
+In Settings → AI Configuration:
+- Set Mode: `cloud-only`
+- Enter your OpenAI API key
+
+---
+
+#### Option 3: M2 Ultra / High RAM (64GB+)
+
+Full local models for maximum privacy.
 
 ```bash
 # Install tools
 pip install huggingface-hub llama-cpp-python
 
-# Download models
+# Download large models (~40GB total)
 huggingface-cli download Qwen/Qwen3-Coder-30B-Instruct-GGUF \
   qwen3-coder-30b-q4_k_m.gguf --local-dir ./models
 
-huggingface-cli download Qwen/Qwen3-Embedding-0.6B-GGUF \
-  qwen3-embedding-0.6b-q8_0.gguf --local-dir ./models
+huggingface-cli download Qwen/Qwen3-Embedding-8B-GGUF \
+  Qwen3-Embedding-8B-Q8_0.gguf --local-dir ./models
 
-# Start model servers
-# Terminal 1:
-python -m llama_cpp.server --model ./models/qwen3-coder-30b-q4_k_m.gguf --port 8080
+# Start all AI servers (~46GB RAM)
+npm run ai
 
-# Terminal 2:
-python -m llama_cpp.server --model ./models/qwen3-embedding-0.6b-q8_0.gguf --port 8081 --embedding
+# In another terminal
+npm run tauri:dev
 ```
 
-Then in Weave Settings:
-- Code Generation: `http://localhost:8080`
-- Embeddings: `http://localhost:8081`
+---
 
-#### Option 2: API-Based
+#### API Keys
 
 Get API keys from:
-- [OpenAI](https://platform.openai.com/api-keys)
-- [Brave Search](https://brave.com/search/api/)
+- [OpenAI](https://platform.openai.com/api-keys) - Required for cloud modes
+- [Brave Search](https://brave.com/search/api/) - Optional for web search
 
 Configure in Weave Settings → AI Configuration.
 

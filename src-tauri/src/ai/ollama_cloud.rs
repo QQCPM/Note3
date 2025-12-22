@@ -3,6 +3,8 @@ use reqwest::Client;
 use super::{ArtifactResult, DatabaseResult};
 
 /// Ollama Cloud service for GLM-4.6 and other cloud models
+/// Uses Ollama's cloud API at https://ollama.com/api/chat
+/// GLM-4.6 is Zhipu AI's flagship model with 355B params, excellent for coding and agentic tasks
 #[derive(Clone)]
 pub struct OllamaCloudService {
     client: Client,
@@ -34,6 +36,8 @@ struct OllamaMessageResponse {
 }
 
 impl OllamaCloudService {
+    /// Create a new Ollama cloud service
+    /// Uses https://ollama.com/api/chat endpoint
     pub fn new(api_key: String, model: String) -> Self {
         Self {
             client: Client::new(),
@@ -42,12 +46,15 @@ impl OllamaCloudService {
         }
     }
 
-    /// Create with GLM-4.6 as default
+    /// Create with GLM-4.6:cloud as default (Ollama Cloud API)
+    /// GLM-4.6: 355B MoE model, 32B active params, MIT license
+    /// Excellent for coding, agents, reasoning, and long-context tasks
+    /// Run locally: `ollama run glm-4.6:cloud`
     pub fn glm4(api_key: String) -> Self {
         Self::new(api_key, "glm-4.6".to_string())
     }
 
-    /// Chat with Ollama Cloud
+    /// Chat with Ollama Cloud (glm-4.6:cloud via https://ollama.com/api/chat)
     pub async fn chat(&self, messages: Vec<OllamaMessage>) -> Result<String, String> {
         let request = OllamaChatRequest {
             model: self.model.clone(),
@@ -70,6 +77,7 @@ impl OllamaCloudService {
             return Err(format!("Ollama Cloud API error {}: {}", status, error_text));
         }
 
+        // Parse Ollama response format: {"message": {"content": "..."}}
         let completion: OllamaChatResponse = response
             .json()
             .await

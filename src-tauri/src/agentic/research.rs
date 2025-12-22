@@ -1,6 +1,9 @@
 use crate::ai::{AIManager, Message};
 use crate::agentic::types::*;
-use serde_json::{json, Value};
+use serde_json::Value;
+
+#[allow(unused_imports)]
+use serde_json::json;
 use std::collections::HashMap;
 
 /// Web research agent that searches and extracts structured data

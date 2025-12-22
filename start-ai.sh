@@ -1,101 +1,55 @@
 #!/bin/bash
-
 # =============================================================================
-# Note3 AI Models Launcher
-# Starts all 3 local AI models in parallel for Note3 app
+# Note3 AI System Launcher
+# - Agent: GPT-5.2 (OpenAI)
+# - Code Gen: MiniMax-M2 (Ollama cloud) - requires Ollama API key
+# - Embeddings: text-embedding-3-large (OpenAI)
+# - Reranker: Qwen3-Reranker-4B (Ollama local)
 # =============================================================================
 
 echo "🤖 Note3 AI System Launcher"
 echo "==========================================="
 echo ""
 
-# Model paths (adjust if your models are elsewhere)
-EMBEDDING_MODEL="$HOME/AI/models/qwen3-embedding-8b/Qwen3-Embedding-8B-Q8_0.gguf"
-RERANKER_MODEL="$HOME/AI/models/qwen3-reranker-8b/Qwen3-Reranker-8B.Q8_0.gguf"
-CODER_MODEL="$(pwd)/Qwen3-Coder-30B-A3B-Instruct-UD-Q8_K_XL.gguf"
-
-# Ports
-CODER_PORT=8080
-EMBEDDING_PORT=8081
-RERANKER_PORT=8082
-
-# Check for llama-cpp-python
-if ! python3 -c "import llama_cpp" 2>/dev/null; then
-    echo "❌ llama-cpp-python not installed."
-    echo "   Install with: pip3 install llama-cpp-python"
+# Check if Ollama is installed
+if ! command -v ollama &> /dev/null; then
+    echo "❌ Ollama not installed."
+    echo "   Install with: brew install ollama"
     exit 1
 fi
 
-# Function to check if a port is in use
-check_port() {
-    lsof -i :$1 >/dev/null 2>&1
-}
+# Check if Ollama is running
+if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+    echo "🚀 Starting Ollama service..."
+    ollama serve > /tmp/ollama.log 2>&1 &
+    sleep 3
+fi
 
-# Function to start a model server
-start_server() {
-    local name=$1
-    local model=$2
-    local port=$3
-    local extra_args=$4
-    
-    if check_port $port; then
-        echo "⚠️  Port $port already in use - $name may already be running"
-        return
-    fi
-    
-    if [ ! -f "$model" ]; then
-        echo "⚠️  $name model not found at: $model"
-        return
-    fi
-    
-    echo "🚀 Starting $name on port $port..."
-    python3 -m llama_cpp.server \
-        --model "$model" \
-        --port $port \
-        --n_gpu_layers -1 \
-        --host 0.0.0.0 \
-        $extra_args \
-        > /tmp/note3-$name.log 2>&1 &
-    
-    echo "   PID: $! | Log: /tmp/note3-$name.log"
-}
-
-# Kill function
-kill_servers() {
-    echo ""
-    echo "🛑 Shutting down AI servers..."
-    pkill -f "llama_cpp.server.*$CODER_PORT" 2>/dev/null
-    pkill -f "llama_cpp.server.*$EMBEDDING_PORT" 2>/dev/null
-    pkill -f "llama_cpp.server.*$RERANKER_PORT" 2>/dev/null
-    echo "✅ All servers stopped"
-    exit 0
-}
-
-# Trap Ctrl+C
-trap kill_servers INT TERM
-
-echo "Starting 3 AI models (this uses ~46GB RAM)..."
+echo "✅ Ollama is running"
 echo ""
 
-# Start all three servers
-start_server "Coder" "$CODER_MODEL" $CODER_PORT "--n_ctx 32768"
-start_server "Embedding" "$EMBEDDING_MODEL" $EMBEDDING_PORT "--embedding true --n_ctx 8192"
-start_server "Reranker" "$RERANKER_MODEL" $RERANKER_PORT "--embedding true --n_ctx 8192"
+# Check reranker model (only pull if missing)
+if ! ollama list | grep -q "dengcao/Qwen3-Reranker-4B"; then
+    echo "📦 Pulling reranker model..."
+    ollama pull dengcao/Qwen3-Reranker-4B
+else
+    echo "✅ Reranker model ready"
+fi
 
 echo ""
 echo "==========================================="
 echo "✅ AI System Ready!"
 echo "==========================================="
 echo ""
-echo "Services:"
-echo "  • Coder:     http://localhost:$CODER_PORT"
-echo "  • Embedding: http://localhost:$EMBEDDING_PORT"
-echo "  • Reranker:  http://localhost:$RERANKER_PORT"
+echo "Model Configuration:"
+echo "  • Agent:      GPT-5.2 (OpenAI API)"
+echo "  • Code Gen:   MiniMax-M2 (Ollama cloud)"
+echo "  • Embeddings: text-embedding-3-large (OpenAI API)"
+echo "  • Reranker:   Qwen3-Reranker-4B (Ollama local)"
+echo ""
+echo "Required API Keys:"
+echo "  1. OpenAI API Key - for agent + embeddings"
+echo "  2. Ollama API Key - for minimax-m2:cloud code gen"
+echo "     (Get from: ollama.com → Account → API Keys)"
 echo ""
 echo "Now run: npm run tauri:dev"
-echo ""
-echo "Press Ctrl+C to stop all servers"
-echo ""
-
-# Wait for all background jobs
-wait

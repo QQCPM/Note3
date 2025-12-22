@@ -78,3 +78,37 @@ pub struct CreateBlockInput {
     pub data: String,
     pub position: Option<i64>,
 }
+
+// Root Node - in-place definition with cross-note linking
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct RootNode {
+    pub id: String,
+    pub term: String,
+    pub highlighted_text: String,
+    pub note_id: String,
+    pub block_id: String,
+    pub start_offset: i64,
+    pub end_offset: i64,
+    pub project_id: Option<String>,
+    pub created_by: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CreateRootNodeInput {
+    pub term: String,
+    pub highlighted_text: String,
+    pub note_id: String,
+    pub block_id: String,
+    pub start_offset: i64,
+    pub end_offset: i64,
+    pub project_id: Option<String>,
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct UpdateRootNodeInput {
+    pub term: Option<String>,
+    pub highlighted_text: Option<String>,
+}

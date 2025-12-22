@@ -1,6 +1,5 @@
 use super::types::*;
-use crate::db::{Block, Note};
-use crate::ai::AIManager;
+use crate::db::Block;
 use sqlx::SqlitePool;
 use serde_json::{json, Value};
 use std::collections::HashMap;

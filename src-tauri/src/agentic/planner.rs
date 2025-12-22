@@ -1,6 +1,10 @@
 use crate::ai::{AIManager, Message};
 use crate::agentic::types::*;
-use serde_json::{json, Value};
+use serde_json::Value;
+
+#[allow(unused_imports)]
+use serde_json::json;
+#[allow(unused_imports)]
 use uuid::Uuid;
 
 /// Multi-step task planner using AI

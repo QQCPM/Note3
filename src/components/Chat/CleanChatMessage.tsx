@@ -6,7 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { Copy, Check } from 'lucide-react';
 import type { Citation, ThinkingStep } from '@/store/aiStore';
-import ProgressTimeline from './ProgressTimeline';
+import ActionLog from './ActionLog';
 import SourcesPanel from './SourcesPanel';
 import CitationTooltip from './CitationTooltip';
 import './CleanChatMessage.css';
@@ -181,12 +181,9 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
       ) : (
         // AI answer - clean, blended text with LaTeX rendering
         <div className="ai-answer">
-          {/* Progress timeline - shows AI's thinking process */}
+          {/* Action log - Antigravity style thinking display */}
           {thinkingSteps && thinkingSteps.length > 0 && (
-            <ProgressTimeline
-              steps={thinkingSteps}
-              isLive={false}
-            />
+            <ActionLog logs={thinkingSteps} />
           )}
 
           {/* Main content */}

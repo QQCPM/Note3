@@ -2,19 +2,36 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Upload, FileText, Video, Music, Image, FileCode } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useFileStore } from '@/store/fileStore';
-import { getFileTypeFromExtension, FileType } from '@/types/project';
+import { useNotesStore } from '@/store/notesStore';
+import { createNote } from '@/utils/tauri';
 
-// ============================================================================
-// TYPES
-// ============================================================================
+type FileType = 'pdf' | 'video' | 'audio' | 'image' | 'markdown';
 
-interface DropZoneProps {
-  onFilesDropped?: (files: File[]) => void;
-}
-
-// ============================================================================
-// FILE TYPE ICONS
-// ============================================================================
+const getFileTypeFromExtension = (filename: string): FileType | null => {
+  const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
+  
+  const typeMap: Record<string, FileType> = {
+    '.pdf': 'pdf',
+    '.mp4': 'video',
+    '.mov': 'video',
+    '.webm': 'video',
+    '.avi': 'video',
+    '.mp3': 'audio',
+    '.m4a': 'audio',
+    '.wav': 'audio',
+    '.ogg': 'audio',
+    '.png': 'image',
+    '.jpg': 'image',
+    '.jpeg': 'image',
+    '.gif': 'image',
+    '.svg': 'image',
+    '.webp': 'image',
+    '.md': 'markdown',
+    '.markdown': 'markdown',
+  };
+  
+  return typeMap[ext] || null;
+};
 
 const FileTypeIcon: React.FC<{ type: FileType }> = ({ type }) => {
   const iconProps = { size: 14, className: 'text-gray-500' };
@@ -35,18 +52,18 @@ const FileTypeIcon: React.FC<{ type: FileType }> = ({ type }) => {
   }
 };
 
-// ============================================================================
-// DROP ZONE COMPONENT
-// ============================================================================
+interface DropZoneProps {
+  onFilesDropped?: (files: File[]) => void;
+}
 
 const DropZone: React.FC<DropZoneProps> = ({ onFilesDropped }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { activeProjectId, addTreeItem, projects } = useProjectStore();
+  const { activeProjectId, projects } = useProjectStore();
   const { addFile } = useFileStore();
+  const { addNote, setActiveNote } = useNotesStore();
 
-  // Handle drag events
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -59,41 +76,50 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesDropped }) => {
     setIsDragOver(false);
   }, []);
 
-  // Process dropped files
   const processFiles = useCallback(
     async (files: File[]) => {
-      const targetProjectId = activeProjectId || projects[0]?.id;
-      if (!targetProjectId) {
-        console.error('No project to add files to');
-        return;
-      }
+      const targetProjectId = activeProjectId || projects[0]?.id || null;
 
       for (const file of files) {
         const fileType = getFileTypeFromExtension(file.name);
         if (fileType) {
-          // Store file in fileStore for preview (now async)
-          const uploadedFile = await addFile(file, fileType);
-          
-          // Add to project tree with reference to stored file
-          addTreeItem({
-            projectId: targetProjectId,
-            name: file.name,
-            type: fileType,
-            origin: 'imported',
-            filePath: uploadedFile.id, // Reference to file in fileStore
-            fileSize: file.size,
-          });
-          
-          console.log(`📁 Uploaded: ${file.name} (${fileType}) - ID: ${uploadedFile.id}`);
+          try {
+            // Store file in fileStore
+            await addFile(file, fileType);
+            
+            // Create note in database (backend doesn't know new fields)
+            const dbNote = await createNote({
+              title: file.name,
+              icon: fileType === 'pdf' ? '📕' : 
+                    fileType === 'video' ? '🎥' : 
+                    fileType === 'audio' ? '🎵' : 
+                    fileType === 'image' ? '🖼️' : '📝',
+              parent_id: null,
+            });
+            
+            // Merge with new fields for the store
+            const noteWithProject = {
+              ...dbNote,
+              project_id: targetProjectId,
+              type: 'note' as const,
+              is_pinned: false,
+            };
+            
+            addNote(noteWithProject);
+            setActiveNote(noteWithProject.id);
+            
+            console.log(`📁 Uploaded: ${file.name} (${fileType}) - Note ID: ${noteWithProject.id}`);
+          } catch (error) {
+            console.error(`Failed to upload ${file.name}:`, error);
+          }
         }
       }
 
       onFilesDropped?.(files);
     },
-    [activeProjectId, projects, addTreeItem, addFile, onFilesDropped]
+    [activeProjectId, projects, addFile, addNote, setActiveNote, onFilesDropped]
   );
 
-  // Handle drop
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -108,7 +134,6 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesDropped }) => {
     [processFiles]
   );
 
-  // Handle file input change
   const handleFileInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
@@ -119,7 +144,6 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesDropped }) => {
     [processFiles]
   );
 
-  // Handle click to open file dialog
   const handleClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -140,7 +164,6 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesDropped }) => {
         onDrop={handleDrop}
         onClick={handleClick}
       >
-        {/* Hidden file input */}
         <input
           ref={fileInputRef}
           type="file"
@@ -150,7 +173,6 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesDropped }) => {
           onChange={handleFileInputChange}
         />
 
-        {/* Icon */}
         <div className="flex justify-center mb-2">
           <Upload
             size={20}
@@ -158,7 +180,6 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesDropped }) => {
           />
         </div>
 
-        {/* Text */}
         <p className="text-xs text-gray-500">
           {isDragOver ? (
             <span className="text-blue-400">Drop files here</span>
@@ -170,7 +191,6 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesDropped }) => {
           )}
         </p>
 
-        {/* Supported formats */}
         <div className="flex items-center justify-center gap-2 mt-2">
           <FileTypeIcon type="pdf" />
           <FileTypeIcon type="video" />

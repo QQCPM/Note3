@@ -4,7 +4,7 @@ import { create } from 'zustand';
 // THINKING STEPS - Claude-style reasoning display
 // ============================================================================
 
-export type ThinkingStepType = 'thought' | 'search' | 'read' | 'tool' | 'analyze' | 'write' | 'create' | 'explore';
+export type ThinkingStepType = 'thought' | 'search' | 'read' | 'tool' | 'analyze' | 'write' | 'create' | 'explore' | 'reasoning' | 'reasoning_summary';
 export type ThinkingStepStatus = 'running' | 'complete' | 'error';
 
 export interface ThinkingStep {
@@ -151,12 +151,21 @@ export const useAIStore = create<AIStore>((set, get) => ({
   // Message actions
   addMessage: (message) =>
     set((state) => {
+      // Complete all running steps before attaching to message
+      const completedSteps = message.role === 'assistant' 
+        ? state.currentThinkingSteps.map(step => ({
+            ...step,
+            status: step.status === 'running' ? 'complete' as const : step.status,
+            duration: step.status === 'running' ? Date.now() - step.timestamp.getTime() : step.duration,
+          }))
+        : state.currentThinkingSteps;
+
       // Attach current thinking steps and citations to the message
       const newMessage: AIMessage = {
         ...message,
         id: crypto.randomUUID(),
         timestamp: new Date(),
-        thinkingSteps: message.role === 'assistant' ? [...state.currentThinkingSteps] : undefined,
+        thinkingSteps: message.role === 'assistant' ? [...completedSteps] : undefined,
         citations: message.role === 'assistant' ? [...state.currentCitations] : undefined,
         isThinkingExpanded: false,
       };
@@ -178,7 +187,18 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
   clearMessages: () => set({ messages: [], currentThinkingSteps: [], currentCitations: [] }),
 
-  setLoading: (loading) => set({ isLoading: loading }),
+  setLoading: (loading) => set((state) => {
+    // When loading is set to false, complete all running steps
+    if (!loading && state.currentThinkingSteps.length > 0) {
+      const completedSteps = state.currentThinkingSteps.map(step => ({
+        ...step,
+        status: step.status === 'running' ? 'complete' as const : step.status,
+        duration: step.status === 'running' ? Date.now() - step.timestamp.getTime() : step.duration,
+      }));
+      return { isLoading: loading, currentThinkingSteps: completedSteps };
+    }
+    return { isLoading: loading };
+  }),
 
   setCurrentRequest: (request) => set({ currentRequest: request }),
 
