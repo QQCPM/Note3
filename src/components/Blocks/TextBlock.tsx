@@ -6,6 +6,7 @@ import SlashCommandMenu from '@/components/Canvas/SlashCommandMenu';
 import AIPromptModal from '@/components/Canvas/AIPromptModal';
 import AIEditPanel from '@/components/AI/AIEditPanel';
 import RichTextRenderer from './RichTextRenderer';
+import { SelectionToolbar } from '@/components/RootNode';
 import { nanoid } from 'nanoid';
 import { Sparkles } from 'lucide-react';
 
@@ -29,6 +30,7 @@ const TextBlock: React.FC<TextBlockProps> = React.memo(({ block }) => {
   const [isHovered, setIsHovered] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
+  const blockContainerRef = useRef<HTMLDivElement>(null);
 
   const { enterEditMode } = useAIStore();
 
@@ -395,6 +397,8 @@ const TextBlock: React.FC<TextBlockProps> = React.memo(({ block }) => {
   return (
     <>
       <div
+        ref={blockContainerRef}
+        data-block-id={block.id}
         className="canvas-block text-block relative group"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -464,6 +468,15 @@ const TextBlock: React.FC<TextBlockProps> = React.memo(({ block }) => {
       {/* AI Edit Panel */}
       {showAIEditPanel && (
         <AIEditPanel blockId={block.id} onClose={handleCloseAIEdit} />
+      )}
+
+      {/* Selection Toolbar for creating Root Node definitions - works in both modes */}
+      {activeNoteId && (
+        <SelectionToolbar
+          containerRef={blockContainerRef}
+          noteId={activeNoteId}
+          blockId={block.id}
+        />
       )}
     </>
   );

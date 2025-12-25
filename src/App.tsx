@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState, useRef } from 'react';
-import { useNotesStore, useFileStore } from '@/store';
+import { useNotesStore, useFileStore, useUIStore } from '@/store';
 import { useLayoutStore } from '@/store/layoutStore';
 import { getAllNotes } from '@/utils/tauri';
 import NoteSidebar from '@/components/Sidebar/NoteSidebar';
+import MemorySidebar from '@/components/Sidebar/MemorySidebar';
 import Canvas from '@/components/Canvas/Canvas';
 import AISidebar from '@/components/AISidebar/AISidebar';
 import NotePreviewPanel from '@/components/NotePreview/NotePreviewPanel';
@@ -28,8 +29,10 @@ function App() {
   const { setNotes, addNote } = useNotesStore();
   const { initializeFromStorage } = useFileStore();
   const { notePanelVisible } = useLayoutStore();
+  const { canvasMode } = useUIStore();
   const [aiInitialized, setAiInitialized] = useState(false);
   const [aiHealthy, setAiHealthy] = useState(false);
+  const [activeMemoryFile, setActiveMemoryFile] = useState<string | null>(null);
   const hasLoadedNotes = useRef(false);
 
   useEffect(() => {
@@ -95,9 +98,14 @@ function App() {
         // Get API keys from environment
         const openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
         const ollamaKey = import.meta.env.VITE_OLLAMA_API_KEY || '';
+        const geminiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 
         if (!openaiKey) {
           console.warn('⚠️ No OpenAI API key in env. AISystem will check persisted config.');
+        }
+
+        if (geminiKey) {
+          console.log('🎓 Gemini API key found - Educational slides enabled');
         }
 
         // Initialize unified AI system with GLM-4.6 (Ollama Cloud)
@@ -105,6 +113,7 @@ function App() {
         const health = await AISystem.initialize({ 
           openaiApiKey: openaiKey,
           ollamaApiKey: ollamaKey,
+          geminiApiKey: geminiKey,  // For educational slide generation
           useGlm46: true,  // Use GLM-4.6 for code generation
         });
         
@@ -165,11 +174,21 @@ function App() {
         {/* Header Dock - Persistent Top Left */}
         <HeaderDock />
 
-        {/* Left Sidebar - Notes & Projects */}
-        <NoteSidebar />
+        {/* Left Sidebar - Context-aware: Notes or Memory Files */}
+        {canvasMode === 'dashboard' ? (
+          <MemorySidebar
+            activeFileId={activeMemoryFile}
+            onSelectFile={setActiveMemoryFile}
+          />
+        ) : (
+          <NoteSidebar />
+        )}
 
-        {/* Main Canvas Area */}
-        <Canvas />
+        {/* Main Canvas Area - passes activeMemoryFile when in dashboard mode */}
+        <Canvas 
+          activeMemoryFile={activeMemoryFile} 
+          onCloseMemoryFile={() => setActiveMemoryFile(null)}
+        />
 
         {/* Right Side - AI Sidebar (always visible) */}
         <AISidebar />

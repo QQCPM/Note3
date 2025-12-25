@@ -64,6 +64,26 @@
   font-weight: 500;
 }
 
+.header-import-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  background: linear-gradient(135deg, rgba(88, 166, 255, 0.15) 0%, rgba(163, 113, 247, 0.15) 100%);
+  color: #58a6ff;
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header-import-btn:hover {
+  background: linear-gradient(135deg, rgba(88, 166, 255, 0.25) 0%, rgba(163, 113, 247, 0.25) 100%);
+  border-color: rgba(88, 166, 255, 0.5);
+}
+
 /* =============================================================================
    AI INSIGHT BANNER
    ============================================================================= */
@@ -810,12 +830,10 @@
 
 .loading-shimmer {
   height: 80px;
-  background: linear-gradient(
-    90deg,
-    #161b22 0%,
-    #21262d 50%,
-    #161b22 100%
-  );
+  background: linear-gradient(90deg,
+      #161b22 0%,
+      #21262d 50%,
+      #161b22 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 10px;
@@ -825,6 +843,7 @@
   0% {
     background-position: 200% 0;
   }
+
   100% {
     background-position: -200% 0;
   }
@@ -1374,8 +1393,9 @@
 /* FOR YOU Header */
 .for-you-header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 4px;
 }
 
@@ -1391,6 +1411,72 @@
 .for-you-subtitle {
   font-size: 12px;
   color: #7d8590;
+}
+
+/* AI Memory Toggle Button */
+.ai-memory-toggle {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #7d8590;
+  transition: all 0.15s ease;
+}
+
+.ai-memory-toggle:hover {
+  background: #30363d;
+  color: #58a6ff;
+  border-color: #58a6ff;
+}
+
+.ai-memory-toggle.active {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+/* Project Memory Toggle Button */
+.project-memory-toggle {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+
+.project-memory-toggle:hover {
+  background: #30363d;
+  border-color: #3fb950;
+}
+
+.project-memory-toggle.active {
+  background: rgba(63, 185, 80, 0.15);
+  border-color: #3fb950;
+}
+
+/* Dashboard Loading Indicator */
+.dashboard-loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  background: rgba(88, 166, 255, 0.08);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #58a6ff;
+  margin-bottom: 16px;
 }
 
 /* Additional Learning Aid Types */
@@ -1425,8 +1511,13 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .learning-aid-modal {
@@ -1444,6 +1535,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1783,3 +1875,237 @@
   backdrop-filter: blur(4px);
 }
 
+/* =============================================================================
+   ROADMAP IMPORT MODAL
+   ============================================================================= */
+
+.roadmap-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.roadmap-modal {
+  width: 100%;
+  max-width: 640px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.roadmap-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #21262d;
+}
+
+.roadmap-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #e6edf3;
+}
+
+.roadmap-modal-title h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.roadmap-modal-close {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: #7d8590;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.roadmap-modal-close:hover {
+  color: #e6edf3;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.roadmap-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.roadmap-modal-description {
+  font-size: 14px;
+  color: #7d8590;
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.roadmap-textarea {
+  width: 100%;
+  min-height: 280px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 13px;
+  color: #e6edf3;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.roadmap-textarea::placeholder {
+  color: #484f58;
+}
+
+.roadmap-textarea:focus {
+  border-color: #58a6ff;
+}
+
+.roadmap-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.roadmap-error {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.2);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #f85149;
+}
+
+.roadmap-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #21262d;
+}
+
+.roadmap-cancel-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  color: #7d8590;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.roadmap-cancel-btn:hover:not(:disabled) {
+  color: #e6edf3;
+  border-color: #7d8590;
+}
+
+.roadmap-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.roadmap-import-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  background: #238636;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.roadmap-import-btn:hover:not(:disabled) {
+  background: #2ea043;
+}
+
+.roadmap-import-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Empty state for plans - Import CTA */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.empty-state-icon {
+  width: 48px;
+  height: 48px;
+  color: #7d8590;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  font-size: 14px;
+  color: #7d8590;
+  margin: 0 0 16px 0;
+}
+
+.import-roadmap-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  background: linear-gradient(135deg, #58a6ff 0%, #a371f7 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.import-roadmap-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+}
+
+/* Loading shimmer for generating state */
+.loading-shimmer {
+  height: 100px;
+  background: linear-gradient(90deg, #21262d 0%, #30363d 50%, #21262d 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}

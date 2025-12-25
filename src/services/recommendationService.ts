@@ -1,4 +1,5 @@
 import { tauriAI } from './tauriAI';
+import { geminiService } from './geminiService';
 import type {
   RecommendationData,
   MindmapData,
@@ -6,6 +7,7 @@ import type {
   ConceptData,
   ExerciseData,
   ResourceData,
+  SlideData,
   RecommendationCache,
   RecommendationType,
 } from '@/types/recommendation';
@@ -118,15 +120,35 @@ function parseAIResponse<T>(response: string, fallback: T): T {
 /**
  * Generate mindmap structure from note content
  */
-export async function generateMindmap(noteId: string): Promise<MindmapData> {
+export async function generateMindmap(noteId: string, noteContent?: string): Promise<MindmapData> {
   const cached = getCachedRecommendation(noteId);
   if (cached?.mindmap) {
     return cached.mindmap;
   }
 
-  const prompt = `Analyze the note content and generate a hierarchical mindmap structure. 
-The mindmap should show the main topic as the center node, with major branches for key themes, 
-and sub-branches for important concepts.
+  // Check if AI is initialized
+  if (!tauriAI.isInitialized()) {
+    throw new Error('AI system not initialized. Please wait for initialization to complete or check your API keys.');
+  }
+
+  // Get content - use provided or fetch from backend
+  let content = noteContent;
+  if (!content) {
+    try {
+      content = await tauriAI.getNoteContext(noteId);
+    } catch {
+      throw new Error('Note content not available. Please provide content directly.');
+    }
+  }
+
+  if (!content || content.trim().length < 10) {
+    throw new Error('Note content is too short to generate a mindmap.');
+  }
+
+  const prompt = `Analyze this note content and generate a hierarchical mindmap structure:
+
+NOTE CONTENT:
+${content}
 
 Return ONLY a JSON object with this structure:
 {
@@ -149,7 +171,7 @@ Return ONLY a JSON object with this structure:
 Make sure the structure reflects the actual content and relationships in the note.`;
 
   try {
-    const response = await tauriAI.chatWithNoteContext(noteId, prompt);
+    const response = await tauriAI.chat([{ role: 'user', content: prompt }]);
     const mindmap = parseAIResponse<MindmapData>(response, {
       center: 'Main Topic',
       nodes: [],
@@ -162,7 +184,10 @@ Make sure the structure reflects the actual content and relationships in the not
 
     return mindmap;
   } catch (error) {
-    console.error('Failed to generate mindmap:', error);
+    console.error('❌ [RecommendationService] Failed to generate mindmap:', error);
+    if (error instanceof Error) {
+      throw new Error(`Mindmap generation failed: ${error.message}`);
+    }
     throw error;
   }
 }
@@ -170,36 +195,44 @@ Make sure the structure reflects the actual content and relationships in the not
 /**
  * Generate flashcards from note content
  */
-export async function generateFlashcards(noteId: string): Promise<FlashcardData[]> {
+export async function generateFlashcards(noteId: string, noteContent?: string): Promise<FlashcardData[]> {
   const cached = getCachedRecommendation(noteId);
   if (cached?.flashcards) {
     return cached.flashcards;
   }
 
-  const prompt = `Analyze the note content and create 8-12 flashcards with questions and answers.
-Focus on key concepts, definitions, important facts, and relationships.
+  if (!tauriAI.isInitialized()) {
+    throw new Error('AI system not initialized.');
+  }
 
-IMPORTANT: If the note contains mathematical formulas or equations, use LaTeX syntax:
-- ONLY use inline math format: $formula$ (e.g., $x_i$ or $\\theta$ or $\\hat\\theta = \\arg\\max_\\theta p(D|\\theta)$)
-- DO NOT use block math format ($$...$$) - always use inline math ($...$)
-- For longer equations, break them into multiple inline math expressions or use text descriptions
-- Use proper LaTeX escaping: \\ for backslashes, \\{ for braces, etc.
+  let content = noteContent;
+  if (!content) {
+    try {
+      content = await tauriAI.getNoteContext(noteId);
+    } catch {
+      throw new Error('Note content not available.');
+    }
+  }
 
-Return ONLY a JSON array with this structure:
+  const prompt = `Analyze this note and create 8-12 flashcards:
+
+NOTE CONTENT:
+${content}
+
+IMPORTANT: Use inline LaTeX math only: $formula$ (not $$...$$)
+
+Return ONLY a JSON array:
 [
   {
-    "question": "Clear, specific question",
-    "answer": "Comprehensive answer explaining the concept (may include LaTeX for math)"
+    "question": "Clear question",
+    "answer": "Comprehensive answer"
   }
-]
-
-Make questions test understanding of important concepts from the note.`;
+]`;
 
   try {
-    const response = await tauriAI.chatWithNoteContext(noteId, prompt);
+    const response = await tauriAI.chat([{ role: 'user', content: prompt }]);
     const flashcards = parseAIResponse<FlashcardData[]>(response, []);
 
-    // Update cache
     const currentData = getCachedRecommendation(noteId) || {};
     currentData.flashcards = flashcards;
     cacheRecommendation(noteId, currentData);
@@ -214,36 +247,44 @@ Make questions test understanding of important concepts from the note.`;
 /**
  * Generate advanced concepts from note content
  */
-export async function generateConcepts(noteId: string): Promise<ConceptData[]> {
+export async function generateConcepts(noteId: string, noteContent?: string): Promise<ConceptData[]> {
   const cached = getCachedRecommendation(noteId);
   if (cached?.concepts) {
     return cached.concepts;
   }
 
-  const prompt = `Analyze the note content and identify 5-8 advanced concepts or related topics 
-that build upon or extend the current material. These should be topics the user might want to explore next.
+  if (!tauriAI.isInitialized()) {
+    throw new Error('AI system not initialized.');
+  }
 
-IMPORTANT: If the note contains mathematical formulas or equations, use LaTeX syntax:
-- ONLY use inline math format: $formula$ (e.g., $x_i$ or $\\theta$ or $\\hat\\theta = \\arg\\max_\\theta p(D|\\theta)$)
-- DO NOT use block math format ($$...$$) - always use inline math ($...$)
-- For longer equations, break them into multiple inline math expressions or use text descriptions
-- Use proper LaTeX escaping: \\ for backslashes, \\{ for braces, etc.
+  let content = noteContent;
+  if (!content) {
+    try {
+      content = await tauriAI.getNoteContext(noteId);
+    } catch {
+      throw new Error('Note content not available.');
+    }
+  }
 
-Return ONLY a JSON array with this structure:
+  const prompt = `Analyze this note and identify 5-8 advanced related concepts:
+
+NOTE CONTENT:
+${content}
+
+Use inline LaTeX math only: $formula$
+
+Return ONLY a JSON array:
 [
   {
     "title": "Concept name",
-    "description": "2-3 sentence explanation of the concept and why it's relevant (may include LaTeX for math)"
+    "description": "2-3 sentence explanation"
   }
-]
-
-Focus on concepts that are naturally connected to the note content.`;
+]`;
 
   try {
-    const response = await tauriAI.chatWithNoteContext(noteId, prompt);
+    const response = await tauriAI.chat([{ role: 'user', content: prompt }]);
     const concepts = parseAIResponse<ConceptData[]>(response, []);
 
-    // Update cache
     const currentData = getCachedRecommendation(noteId) || {};
     currentData.concepts = concepts;
     cacheRecommendation(noteId, currentData);
@@ -258,37 +299,45 @@ Focus on concepts that are naturally connected to the note content.`;
 /**
  * Generate practice exercises from note content
  */
-export async function generateExercises(noteId: string): Promise<ExerciseData[]> {
+export async function generateExercises(noteId: string, noteContent?: string): Promise<ExerciseData[]> {
   const cached = getCachedRecommendation(noteId);
   if (cached?.exercises) {
     return cached.exercises;
   }
 
-  const prompt = `Analyze the note content and create 5-8 practice exercises or problems 
-that help reinforce the key concepts. These should be hands-on, practical exercises.
+  if (!tauriAI.isInitialized()) {
+    throw new Error('AI system not initialized.');
+  }
 
-IMPORTANT: If the note contains mathematical formulas or equations, use LaTeX syntax:
-- ONLY use inline math format: $formula$ (e.g., $x_i$ or $\\theta$ or $\\hat\\theta = \\arg\\max_\\theta p(D|\\theta)$)
-- DO NOT use block math format ($$...$$) - always use inline math ($...$)
-- For longer equations, break them into multiple inline math expressions or use text descriptions
-- Use proper LaTeX escaping: \\ for backslashes, \\{ for braces, etc.
+  let content = noteContent;
+  if (!content) {
+    try {
+      content = await tauriAI.getNoteContext(noteId);
+    } catch {
+      throw new Error('Note content not available.');
+    }
+  }
 
-Return ONLY a JSON array with this structure:
+  const prompt = `Analyze this note and create 5-8 practice exercises:
+
+NOTE CONTENT:
+${content}
+
+Use inline LaTeX math only: $formula$
+
+Return ONLY a JSON array:
 [
   {
     "title": "Exercise name",
-    "description": "Clear description of what to do and what concepts it covers (may include LaTeX for math)",
+    "description": "Clear description",
     "difficulty": "beginner" | "intermediate" | "advanced"
   }
-]
-
-Make exercises relevant to the actual content of the note.`;
+]`;
 
   try {
-    const response = await tauriAI.chatWithNoteContext(noteId, prompt);
+    const response = await tauriAI.chat([{ role: 'user', content: prompt }]);
     const exercises = parseAIResponse<ExerciseData[]>(response, []);
 
-    // Update cache
     const currentData = getCachedRecommendation(noteId) || {};
     currentData.exercises = exercises;
     cacheRecommendation(noteId, currentData);
@@ -303,32 +352,44 @@ Make exercises relevant to the actual content of the note.`;
 /**
  * Generate learning resources from note content
  */
-export async function generateResources(noteId: string): Promise<ResourceData[]> {
+export async function generateResources(noteId: string, noteContent?: string): Promise<ResourceData[]> {
   const cached = getCachedRecommendation(noteId);
   if (cached?.resources) {
     return cached.resources;
   }
 
-  const prompt = `Analyze the note content and suggest 6-10 high-quality learning resources 
-(books, courses, videos, papers, tutorials, etc.) that would help deepen understanding of the topic.
+  if (!tauriAI.isInitialized()) {
+    throw new Error('AI system not initialized.');
+  }
 
-Return ONLY a JSON array with this structure:
+  let content = noteContent;
+  if (!content) {
+    try {
+      content = await tauriAI.getNoteContext(noteId);
+    } catch {
+      throw new Error('Note content not available.');
+    }
+  }
+
+  const prompt = `Analyze this note and suggest 6-10 high-quality learning resources:
+
+NOTE CONTENT:
+${content}
+
+Return ONLY a JSON array:
 [
   {
-    "type": "Book" | "Course" | "Video" | "Paper" | "Tutorial" | "Interactive" | "Article" | "Website",
+    "type": "Book" | "Course" | "Video" | "Paper" | "Tutorial" | "Article",
     "title": "Resource title",
-    "description": "Why this resource is valuable and what it covers",
+    "description": "Why this resource is valuable",
     "link": "URL if available (optional)"
   }
-]
-
-Suggest real, well-known resources when possible.`;
+]`;
 
   try {
-    const response = await tauriAI.chatWithNoteContext(noteId, prompt);
+    const response = await tauriAI.chat([{ role: 'user', content: prompt }]);
     const resources = parseAIResponse<ResourceData[]>(response, []);
 
-    // Update cache
     const currentData = getCachedRecommendation(noteId) || {};
     currentData.resources = resources;
     cacheRecommendation(noteId, currentData);
@@ -341,11 +402,98 @@ Suggest real, well-known resources when possible.`;
 }
 
 /**
+ * Generate educational slides from note content using Gemini 3 Pro
+ * Creates up to 14 detailed visual slides explaining key concepts
+ */
+export async function generateSlides(
+  noteId: string,
+  numSlides: number = 8,
+  onProgress?: (progress: { current: number; total: number; message: string }) => void,
+  noteContent?: string  // Optional: pass content directly to avoid DB query
+): Promise<SlideData[]> {
+  const cached = getCachedRecommendation(noteId);
+  if (cached?.slides && cached.slides.length > 0) {
+    return cached.slides;
+  }
+
+  // Check if Gemini service is initialized
+  if (!geminiService.isInitialized) {
+    throw new Error('Gemini service not initialized. Please configure your Google AI API key.');
+  }
+
+  try {
+    // Get note content - use provided content or fetch from backend
+    let content = noteContent;
+    
+    if (!content) {
+      try {
+        content = await tauriAI.getNoteContext(noteId);
+      } catch (dbError) {
+        console.warn('⚠️ Failed to get note from DB, will need content passed directly:', dbError);
+        throw new Error('Note content not available. Please ensure the note is saved to the database.');
+      }
+    }
+    
+    if (!content || content.length === 0) {
+      throw new Error('No note content found');
+    }
+
+    // Generate slides using Gemini service
+    const generatedSlides = await geminiService.generateAllSlides(
+      content,  // Use the validated content variable
+      Math.min(numSlides, 14), // Max 14 slides
+      (progress) => {
+        onProgress?.({
+          current: progress.currentSlide,
+          total: progress.totalSlides,
+          message: progress.message,
+        });
+      }
+    );
+
+    // Convert to SlideData format
+    const slides: SlideData[] = generatedSlides.map((slide) => ({
+      slideNumber: slide.slideNumber,
+      title: slide.title,
+      type: slide.type as SlideData['type'],
+      imageData: slide.imageData,
+      caption: slide.caption,
+    }));
+
+    // Update cache
+    const currentData = getCachedRecommendation(noteId) || {};
+    currentData.slides = slides;
+    cacheRecommendation(noteId, currentData);
+
+    return slides;
+  } catch (error) {
+    console.error('Failed to generate slides:', error);
+    throw error;
+  }
+}
+
+/**
+ * Initialize Gemini service with API key
+ * Should be called during app initialization if Google AI API key is available
+ */
+export function initializeGeminiService(apiKey: string): void {
+  geminiService.initialize(apiKey);
+}
+
+/**
+ * Check if Gemini service is ready for slide generation
+ */
+export function isGeminiServiceReady(): boolean {
+  return geminiService.isInitialized;
+}
+
+/**
  * Analyze note and generate all recommendations
  * This is the main entry point for recommendation generation
  */
 export async function analyzeNoteForRecommendations(
-  noteId: string
+  noteId: string,
+  noteContent?: string
 ): Promise<RecommendationData> {
   // Check cache first
   const cached = getCachedRecommendation(noteId);
@@ -355,11 +503,11 @@ export async function analyzeNoteForRecommendations(
 
   // Generate all recommendations in parallel for better performance
   const [mindmap, flashcards, concepts, exercises, resources] = await Promise.allSettled([
-    generateMindmap(noteId),
-    generateFlashcards(noteId),
-    generateConcepts(noteId),
-    generateExercises(noteId),
-    generateResources(noteId),
+    generateMindmap(noteId, noteContent),
+    generateFlashcards(noteId, noteContent),
+    generateConcepts(noteId, noteContent),
+    generateExercises(noteId, noteContent),
+    generateResources(noteId, noteContent),
   ]);
 
   const data: RecommendationData = {};
@@ -408,6 +556,9 @@ export async function generateRecommendation(
       break;
     case 'resources':
       await generateResources(noteId);
+      break;
+    case 'slides':
+      await generateSlides(noteId);
       break;
   }
 

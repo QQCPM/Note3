@@ -3,6 +3,7 @@ import { useTransitionStore } from '@/store/transitionStore';
 import { useBlocksStore } from '@/store/blocksStore';
 import { createBlock } from '@/utils/tauri';
 import { streamAIEditChat } from './aiEditService';
+import { processSecretaryMessage, isPlanningRequest } from './secretaryService';
 import type { TextBlockData } from '@/types';
 
 /**
@@ -10,6 +11,7 @@ import type { TextBlockData } from '@/types';
  *
  * Handles AI chat functionality in StartingPage
  * - Regular chat (no note context)
+ * - Planning/scheduling (routed to Secretary)
  * - Chat with note context (@mention)
  * - Manages conversation history
  * - Converts highlights to context
@@ -21,6 +23,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   noteId?: string; // If this message involves a note
+  isSecretary?: boolean; // If this came from secretary service
 }
 
 /**
@@ -91,12 +94,31 @@ Be helpful, concise, and format your responses with proper markdown.`;
 
 /**
  * Regular chat (no note context)
+ * Routes planning requests to Secretary Service
  */
 export async function sendChatMessage(
   conversationHistory: ChatMessage[],
   userMessage: string
 ): Promise<string> {
   try {
+    // Check if this is a planning/scheduling request
+    if (isPlanningRequest(userMessage)) {
+      console.log('📅 Detected planning request, routing to Secretary...');
+
+      const secretaryResponse = await processSecretaryMessage(
+        userMessage,
+        convertToAIMessages(conversationHistory)
+      );
+
+      // Return the secretary's message
+      // The actions are logged for debugging, could be used for UI feedback
+      if (secretaryResponse.actions.length > 0) {
+        console.log('🔧 Secretary actions:', secretaryResponse.actions);
+      }
+
+      return secretaryResponse.message;
+    }
+
     console.log('💬 Sending chat message to AI...');
 
     // Convert to AI messages format with system prompt
@@ -176,7 +198,7 @@ Remember: Create ONLY new content. The highlighted text is just for reference - 
     // This will use AI tools to edit the block and create a pending edit
     return new Promise((resolve, reject) => {
       console.log(`🤖 Starting AI edit on block ${newBlock.id}...`);
-      
+
       streamAIEditChat({
         blockId: newBlock.id,
         userMessage: fullMessage,
@@ -256,11 +278,11 @@ This allows the content to be automatically added to the note.`;
     // Extract new content if present
     let newContent: string | null = null;
     const newContentMatch = response.match(/===NEW CONTENT START===([\s\S]*?)===NEW CONTENT END===/);
-    
+
     if (newContentMatch) {
       newContent = newContentMatch[1].trim();
       console.log(`📝 New content extracted: ${newContent.length} chars`);
-      
+
       // DON'T save yet - create a pending edit instead
       // The pending edit will be created by the caller and shown in preview panel
     }

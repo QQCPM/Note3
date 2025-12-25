@@ -130,12 +130,18 @@ class MemoryService {
 
   async loadProjectMemory(projectId: string): Promise<ProjectMemory | null> {
     try {
+      let filePath: string;
+      
+      // Try project path first, fall back to global memory folder
       const projectPath = await getProjectPath(projectId);
-      if (!projectPath) {
-        return null;
+      if (projectPath) {
+        filePath = `${projectPath}/${PROJECT_MEMORY_FILE}`;
+      } else {
+        // Use global memory folder
+        const basePath = await getMemoryBasePath();
+        filePath = `${basePath}/${PROJECT_MEMORY_FILE}`;
       }
 
-      const filePath = `${projectPath}/${PROJECT_MEMORY_FILE}`;
       const content = await readMemoryFile(filePath);
       
       if (!content) {
@@ -154,12 +160,18 @@ class MemoryService {
 
   async saveProjectMemory(projectId: string, memory: ProjectMemory): Promise<void> {
     try {
+      let filePath: string;
+      
+      // Try project path first, fall back to global memory folder
       const projectPath = await getProjectPath(projectId);
-      if (!projectPath) {
-        throw new Error('Project path not found');
+      if (projectPath) {
+        filePath = `${projectPath}/${PROJECT_MEMORY_FILE}`;
+      } else {
+        // Use global memory folder
+        const basePath = await getMemoryBasePath();
+        filePath = `${basePath}/${PROJECT_MEMORY_FILE}`;
       }
 
-      const filePath = `${projectPath}/${PROJECT_MEMORY_FILE}`;
       const content = serializeProjectMemory(memory);
       await writeMemoryFile(filePath, content);
       
@@ -181,10 +193,13 @@ class MemoryService {
       
       if (projectId) {
         const projectPath = await getProjectPath(projectId);
-        if (!projectPath) {
-          return null;
+        if (projectPath) {
+          filePath = `${projectPath}/${DAILY_MEMORY_FILE}`;
+        } else {
+          // Fall back to global folder if project path not found
+          const basePath = await getMemoryBasePath();
+          filePath = `${basePath}/${DAILY_MEMORY_FILE}`;
         }
-        filePath = `${projectPath}/${DAILY_MEMORY_FILE}`;
       } else {
         const basePath = await getMemoryBasePath();
         filePath = `${basePath}/${DAILY_MEMORY_FILE}`;
@@ -212,10 +227,13 @@ class MemoryService {
       
       if (projectId) {
         const projectPath = await getProjectPath(projectId);
-        if (!projectPath) {
-          throw new Error('Project path not found');
+        if (projectPath) {
+          filePath = `${projectPath}/${DAILY_MEMORY_FILE}`;
+        } else {
+          // Fall back to global folder if project path not found
+          const basePath = await getMemoryBasePath();
+          filePath = `${basePath}/${DAILY_MEMORY_FILE}`;
         }
-        filePath = `${projectPath}/${DAILY_MEMORY_FILE}`;
       } else {
         const basePath = await getMemoryBasePath();
         filePath = `${basePath}/${DAILY_MEMORY_FILE}`;
@@ -356,6 +374,146 @@ class MemoryService {
     }
 
     await this.saveDailyMemory(daily, projectId);
+  }
+
+  // ============================================
+  // Auto-generate Sample Files
+  // ============================================
+
+  async initializeDefaultFiles(projectId?: string): Promise<void> {
+    // Check and create AI.md if it doesn't exist
+    const aiMemory = await this.loadAIMemory();
+    if (!aiMemory) {
+      await this.createDefaultAIMemory();
+      console.log('Created default AI.md');
+    }
+
+    // Check and create Daily.md if it doesn't exist
+    const dailyMemory = await this.loadDailyMemory(projectId);
+    if (!dailyMemory) {
+      await this.createDefaultDailyMemory(projectId);
+      console.log('Created default Daily.md');
+    }
+
+    // If project is specified, create Project.md if it doesn't exist
+    if (projectId) {
+      const projectMemory = await this.loadProjectMemory(projectId);
+      if (!projectMemory) {
+        await this.createDefaultProjectMemory(projectId);
+        console.log('Created default Project.md');
+      }
+    }
+  }
+
+  async createDefaultDailyMemory(projectId?: string): Promise<DailyMemory> {
+    const today = new Date().toISOString().split('T')[0];
+    const defaultMemory: DailyMemory = {
+      date: today,
+      context: {
+        week: 1,
+        phase: 'Getting Started',
+        focus: 'Initial Setup',
+      },
+      tasks: [
+        {
+          id: 'task-1',
+          time: '09:00',
+          task: 'Review learning goals',
+          type: 'review',
+          duration: '30min',
+          status: 'pending',
+          reason: 'Start with clarity on what you want to achieve',
+        },
+        {
+          id: 'task-2',
+          time: '09:30',
+          task: 'Core study session',
+          type: 'learn',
+          duration: '60min',
+          status: 'pending',
+          reason: 'Morning focus for deep learning',
+        },
+        {
+          id: 'task-3',
+          time: '10:30',
+          task: 'Break',
+          type: 'break',
+          duration: '15min',
+          status: 'pending',
+        },
+        {
+          id: 'task-4',
+          time: '10:45',
+          task: 'Practice exercises',
+          type: 'practice',
+          duration: '45min',
+          status: 'pending',
+          reason: 'Apply what you learned',
+        },
+      ],
+      totalStudyTime: '135min',
+      aiNotes: 'Welcome! This is your first day. Take it easy and focus on building good habits.',
+    };
+
+    await this.saveDailyMemory(defaultMemory, projectId);
+    return defaultMemory;
+  }
+
+  async createDefaultProjectMemory(projectId: string, projectName?: string): Promise<ProjectMemory> {
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 30); // 30-day default project
+
+    const defaultMemory: ProjectMemory = {
+      name: projectName || 'My Learning Project',
+      goal: {
+        description: 'Complete this learning project with understanding and practical skills',
+        deadline: endDate.toISOString().split('T')[0],
+      },
+      timeline: {
+        startDate: today.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        currentDay: 1,
+        totalDays: 30,
+      },
+      currentPhase: 'Foundations',
+      phases: [
+        {
+          id: 'phase-1',
+          name: 'Foundations',
+          weeks: '1-2',
+          status: 'in_progress',
+          topics: ['Core concepts', 'Basic terminology', 'Setup & tools'],
+        },
+        {
+          id: 'phase-2',
+          name: 'Core Skills',
+          weeks: '2-3',
+          status: 'pending',
+          topics: ['Main techniques', 'Practice exercises', 'Common patterns'],
+        },
+        {
+          id: 'phase-3',
+          name: 'Application',
+          weeks: '3-4',
+          status: 'pending',
+          topics: ['Real projects', 'Problem solving', 'Review & refine'],
+        },
+      ],
+      weeklyPlan: {
+        Mon: 'Theory & reading',
+        Tue: 'Practice exercises',
+        Wed: 'Theory & reading',
+        Thu: 'Practice exercises',
+        Fri: 'Project work',
+        Sat: 'Review & catch up',
+        Sun: 'Rest or light review',
+      },
+      blockers: [],
+    };
+
+    await this.saveProjectMemory(projectId, defaultMemory);
+    return defaultMemory;
   }
 
   // ============================================

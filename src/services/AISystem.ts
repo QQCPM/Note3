@@ -24,6 +24,9 @@ import {
   generateConcepts, 
   generateExercises, 
   generateResources,
+  generateSlides,
+  initializeGeminiService,
+  isGeminiServiceReady,
   clearRecommendationCache,
   clearAllRecommendationCache,
 } from './recommendationService';
@@ -61,6 +64,7 @@ export type AISystemMode =
 export interface AISystemConfig {
   openaiApiKey: string;
   ollamaApiKey?: string;  // For GLM-4.6 cloud code generation
+  geminiApiKey?: string;  // For Gemini 3 Pro slide generation
   useGlm46?: boolean;     // Force GLM-4.6 instead of local models (legacy, use mode: 'demo')
   mode?: AISystemMode;    // Machine-specific configuration mode
   autoInitialize?: boolean;
@@ -163,7 +167,18 @@ class AISystemService {
       await tauriAI.initialize(this._config);
       console.log('✅ [AISystem] Tauri AI backend initialized');
 
-      // Step 4: Health check
+      // Step 4: Initialize Gemini service if API key is provided
+      if (config.geminiApiKey) {
+        try {
+          initializeGeminiService(config.geminiApiKey);
+          console.log('✅ [AISystem] Gemini service initialized for slide generation');
+        } catch (geminiError) {
+          console.warn('⚠️ [AISystem] Gemini service initialization failed:', geminiError);
+          // Don't fail entire initialization if Gemini fails
+        }
+      }
+
+      // Step 5: Health check
       await this.checkHealth();
 
       // Step 5: Determine final status
@@ -178,13 +193,19 @@ class AISystemService {
 
     } catch (error) {
       this._setStatus('error');
+      const errorMessage = error instanceof Error ? error.message : String(error);
       this._health = {
         status: 'error',
         services: { embedding: false, reranker: false, localCode: false, agent: false, apiCode: false },
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
         lastCheck: new Date(),
       };
       console.error('❌ [AISystem] Initialization failed:', error);
+      console.error('❌ [AISystem] Error details:', errorMessage);
+      console.error('❌ [AISystem] Please check:');
+      console.error('   1. OpenAI API key is valid');
+      console.error('   2. Tauri backend is running');
+      console.error('   3. Network connection is available');
       throw error;
     }
   }
@@ -515,6 +536,33 @@ class AISystemService {
    */
   clearAllRecommendationCache() {
     clearAllRecommendationCache();
+  }
+
+  /**
+   * Generate educational slides from note content using Gemini 3 Pro
+   */
+  async generateSlides(
+    noteId: string,
+    numSlides: number = 8,
+    onProgress?: (progress: { current: number; total: number; message: string }) => void
+  ) {
+    this._requireReady();
+    return generateSlides(noteId, numSlides, onProgress);
+  }
+
+  /**
+   * Check if Gemini service is ready for slide generation
+   */
+  isGeminiReady(): boolean {
+    return isGeminiServiceReady();
+  }
+
+  /**
+   * Initialize Gemini service with API key (can be called separately)
+   */
+  initializeGemini(apiKey: string): void {
+    initializeGeminiService(apiKey);
+    console.log('✅ [AISystem] Gemini service initialized');
   }
 
   // ========================================================================

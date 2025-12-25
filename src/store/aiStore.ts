@@ -110,11 +110,11 @@ interface AIStore {
   addThinkingStep: (step: Omit<ThinkingStep, 'id' | 'timestamp'>) => void;
   updateThinkingStep: (stepId: string, updates: Partial<ThinkingStep>) => void;
   clearCurrentThinking: () => void;
-  
+
   // NEW: Actions - Citations
   addCitation: (citation: Omit<Citation, 'id'>) => Citation;
   clearCurrentCitations: () => void;
-  
+
   // NEW: Actions - Toggle thinking expanded
   toggleThinkingExpanded: (messageId: string) => void;
 
@@ -134,6 +134,22 @@ interface AIStore {
   // Actions - Mode
   enterEditMode: (blockId: string) => void;
   exitEditMode: () => void;
+
+  // NEW: Background Slide Generation
+  isGeneratingSlides: boolean;
+  slideProgress: {
+    current: number;
+    total: number;
+    message: string;
+  };
+  generatedSlides: any[] | null; // Using any[] to avoid circular dependency with types/recommendation.ts
+  slideError: string | null;
+
+  startSlideGeneration: () => void;
+  updateSlideProgress: (progress: { current: number; total: number; message: string }) => void;
+  finishSlideGeneration: (slides: any[]) => void;
+  setSlideError: (error: string) => void;
+  resetSlideState: () => void;
 }
 
 export const useAIStore = create<AIStore>((set, get) => ({
@@ -152,12 +168,12 @@ export const useAIStore = create<AIStore>((set, get) => ({
   addMessage: (message) =>
     set((state) => {
       // Complete all running steps before attaching to message
-      const completedSteps = message.role === 'assistant' 
+      const completedSteps = message.role === 'assistant'
         ? state.currentThinkingSteps.map(step => ({
-            ...step,
-            status: step.status === 'running' ? 'complete' as const : step.status,
-            duration: step.status === 'running' ? Date.now() - step.timestamp.getTime() : step.duration,
-          }))
+          ...step,
+          status: step.status === 'running' ? 'complete' as const : step.status,
+          duration: step.status === 'running' ? Date.now() - step.timestamp.getTime() : step.duration,
+        }))
         : state.currentThinkingSteps;
 
       // Attach current thinking steps and citations to the message
@@ -169,7 +185,7 @@ export const useAIStore = create<AIStore>((set, get) => ({
         citations: message.role === 'assistant' ? [...state.currentCitations] : undefined,
         isThinkingExpanded: false,
       };
-      
+
       return {
         messages: [...state.messages, newMessage],
         // Clear current thinking/citations after attaching to message
@@ -231,11 +247,11 @@ export const useAIStore = create<AIStore>((set, get) => ({
     const state = get();
     const newId = state.currentCitations.length + 1;
     const newCitation: Citation = { ...citation, id: newId };
-    
+
     set((state) => ({
       currentCitations: [...state.currentCitations, newCitation],
     }));
-    
+
     return newCitation;
   },
 
@@ -351,5 +367,48 @@ export const useAIStore = create<AIStore>((set, get) => ({
       targetBlockId: null,
       currentRequest: null,
       isLoading: false,
+    }),
+
+  // Background Slide Generation
+  isGeneratingSlides: false,
+  slideProgress: {
+    current: 0,
+    total: 0,
+    message: '',
+  },
+  generatedSlides: null,
+  slideError: null,
+
+  startSlideGeneration: () =>
+    set({
+      isGeneratingSlides: true,
+      slideError: null,
+      slideProgress: { current: 0, total: 0, message: 'Starting...' },
+    }),
+
+  updateSlideProgress: (progress) =>
+    set({
+      slideProgress: progress,
+    }),
+
+  finishSlideGeneration: (slides) =>
+    set({
+      isGeneratingSlides: false,
+      generatedSlides: slides,
+      slideProgress: { current: 0, total: 0, message: 'Complete' },
+    }),
+
+  setSlideError: (error) =>
+    set({
+      isGeneratingSlides: false,
+      slideError: error,
+    }),
+
+  resetSlideState: () =>
+    set({
+      isGeneratingSlides: false,
+      generatedSlides: null,
+      slideError: null,
+      slideProgress: { current: 0, total: 0, message: '' },
     }),
 }));

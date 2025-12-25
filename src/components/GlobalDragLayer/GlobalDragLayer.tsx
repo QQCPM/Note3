@@ -41,7 +41,7 @@ const GlobalDragLayer: React.FC = () => {
         top: 0,
         left: 0,
         pointerEvents: 'none', // CRITICAL: Allow mouse events to pass through
-        zIndex: 10000, // Above everything
+        zIndex: 5000, // Above canvas elements but below modals (9999)
         willChange: 'transform', // Hint to browser for GPU optimization
       }}
     >

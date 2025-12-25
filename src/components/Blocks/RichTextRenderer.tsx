@@ -4,10 +4,41 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { RootNodeMention } from '@/components/RootNode';
 
 interface RichTextRendererProps {
   content: string;
   enableMarkdown?: boolean; // Allow disabling markdown for plain text blocks
+  projectId?: string | null; // For scoping root node lookups
+}
+
+/**
+ * Detects @mentions in text and returns segments for rendering
+ */
+function parseTextWithMentions(text: string): Array<{ type: 'text' | 'mention'; content: string }> {
+  const segments: Array<{ type: 'text' | 'mention'; content: string }> = [];
+  const mentionRegex = /@([\w]+(?:\s+[\w]+){0,2})/g;
+  
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = mentionRegex.exec(text)) !== null) {
+    // Add text before the mention
+    if (match.index > lastIndex) {
+      segments.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+    }
+    
+    // Add the mention
+    segments.push({ type: 'mention', content: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Add remaining text
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', content: text.slice(lastIndex) });
+  }
+  
+  return segments;
 }
 
 /**
@@ -47,18 +78,46 @@ function normalizeLatex(content: string): string {
  * - Block math: $$formula$$
  */
 
+/**
+ * Renders text segments with @mentions converted to RootNodeMention components
+ */
+const TextWithMentions: React.FC<{ text: string; projectId?: string | null }> = ({ text, projectId }) => {
+  const segments = useMemo(() => parseTextWithMentions(text), [text]);
+  
+  return (
+    <>
+      {segments.map((segment, index) => {
+        if (segment.type === 'mention') {
+          return (
+            <RootNodeMention
+              key={`mention-${index}`}
+              term={segment.content}
+              projectId={projectId}
+            />
+          );
+        }
+        return <span key={`text-${index}`}>{segment.content}</span>;
+      })}
+    </>
+  );
+};
+
 const RichTextRenderer: React.FC<RichTextRendererProps> = ({
   content,
-  enableMarkdown = true
+  enableMarkdown = true,
+  projectId
 }) => {
   // Normalize LaTeX before rendering
   const processedContent = useMemo(() => normalizeLatex(content), [content]);
   
-  // If markdown is disabled, render as plain text
+  // Check if content has @mentions
+  const hasMentions = useMemo(() => /@[\w]+/.test(content), [content]);
+  
+  // If markdown is disabled, render as plain text with mentions
   if (!enableMarkdown) {
     return (
       <div className="rich-text-content whitespace-pre-wrap text-gray-200">
-        {content}
+        {hasMentions ? <TextWithMentions text={content} projectId={projectId} /> : content}
       </div>
     );
   }
@@ -93,9 +152,20 @@ const RichTextRenderer: React.FC<RichTextRendererProps> = ({
           h4: ({ children }) => (
             <h4 className="text-base font-semibold mb-2 text-gray-200">{children}</h4>
           ),
-          p: ({ children }) => (
-            <p className="mb-3 text-gray-300 leading-relaxed">{children}</p>
-          ),
+          p: ({ children }) => {
+            // Process children to detect @mentions in text nodes
+            const processChildren = (nodes: React.ReactNode): React.ReactNode => {
+              return React.Children.map(nodes, (child, idx) => {
+                if (typeof child === 'string' && /@[\w]+/.test(child)) {
+                  return <TextWithMentions key={idx} text={child} projectId={projectId} />;
+                }
+                return child;
+              });
+            };
+            return (
+              <p className="mb-3 text-gray-300 leading-relaxed">{processChildren(children)}</p>
+            );
+          },
           strong: ({ children }) => (
             <strong className="font-bold text-gray-100">{children}</strong>
           ),

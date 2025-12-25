@@ -27,9 +27,39 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   const [showDialog, setShowDialog] = useState(false);
 
   const handleSelectionChange = useCallback(() => {
+    if (!containerRef.current) {
+      setSelectionInfo(null);
+      return;
+    }
+
+    // Check if we're in a textarea (edit mode)
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLTextAreaElement && containerRef.current.contains(activeElement)) {
+      const start = activeElement.selectionStart;
+      const end = activeElement.selectionEnd;
+      
+      if (start !== end) {
+        const selectedText = activeElement.value.substring(start, end).trim();
+        if (selectedText.length >= 2) {
+          const rect = activeElement.getBoundingClientRect();
+          // Position above the textarea
+          setSelectionInfo({
+            text: selectedText,
+            startOffset: start,
+            endOffset: end,
+            rect: new DOMRect(rect.left + rect.width / 2, rect.top, 0, 0),
+          });
+          return;
+        }
+      }
+      setSelectionInfo(null);
+      return;
+    }
+
+    // Handle regular text selection (view mode)
     const selection = window.getSelection();
     
-    if (!selection || selection.isCollapsed || !containerRef.current) {
+    if (!selection || selection.isCollapsed) {
       setSelectionInfo(null);
       return;
     }
@@ -58,9 +88,17 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   }, [containerRef]);
 
   useEffect(() => {
+    // Listen for text selection changes
     document.addEventListener('selectionchange', handleSelectionChange);
+    
+    // Also listen for mouseup and keyup to catch textarea selections
+    document.addEventListener('mouseup', handleSelectionChange);
+    document.addEventListener('keyup', handleSelectionChange);
+    
     return () => {
       document.removeEventListener('selectionchange', handleSelectionChange);
+      document.removeEventListener('mouseup', handleSelectionChange);
+      document.removeEventListener('keyup', handleSelectionChange);
     };
   }, [handleSelectionChange]);
 

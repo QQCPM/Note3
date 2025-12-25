@@ -85,6 +85,13 @@ interface DashboardStore {
 
   // Initialize with sample data (for demo)
   initializeSampleData: () => void;
+
+  // AI-Powered Roadmap & Plan Generation
+  importRoadmapAsync: (rawRoadmap: string, projectId: string) => Promise<void>;
+  generateTodayPlanAsync: (projectId: string) => Promise<void>;
+  generateTomorrowPlanAsync: (projectId: string) => Promise<void>;
+  completeDayAndAdvance: (projectId: string) => Promise<void>;
+  hasActiveRoadmap: (projectId: string) => Promise<boolean>;
 }
 
 // ============================================================================
@@ -137,10 +144,10 @@ export const useDashboardStore = create<DashboardStore>()(
           const updatedTasks = plan.tasks.map((task) =>
             task.id === taskId
               ? {
-                  ...task,
-                  status,
-                  completedAt: status === 'completed' ? new Date().toISOString() : undefined,
-                }
+                ...task,
+                status,
+                completedAt: status === 'completed' ? new Date().toISOString() : undefined,
+              }
               : task
           );
 
@@ -215,10 +222,10 @@ export const useDashboardStore = create<DashboardStore>()(
           set((state) => ({
             todayReflection: state.todayReflection
               ? {
-                  ...state.todayReflection,
-                  aiProcessed: true,
-                  aiInsights: 'Based on your reflection, I\'ll adjust tomorrow\'s pace.',
-                }
+                ...state.todayReflection,
+                aiProcessed: true,
+                aiInsights: 'Based on your reflection, I\'ll adjust tomorrow\'s pace.',
+              }
               : null,
             isProcessingReflection: false,
           }));
@@ -386,7 +393,7 @@ export const useDashboardStore = create<DashboardStore>()(
           showReflection,
         });
         */
-        
+
         // For testing: always show
         set({
           showTomorrowPlan: true,
@@ -398,7 +405,7 @@ export const useDashboardStore = create<DashboardStore>()(
       transitionToNewDay: () => {
         const state = get();
         const currentDate = getCurrentDate();
-        
+
         // Check if today's plan is for yesterday (needs transition)
         if (state.todayPlan && state.todayPlan.date !== currentDate) {
           // Tomorrow becomes today
@@ -408,7 +415,7 @@ export const useDashboardStore = create<DashboardStore>()(
               date: currentDate,
               id: `plan-${currentDate}`,
             };
-            
+
             set({
               todayPlan: newTodayPlan,
               tomorrowPlan: null, // Clear tomorrow plan (AI will generate new one)
@@ -621,6 +628,113 @@ export const useDashboardStore = create<DashboardStore>()(
           // Clear reflection so it's fresh
           todayReflection: null,
         });
+      },
+
+      // ========================================================================
+      // AI-POWERED ROADMAP & PLAN GENERATION
+      // ========================================================================
+
+      importRoadmapAsync: async (rawRoadmap, projectId) => {
+        set({ isGeneratingPlan: true });
+        try {
+          const { processRoadmap } = await import('@/services/dailyPlanService');
+          const projectMemory = await processRoadmap(rawRoadmap, projectId);
+
+          // Update roadmap context in store
+          set({
+            activeRoadmapId: projectId,
+            roadmapDay: 1,
+            roadmapTotalDays: projectMemory.timeline.totalDays,
+            roadmapProgress: 0,
+            isGeneratingPlan: false,
+          });
+
+          console.log('✅ [DashboardStore] Roadmap imported successfully');
+        } catch (error) {
+          console.error('❌ [DashboardStore] Failed to import roadmap:', error);
+          set({ isGeneratingPlan: false });
+          throw error;
+        }
+      },
+
+      generateTodayPlanAsync: async (projectId) => {
+        set({ isGeneratingPlan: true });
+        try {
+          const { generateDailyPlan } = await import('@/services/dailyPlanService');
+          const plan = await generateDailyPlan(projectId);
+
+          set({
+            todayPlan: plan,
+            isGeneratingPlan: false,
+          });
+
+          console.log('✅ [DashboardStore] Today plan generated');
+        } catch (error) {
+          console.error('❌ [DashboardStore] Failed to generate today plan:', error);
+          set({ isGeneratingPlan: false });
+          // Fall back to sample data
+          get().initializeSampleData();
+        }
+      },
+
+      generateTomorrowPlanAsync: async (projectId) => {
+        set({ isGeneratingPlan: true });
+        try {
+          const { generateDailyPlan, getCurrentDayTopic } = await import('@/services/dailyPlanService');
+          const { getTomorrowDate } = await import('@/types/dashboard');
+
+          // Get tomorrow's context
+          const currentTopic = await getCurrentDayTopic(projectId);
+          if (!currentTopic) {
+            throw new Error('No roadmap found');
+          }
+
+          // Generate for tomorrow (next day in roadmap)
+          const plan = await generateDailyPlan(projectId, getTomorrowDate());
+
+          set({
+            tomorrowPlan: plan,
+            isGeneratingPlan: false,
+          });
+
+          console.log('✅ [DashboardStore] Tomorrow plan generated');
+        } catch (error) {
+          console.error('❌ [DashboardStore] Failed to generate tomorrow plan:', error);
+          set({ isGeneratingPlan: false });
+        }
+      },
+
+      completeDayAndAdvance: async (projectId) => {
+        const { todayReflection } = get();
+        try {
+          const { completeDay } = await import('@/services/dailyPlanService');
+          await completeDay(projectId, todayReflection || undefined);
+
+          // Update store progress
+          const currentDay = get().roadmapDay;
+          const totalDays = get().roadmapTotalDays;
+          const newDay = currentDay + 1;
+
+          set({
+            roadmapDay: newDay,
+            roadmapProgress: Math.round((newDay / totalDays) * 100),
+            streak: get().streak + 1,
+            totalDaysActive: get().totalDaysActive + 1,
+          });
+
+          console.log(`✅ [DashboardStore] Advanced to day ${newDay}`);
+        } catch (error) {
+          console.error('❌ [DashboardStore] Failed to complete day:', error);
+        }
+      },
+
+      hasActiveRoadmap: async (projectId) => {
+        try {
+          const { hasRoadmap } = await import('@/services/dailyPlanService');
+          return await hasRoadmap(projectId);
+        } catch {
+          return false;
+        }
       },
     }),
     {

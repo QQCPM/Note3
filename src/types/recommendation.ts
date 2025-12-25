@@ -34,12 +34,21 @@ export interface ResourceData {
   link?: string;
 }
 
+export interface SlideData {
+  slideNumber: number;
+  title: string;
+  type: 'architecture' | 'concept' | 'process' | 'graph' | 'comparison' | 'overview';
+  imageData: string; // Base64 encoded PNG image
+  caption: string;
+}
+
 export interface RecommendationData {
   mindmap?: MindmapData;
   flashcards?: FlashcardData[];
   concepts?: ConceptData[];
   exercises?: ExerciseData[];
   resources?: ResourceData[];
+  slides?: SlideData[];
 }
 
 export interface RecommendationCache {
@@ -48,5 +57,5 @@ export interface RecommendationCache {
   timestamp: number;
 }
 
-export type RecommendationType = 'mindmap' | 'flashcards' | 'concepts' | 'exercises' | 'resources';
+export type RecommendationType = 'mindmap' | 'flashcards' | 'concepts' | 'exercises' | 'resources' | 'slides';
 

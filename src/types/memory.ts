@@ -8,9 +8,19 @@
 export interface UserPreferences {
   bestFocusTime?: string;          // e.g., "9am-12pm"
   breakFrequency?: string;         // e.g., "Every 45 minutes"
+  breakFrequencyMinutes?: number;  // e.g., 45
   learningStyle?: string;          // e.g., "Visual + hands-on"
   weekdayHours?: number;           // e.g., 2
   weekendHours?: number;           // e.g., 4
+  dailyStudyMinutes?: number;      // e.g., 120
+  preferredTimeSlot?: 'morning' | 'afternoon' | 'evening' | 'night';
+  notifications?: boolean;
+}
+
+export interface LearningStyle {
+  primary: 'visual' | 'auditory' | 'reading' | 'kinesthetic';
+  preferences: string[];           // e.g., ["Step-by-step explanations", "Examples before theory"]
+  pace: 'slow' | 'moderate' | 'fast';
 }
 
 export interface AvailabilitySlot {
@@ -20,9 +30,12 @@ export interface AvailabilitySlot {
 
 export interface AIMemory {
   preferences: UserPreferences;
+  learningStyle?: LearningStyle;   // Detailed learning style
   availability: AvailabilitySlot[];
   blockedDates: string[];          // e.g., ["Feb 10-17"]
   customInstructions?: string;     // Free-form AI instructions
+  currentFocus?: string;           // What the user is currently learning
+  goals?: string[];                // Learning goals
 }
 
 // ============================================

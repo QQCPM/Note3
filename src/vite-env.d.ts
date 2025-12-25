@@ -2,7 +2,9 @@
 
 interface ImportMetaEnv {
   readonly VITE_OPENAI_API_KEY: string
-  // Add other env variables here
+  readonly VITE_OLLAMA_API_KEY?: string
+  readonly VITE_GEMINI_API_KEY?: string
+  readonly VITE_AI_MODE?: string
 }
 
 interface ImportMeta {

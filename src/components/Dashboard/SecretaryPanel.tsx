@@ -41,8 +41,10 @@ const SecretaryPanel: React.FC = () => {
     <div className="secretary-panel">
       {/* FOR YOU Header */}
       <div className="for-you-header">
-        <h2 className="for-you-title">FOR YOU</h2>
-        <span className="for-you-subtitle">Personalized learning assistant</span>
+        <div>
+          <h2 className="for-you-title">FOR YOU</h2>
+          <span className="for-you-subtitle">Personalized learning assistant</span>
+        </div>
       </div>
 
       {/* Progress Overview */}

@@ -7,9 +7,14 @@ import InfiniteCanvas from './InfiniteCanvas';
 import KnowledgeGraph3D from './KnowledgeGraph3D';
 import StartingPage from '../StartingPage/StartingPage';
 import { FilePreview } from '../FileViewer';
-import { Dashboard } from '../Dashboard';
+import { Dashboard, MemoryFileEditor } from '../Dashboard';
 
-const Canvas: React.FC = () => {
+interface CanvasProps {
+  activeMemoryFile?: string | null;
+  onCloseMemoryFile?: () => void;
+}
+
+const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) => {
   // Single source of truth: activeNoteId determines what note is displayed
   const { activeNoteId } = useNotesStore();
   const { setBlocks, blocks } = useBlocksStore();
@@ -90,11 +95,18 @@ const Canvas: React.FC = () => {
     }
   }, [activeNoteId, setBlocks]);
 
-  // Dashboard mode
+  // Dashboard mode - show MemoryFileEditor if a file is selected, otherwise Dashboard
   if (canvasMode === 'dashboard') {
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
-        <Dashboard />
+        {activeMemoryFile ? (
+          <MemoryFileEditor 
+            fileType={activeMemoryFile as 'ai' | 'project' | 'daily'} 
+            onClose={() => onCloseMemoryFile?.()}
+          />
+        ) : (
+          <Dashboard />
+        )}
       </main>
     );
   }

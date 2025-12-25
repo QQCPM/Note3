@@ -39,7 +39,7 @@ const StartingPage: React.FC = () => {
     const { treeItems } = useProjectStore();
     const { showNotePanel, notePanelVisible } = useLayoutStore();
     const { addHighlight } = useTransitionStore();
-    
+
     // Use shared AI store for messages (synced with AgentTab)
     const {
         messages,
@@ -50,13 +50,13 @@ const StartingPage: React.FC = () => {
         clearCurrentThinking,
         addPendingEdit,
     } = useAIStore();
-    
+
     const [inputValue, setInputValue] = useState('');
     const [selectedModel, setSelectedModel] = useState<'gpt' | 'gemini'>('gpt');
     const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [isRecommendationsExiting, setIsRecommendationsExiting] = useState(false);
-    
+
     // PDF upload state
     const [uploadedPDF, setUploadedPDF] = useState<{ file: File; extracted: PDFExtractResult } | null>(null);
     const [isExtractingPDF, setIsExtractingPDF] = useState(false);
@@ -106,7 +106,7 @@ const StartingPage: React.FC = () => {
             role: 'user',
             content: value,
         });
-        
+
         setInputValue('');
         setLoading(true);
         clearCurrentThinking();
@@ -118,7 +118,7 @@ const StartingPage: React.FC = () => {
                 let note = findNoteRecursively(notes, mentionedNoteId);
                 let noteTitle = note?.title || '';
                 let noteContent: string | null = null;
-                
+
                 // If not found in notes store, check if it's a project tree item
                 if (!note) {
                     const treeItem = treeItems.find(t => t.noteId === mentionedNoteId || t.id === mentionedNoteId);
@@ -127,10 +127,10 @@ const StartingPage: React.FC = () => {
                         console.log(`📝 Found in project tree: "${noteTitle}"`);
                     }
                 }
-                
+
                 // Get note content from localStorage (for generated notes)
                 noteContent = getNoteContent(mentionedNoteId);
-                
+
                 if (note || noteContent) {
                     console.log(`📝 @mention detected: "${noteTitle}" (${mentionedNoteId})`);
                     console.log(`📄 Note content available: ${noteContent ? 'Yes (' + noteContent.length + ' chars)' : 'No'}`);
@@ -146,7 +146,7 @@ const StartingPage: React.FC = () => {
                         // Match escaped title
                         new RegExp(`@${noteTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'),
                     ];
-                    
+
                     let messageWithoutMention = value;
                     for (const pattern of mentionPatterns) {
                         const newMessage = messageWithoutMention.replace(pattern, '').trim();
@@ -155,7 +155,7 @@ const StartingPage: React.FC = () => {
                             break;
                         }
                     }
-                    
+
                     // Build message with note content context for AI
                     let messageWithContext = messageWithoutMention;
                     if (noteContent) {
@@ -169,12 +169,12 @@ User's request: ${messageWithoutMention}
 
 Please use the note content as context to fulfill the user's request.`;
                     }
-                    
+
                     console.log(`📤 Sending to AI with note context`);
 
                     // Determine if this is a generated note (localStorage) or database note
                     const isGeneratedNote = noteContent !== null && noteContent.length > 0;
-                    
+
                     if (isGeneratedNote && noteContent) {
                         // Use chatWithGeneratedNote for localStorage notes
                         console.log('📝 Using generated note flow (localStorage)');
@@ -220,15 +220,25 @@ Please use the note content as context to fulfill the user's request.`;
                             content: response,
                         });
                     }
-                    
+
                     setLoading(false);
                     return;
                 }
             }
 
             // Normal chat response (no @mention)
-            console.log('💬 Regular chat message');
-            const response = await sendChatMessage([], value);
+            // Pass full conversation history for context (secretary needs this for memory)
+            console.log('💬 Regular chat message, passing', messages.length, 'messages as history');
+
+            // Convert aiStore messages to chatService format
+            const chatHistory = messages.map(m => ({
+                id: m.id,
+                role: m.role as 'user' | 'assistant' | 'system',
+                content: m.content,
+                timestamp: m.timestamp.getTime()
+            }));
+
+            const response = await sendChatMessage(chatHistory, value);
 
             // Add AI response to shared store
             addMessage({
@@ -274,14 +284,14 @@ Please use the note content as context to fulfill the user's request.`;
             console.log(`📄 Extracting PDF: ${file.name}`);
             const extracted = await extractPDFText(file);
             setUploadedPDF({ file, extracted });
-            
+
             // Show preview in chat
             const preview = await analyzePDFForPreview(extracted);
             addMessage({
                 role: 'assistant',
                 content: preview,
             });
-            
+
             console.log(`✅ PDF extracted: ${extracted.totalPages} pages, ${extracted.wordCount} words`);
         } catch (error) {
             console.error('Failed to extract PDF:', error);
@@ -303,7 +313,7 @@ Please use the note content as context to fulfill the user's request.`;
 
         setLoading(true);
         setGenerationProgress('Starting...');
-        
+
         addMessage({
             role: 'user',
             content: userPrompt,
@@ -357,20 +367,20 @@ Please use the note content as context to fulfill the user's request.`;
                             {messages
                                 .filter((message) => message.role !== 'system')
                                 .map((message, idx, filteredMessages) => (
-                                <div
-                                    key={message.id}
-                                    onMouseUp={() => handleTextSelection(message.id)}
-                                >
-                                    <CleanChatMessage
-                                        role={message.role as 'user' | 'assistant'}
-                                        content={message.content}
-                                        isLatest={idx === filteredMessages.length - 1}
-                                        messageId={message.id}
-                                        thinkingSteps={message.thinkingSteps}
-                                        citations={message.citations}
-                                    />
-                                </div>
-                            ))}
+                                    <div
+                                        key={message.id}
+                                        onMouseUp={() => handleTextSelection(message.id)}
+                                    >
+                                        <CleanChatMessage
+                                            role={message.role as 'user' | 'assistant'}
+                                            content={message.content}
+                                            isLatest={idx === filteredMessages.length - 1}
+                                            messageId={message.id}
+                                            thinkingSteps={message.thinkingSteps}
+                                            citations={message.citations}
+                                        />
+                                    </div>
+                                ))}
 
                             {/* Live thinking display while AI is processing */}
                             {isLoading && currentThinkingSteps.length > 0 && (
@@ -410,7 +420,7 @@ Please use the note content as context to fulfill the user's request.`;
                                                 onChange={handleFileUpload}
                                                 className="hidden"
                                             />
-                                            <button 
+                                            <button
                                                 onClick={() => fileInputRef.current?.click()}
                                                 className={`p-2 rounded-full transition-colors ${uploadedPDF ? 'text-[#58a6ff] bg-[#58a6ff]/10' : 'text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d]'}`}
                                                 title={uploadedPDF ? `PDF: ${uploadedPDF.file.name}` : "Attach PDF"}
@@ -507,7 +517,7 @@ Please use the note content as context to fulfill the user's request.`;
                             <div className="grid grid-cols-1 md:grid-cols-2 rounded-xl overflow-hidden">
                                 {/* Deep Learning */}
                                 <RecommendationCard
-                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14v1a4 4 0 0 1-8 0v-1"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/><path d="M12 11v3"/></svg>}
+                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z" /><path d="M16 14v1a4 4 0 0 1-8 0v-1" /><circle cx="8" cy="18" r="2" /><circle cx="16" cy="18" r="2" /><path d="M12 11v3" /></svg>}
                                     title="Explain VAE vs DAG"
                                     description="Compare Variational Autoencoders and DAG models from your Deep Learning notes."
                                     action="Compare"
@@ -515,7 +525,7 @@ Please use the note content as context to fulfill the user's request.`;
                                 />
                                 {/* Neuroscience 2 */}
                                 <RecommendationCard
-                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V22h6v-4.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 10h.01M15 10h.01M9 14c.5.5 1.5 1 3 1s2.5-.5 3-1"/></svg>}
+                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V22h6v-4.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z" /><path d="M9 10h.01M15 10h.01M9 14c.5.5 1.5 1 3 1s2.5-.5 3-1" /></svg>}
                                     title="Quiz on Neural Pathways"
                                     description="Test your understanding of synaptic plasticity from Neuroscience 2."
                                     action="Start Quiz"
@@ -531,7 +541,7 @@ Please use the note content as context to fulfill the user's request.`;
                                 />
                                 {/* React Coding */}
                                 <RecommendationCard
-                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>}
+                                    icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 18l6-6-6-6" /><path d="M8 6l-6 6 6 6" /></svg>}
                                     title="React Hooks Deep Dive"
                                     description="Explain useEffect cleanup and dependency arrays from your React notes."
                                     action="Explain"
@@ -561,7 +571,7 @@ Please use the note content as context to fulfill the user's request.`;
                                                 onChange={handleFileUpload}
                                                 className="hidden"
                                             />
-                                            <button 
+                                            <button
                                                 onClick={() => fileInputRef.current?.click()}
                                                 className={`p-2 rounded-full transition-colors ${uploadedPDF ? 'text-[#58a6ff] bg-[#58a6ff]/10' : 'text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#30363d]'}`}
                                                 title={uploadedPDF ? `PDF: ${uploadedPDF.file.name}` : "Attach PDF"}

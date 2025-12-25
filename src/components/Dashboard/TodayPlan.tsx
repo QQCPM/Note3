@@ -1,14 +1,16 @@
 import React from 'react';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { DailyPlan, ScheduledTask, getTaskTypeIcon, formatDuration } from '@/types/dashboard';
-import { Check, Circle, Play, SkipForward } from 'lucide-react';
+import { Check, Circle, Play, SkipForward, Upload, Loader2, CalendarDays } from 'lucide-react';
 
 interface TodayPlanProps {
   plan: DailyPlan | null;
   progress: number;
+  onImportClick?: () => void;
+  isGenerating?: boolean;
 }
 
-const TodayPlan: React.FC<TodayPlanProps> = ({ plan, progress }) => {
+const TodayPlan: React.FC<TodayPlanProps> = ({ plan, progress, onImportClick, isGenerating }) => {
   const { updateTaskStatus } = useDashboardStore();
 
   if (!plan) {
@@ -16,9 +18,28 @@ const TodayPlan: React.FC<TodayPlanProps> = ({ plan, progress }) => {
       <section className="dashboard-section">
         <div className="section-header">
           <h2 className="section-title">TODAY</h2>
+          {isGenerating && (
+            <span className="section-badge generating">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Generating
+            </span>
+          )}
         </div>
         <div className="empty-state">
-          <p>No plan for today yet.</p>
+          {isGenerating ? (
+            <div className="loading-shimmer" />
+          ) : (
+            <>
+              <CalendarDays className="empty-state-icon" />
+              <p>No learning roadmap imported yet.</p>
+              {onImportClick && (
+                <button className="import-roadmap-btn" onClick={onImportClick}>
+                  <Upload className="w-4 h-4" />
+                  Import Learning Roadmap
+                </button>
+              )}
+            </>
+          )}
         </div>
       </section>
     );

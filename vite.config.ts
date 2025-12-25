@@ -44,4 +44,9 @@ export default defineConfig({
     // Produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_DEBUG,
   },
+
+  // Optimize dependencies
+  optimizeDeps: {
+    include: ['@google/genai'],
+  },
 });

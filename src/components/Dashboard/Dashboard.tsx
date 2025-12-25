@@ -1,13 +1,19 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDashboardStore, useTodayProgress } from '@/store/dashboardStore';
 import { useProjectStore } from '@/store/projectStore';
+import { memoryService } from '@/services/memoryService';
+import { Upload } from 'lucide-react';
 import TodayPlan from './TodayPlan';
 import TomorrowPlan from './TomorrowPlan';
 import ReflectionSection from './ReflectionSection';
 import SecretaryPanel from './SecretaryPanel';
+import RoadmapImportModal from './RoadmapImportModal';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+
   const {
     todayPlan,
     tomorrowPlan,
@@ -15,7 +21,11 @@ const Dashboard: React.FC = () => {
     showReflection,
     roadmapDay,
     activeRoadmapId,
+    isGeneratingPlan,
     initializeSampleData,
+    generateTodayPlanAsync,
+    generateTomorrowPlanAsync,
+    hasActiveRoadmap,
     checkTimeBasedVisibility,
     transitionToNewDay,
   } = useDashboardStore();
@@ -26,18 +36,78 @@ const Dashboard: React.FC = () => {
   // Get active project info
   const activeProject = activeRoadmapId ? getProjectById(activeRoadmapId) : null;
 
-  // Initialize sample data for demo (remove in production)
+  // Initialize memory files and sync with dashboard
   useEffect(() => {
-    if (!todayPlan) {
-      initializeSampleData();
-    }
-  }, [todayPlan, initializeSampleData]);
+    const initializeMemory = async () => {
+      try {
+        // Initialize default files if they don't exist
+        await memoryService.initializeDefaultFiles(activeRoadmapId || undefined);
+
+        // Sync daily memory with dashboard
+        await memoryService.syncDailyToDashboard();
+      } catch (error) {
+        console.error('Failed to initialize memory:', error);
+      }
+    };
+
+    initializeMemory();
+  }, [activeRoadmapId]);
+
+  // Initialize plans - use AI if roadmap exists, otherwise sample data
+  useEffect(() => {
+    const initializePlans = async () => {
+      if (isInitialized || todayPlan) return;
+
+      try {
+        // Check if we have an active roadmap for AI generation
+        if (activeRoadmapId) {
+          const hasRoadmap = await hasActiveRoadmap(activeRoadmapId);
+
+          if (hasRoadmap) {
+            // Generate today's plan from roadmap
+            console.log('🚀 [Dashboard] Generating AI-powered daily plan...');
+            await generateTodayPlanAsync(activeRoadmapId);
+
+            // Generate tomorrow's plan if visible
+            if (showTomorrowPlan && !tomorrowPlan) {
+              await generateTomorrowPlanAsync(activeRoadmapId);
+            }
+          } else {
+            // No roadmap yet - use sample data for demo
+            console.log('📋 [Dashboard] No roadmap found, using sample data');
+            initializeSampleData();
+          }
+        } else {
+          // No project selected - use sample data
+          initializeSampleData();
+        }
+
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize plans:', error);
+        initializeSampleData();
+        setIsInitialized(true);
+      }
+    };
+
+    initializePlans();
+  }, [
+    activeRoadmapId,
+    todayPlan,
+    tomorrowPlan,
+    showTomorrowPlan,
+    isInitialized,
+    hasActiveRoadmap,
+    generateTodayPlanAsync,
+    generateTomorrowPlanAsync,
+    initializeSampleData,
+  ]);
 
   // Check time-based visibility and day transition on mount and every minute
   useEffect(() => {
     checkTimeBasedVisibility();
     transitionToNewDay(); // Check if we need to transition tomorrow -> today
-    
+
     const interval = setInterval(() => {
       checkTimeBasedVisibility();
       transitionToNewDay();
@@ -75,6 +145,13 @@ const Dashboard: React.FC = () => {
           )}
         </div>
         <div className="dashboard-header-right">
+          <button
+            className="header-import-btn"
+            onClick={() => setShowImportModal(true)}
+          >
+            <Upload className="w-4 h-4" />
+            Import Roadmap
+          </button>
           <span className="dashboard-date">{formatDate()}</span>
         </div>
       </header>
@@ -84,7 +161,12 @@ const Dashboard: React.FC = () => {
         {/* Left Column - Plans & Reflection */}
         <div className="dashboard-left">
           {/* Today's Plan */}
-          <TodayPlan plan={todayPlan} progress={todayProgress} />
+          <TodayPlan
+            plan={todayPlan}
+            progress={todayProgress}
+            onImportClick={() => setShowImportModal(true)}
+            isGenerating={isGeneratingPlan}
+          />
 
           {/* Divider */}
           <div className="dashboard-divider" />
@@ -107,6 +189,13 @@ const Dashboard: React.FC = () => {
           <SecretaryPanel />
         </div>
       </div>
+
+      {/* Roadmap Import Modal */}
+      <RoadmapImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        projectId={activeRoadmapId || 'default-project'}
+      />
     </div>
   );
 };
