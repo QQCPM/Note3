@@ -31,7 +31,7 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
   const loadMemoryFiles = async () => {
     try {
       const aiMemory = await memoryService.loadAIMemory();
-      const projectMemory = activeProjectId 
+      const projectMemory = activeProjectId
         ? await memoryService.loadProjectMemory(activeProjectId)
         : null;
       const dailyMemory = await memoryService.loadDailyMemory(activeProjectId || undefined);
@@ -47,7 +47,7 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
         },
         {
           id: 'project',
-          name: 'Project.md',
+          name: 'Plan.md',
           icon: <Target size={14} />,
           type: 'project',
           exists: !!projectMemory,
@@ -102,11 +102,10 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
           <button
             key={file.id}
             onClick={() => handleFileClick(file)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md transition-all text-left mb-0.5 ${
-              activeFileId === file.id
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md transition-all text-left mb-0.5 ${activeFileId === file.id
                 ? 'bg-[#1f6feb]/15 text-white'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b22]'
-            }`}
+              }`}
           >
             <span style={{ color: file.color }}>{file.icon}</span>
             <span className="text-[13px] flex-1">{file.name}</span>

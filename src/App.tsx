@@ -6,7 +6,7 @@ import { getAllNotes } from '@/utils/tauri';
 import NoteSidebar from '@/components/Sidebar/NoteSidebar';
 import MemorySidebar from '@/components/Sidebar/MemorySidebar';
 import Canvas from '@/components/Canvas/Canvas';
-import AISidebar from '@/components/AISidebar/AISidebar';
+import AIWindowManager from '@/components/AISidebar/AIWindowManager';
 import NotePreviewPanel from '@/components/NotePreview/NotePreviewPanel';
 import ContextMenu from '@/components/ContextMenu/ContextMenu';
 import GlobalDragLayer from '@/components/GlobalDragLayer/GlobalDragLayer';
@@ -110,13 +110,13 @@ function App() {
 
         // Initialize unified AI system with GLM-4.6 (Ollama Cloud)
         console.log('🚀 Initializing unified AI system with GLM-4.6...');
-        const health = await AISystem.initialize({ 
+        const health = await AISystem.initialize({
           openaiApiKey: openaiKey,
           ollamaApiKey: ollamaKey,
           geminiApiKey: geminiKey,  // For educational slide generation
           useGlm46: true,  // Use GLM-4.6 for code generation
         });
-        
+
         setAiInitialized(AISystem.isReady);
         console.log('✅ AI system initialized - Status:', AISystem.status);
 
@@ -185,13 +185,13 @@ function App() {
         )}
 
         {/* Main Canvas Area - passes activeMemoryFile when in dashboard mode */}
-        <Canvas 
-          activeMemoryFile={activeMemoryFile} 
+        <Canvas
+          activeMemoryFile={activeMemoryFile}
           onCloseMemoryFile={() => setActiveMemoryFile(null)}
         />
 
-        {/* Right Side - AI Sidebar (always visible) */}
-        <AISidebar />
+        {/* Right Side - AI Windows (primary + detached) */}
+        <AIWindowManager />
 
         {/* Note Preview Panel (overlay when visible) */}
         {notePanelVisible && <NotePreviewPanel />}

@@ -236,52 +236,48 @@ async function executeCreateRoadmap(args: {
 
         // Calculate timeline
         const totalWeeks = Math.ceil(args.duration_days / 7);
-        const totalMonths = Math.ceil(totalWeeks / 4);
 
-        // Generate rich, structured roadmap with Month > Week > Concepts/Reading/Tasks
-        const prompt = `Create a COMPREHENSIVE learning roadmap for: ${args.topic}
+        // Generate structured roadmap - day by day with clear format
+        const prompt = `Create a learning roadmap for: ${args.topic}
 
-TIMELINE: ${totalMonths} month(s), ${totalWeeks} weeks total
+DURATION: ${args.duration_days} days (${totalWeeks} weeks)
 SCHEDULE: ${studyDays.join(', ')}, ${dailyHours} hours per day
-${args.specific_topics ? `MUST INCLUDE: ${args.specific_topics}` : ''}
+${args.specific_topics ? `FOCUS ON: ${args.specific_topics}` : ''}
 
-Generate a DETAILED curriculum with this EXACT structure:
-
+OUTPUT FORMAT - Use this exact structure:
 {
-  "name": "Descriptive Roadmap Name",
-  "months": [
+  "name": "Clear descriptive name",
+  "duration": "${args.duration_days} days",
+  "daily_hours": ${dailyHours},
+  "goal": "What the learner will achieve by the end",
+  "days": [
     {
-      "month": 1,
-      "title": "Month 1: The Foundation Phase",
-      "goal": "Clear goal statement for this month - what the learner will achieve",
-      "resources": "Core books, courses, or materials for this month (be specific with titles/URLs)",
-      "weeks": [
-        {
-          "week": 1,
-          "title": "Week 1: Topic Name",
-          "concepts": "Key concepts to learn this week. Be specific - not 'learn basics' but 'Learn JSX syntax, component lifecycle, props and state management'",
-          "reading": "Specific chapters, documentation sections, or articles to read",
-          "tasks": "Hands-on projects, exercises, or implementations. Be specific - 'Build a Todo app with useState and useEffect' not just 'Practice'"
-        },
-        {
-          "week": 2,
-          "title": "Week 2: Next Topic",
-          "concepts": "...",
-          "reading": "...",
-          "tasks": "..."
-        }
+      "day": 1,
+      "title": "Day 1: Topic Name",
+      "tasks": [
+        "[ ] Specific actionable task 1",
+        "[ ] Specific actionable task 2"
       ]
+    },
+    {
+      "day": 2,
+      "title": "Day 2: Next Topic",
+      "tasks": ["[ ] Task 1", "[ ] Task 2"]
     }
+  ],
+  "resources": [
+    "Resource 1 - https://...",
+    "Resource 2 - https://..."
   ]
 }
 
-REQUIREMENTS:
-1. Generate ALL ${totalMonths} months with ALL ${totalWeeks} weeks
-2. Each month MUST have a clear Goal and Core Resources
-3. Each week MUST have detailed Concepts, Reading, and Tasks
-4. Be SPECIFIC - name actual books, chapters, frameworks, projects
-5. Week 4, 8, 12, etc. should include larger projects
-6. Final month should have a capstone project
+RULES:
+- Generate exactly ${args.duration_days} days
+- Each day has 2-4 specific, checkable tasks
+- Keep tasks concise (10-15 words max)
+- Use checkboxes [ ] for every task
+- Group resources at the end (5-10 max)
+- Day titles should be short and clear
 
 Generate the complete JSON now.`;
 
@@ -295,21 +291,16 @@ Generate the complete JSON now.`;
 
         const generated = JSON.parse(jsonMatch[0]);
 
-        // Convert to internal format for storage
+        // Convert to internal format for storage (days-based)
         const dailyTopics: any[] = [];
-        let dayCounter = 1;
-        for (const month of generated.months || []) {
-            for (const week of month.weeks || []) {
-                dailyTopics.push({
-                    day: dayCounter++,
-                    week: week.week,
-                    month: month.month,
-                    topic: week.title,
-                    concepts: week.concepts,
-                    reading: week.reading,
-                    tasks: week.tasks
-                });
-            }
+        for (const day of generated.days || []) {
+            dailyTopics.push({
+                day: day.day,
+                week: Math.ceil(day.day / 7),
+                month: Math.ceil(day.day / 30),
+                topic: day.title,
+                tasks: day.tasks || []
+            });
         }
 
         // Store as pending roadmap
@@ -319,42 +310,43 @@ Generate the complete JSON now.`;
             totalDays: args.duration_days,
             studyDays,
             dailyHours,
-            phases: generated.months || [],
+            phases: [], // No longer used, kept for compatibility
             dailyTopics
         };
 
-        // Build RICH output in the user's desired format
+        // Build clean day-by-day output
         let detailMessage = `# ${pendingRoadmap.name}\n\n`;
+        detailMessage += `**Duration:** ${args.duration_days} days | **Daily:** ${dailyHours}h\n\n`;
 
-        for (const month of generated.months || []) {
+        if (generated.goal) {
+            detailMessage += `**Goal:** ${generated.goal}\n\n`;
+        }
+
+        detailMessage += `---\n\n`;
+
+        for (const day of generated.days || []) {
+            detailMessage += `## ${day.title}\n`;
+            if (day.tasks && Array.isArray(day.tasks)) {
+                for (const task of day.tasks) {
+                    detailMessage += `${task}\n`;
+                }
+            }
+            detailMessage += `\n`;
+        }
+
+        // Resources at the end
+        if (generated.resources && Array.isArray(generated.resources) && generated.resources.length > 0) {
             detailMessage += `---\n\n`;
-            detailMessage += `## ${month.title}\n\n`;
-
-            if (month.goal) {
-                detailMessage += `**Goal:** ${month.goal}\n\n`;
+            detailMessage += `## 📚 Resources\n\n`;
+            for (const resource of generated.resources) {
+                detailMessage += `- ${resource}\n`;
             }
-            if (month.resources) {
-                detailMessage += `**Core Resources:** ${month.resources}\n\n`;
-            }
-
-            for (const week of month.weeks || []) {
-                detailMessage += `### ${week.title}\n\n`;
-
-                if (week.concepts) {
-                    detailMessage += `**Concepts:** ${week.concepts}\n\n`;
-                }
-                if (week.reading) {
-                    detailMessage += `**Reading:** ${week.reading}\n\n`;
-                }
-                if (week.tasks) {
-                    detailMessage += `**Tasks:** ${week.tasks}\n\n`;
-                }
-            }
+            detailMessage += `\n`;
         }
 
         detailMessage += `---\n\n`;
         detailMessage += `✅ **This roadmap is ready to save!**\n\n`;
-        detailMessage += `Tell me when you want to start (e.g., "tomorrow", "next Monday", "January 2, 2026") and I'll add it to your calendar.\n\n`;
+        detailMessage += `Tell me when you want to start (e.g., "tomorrow", "next Monday") and I'll add it to your calendar.\n\n`;
         detailMessage += `💡 You can also ask me to modify any part before saving.`;
 
         return {

@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { StickyNote, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useNotesStore } from '@/store/notesStore';
 import { createNote } from '@/utils/tauri';
 import SidebarSection from './SidebarSection';
@@ -12,7 +12,7 @@ interface NotesSectionProps {
 
 const NotesSection: React.FC<NotesSectionProps> = ({ isExpanded, onToggle }) => {
   const { buildStandaloneTree, addNote, setActiveNote } = useNotesStore();
-  
+
   const standaloneTree = buildStandaloneTree();
 
   const handleNewNote = useCallback(async () => {
@@ -42,7 +42,6 @@ const NotesSection: React.FC<NotesSectionProps> = ({ isExpanded, onToggle }) => 
   return (
     <SidebarSection
       title="Notes"
-      icon={<StickyNote size={14} />}
       isExpanded={isExpanded}
       onToggle={onToggle}
       count={standaloneTree.length}

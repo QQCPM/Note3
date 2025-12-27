@@ -39,12 +39,39 @@ export interface AIMemory {
 }
 
 // ============================================
-// Project.md - Per-Project Context & Roadmap
+// Plan.md - Multi-Level Learning Plans (NEW - for future use)
 // ============================================
 
-export interface ProjectGoal {
-  description: string;
-  deadline?: string;
+export interface YearPlan {
+  year: number;
+  quarters: {
+    quarter: 1 | 2 | 3 | 4;
+    goal: string;
+    focus: string[];
+  }[];
+}
+
+export interface Roadmap {
+  id: string;
+  name: string;
+  topic: string;
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'paused' | 'completed';
+  studyDays: string[];
+  dailyHours: number;
+  phases: RoadmapPhase[];
+  dailyTopics?: DailyTopic[];
+}
+
+export interface DailyTopic {
+  day: number;
+  week: number;
+  month: number;
+  topic: string;
+  concepts?: string;
+  reading?: string;
+  tasks?: string;
 }
 
 export interface RoadmapPhase {
@@ -53,6 +80,22 @@ export interface RoadmapPhase {
   weeks: string;                   // e.g., "1-4"
   status: 'completed' | 'in_progress' | 'pending';
   topics: string[];
+}
+
+// NEW: Multi-plan structure for Plan.md
+export interface PlanMemory {
+  yearPlan?: YearPlan;
+  activeRoadmaps: Roadmap[];
+  archivedRoadmaps: Roadmap[];
+}
+
+// ============================================
+// Project.md - Per-Project Context & Roadmap (LEGACY - keep for backward compatibility)
+// ============================================
+
+export interface ProjectGoal {
+  description: string;
+  deadline?: string;
 }
 
 export interface WeeklyPlan {

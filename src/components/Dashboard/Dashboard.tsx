@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useDashboardStore, useTodayProgress } from '@/store/dashboardStore';
 import { useProjectStore } from '@/store/projectStore';
+import { useAIStore } from '@/store/aiStore';
+import { useNotesStore } from '@/store';
 import { memoryService } from '@/services/memoryService';
 import { Upload } from 'lucide-react';
 import TodayPlan from './TodayPlan';
@@ -31,10 +33,18 @@ const Dashboard: React.FC = () => {
   } = useDashboardStore();
 
   const { getProjectById } = useProjectStore();
+  const { switchSession } = useAIStore();
+  const { setActiveNote } = useNotesStore();
   const todayProgress = useTodayProgress();
 
   // Get active project info
   const activeProject = activeRoadmapId ? getProjectById(activeRoadmapId) : null;
+
+  // Clear active note AND AI session when entering Dashboard (use global session)
+  useEffect(() => {
+    setActiveNote(null);   // Clear note context from AI footer
+    switchSession(null);   // Use global AI session
+  }, [setActiveNote, switchSession]);
 
   // Initialize memory files and sync with dashboard
   useEffect(() => {

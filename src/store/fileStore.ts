@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { FileType } from '@/types/project';
+import { pdfjs } from 'react-pdf';
+
+// Setup PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 // ============================================================================
 // TYPES
@@ -13,6 +17,7 @@ export interface UploadedFile {
   objectUrl: string;
   size: number;
   uploadedAt: string;
+  thumbnailUrl?: string; // Data URL of first page thumbnail for PDFs
 }
 
 interface FileStore {
@@ -48,15 +53,16 @@ interface StoredFileData {
   mimeType: string;
   size: number;
   uploadedAt: string;
+  thumbnailUrl?: string; // Stored thumbnail data URL
 }
 
 const openDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    
+
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
-    
+
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -66,10 +72,10 @@ const openDB = (): Promise<IDBDatabase> => {
   });
 };
 
-const saveFileToIndexedDB = async (file: File, id: string, type: FileType): Promise<void> => {
+const saveFileToIndexedDB = async (file: File, id: string, type: FileType, thumbnailUrl?: string): Promise<void> => {
   const db = await openDB();
   const arrayBuffer = await file.arrayBuffer();
-  
+
   const storedData: StoredFileData = {
     id,
     name: file.name,
@@ -78,13 +84,14 @@ const saveFileToIndexedDB = async (file: File, id: string, type: FileType): Prom
     mimeType: file.type,
     size: file.size,
     uploadedAt: new Date().toISOString(),
+    thumbnailUrl,
   };
-  
+
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.put(storedData);
-    
+
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve();
   });
@@ -92,12 +99,12 @@ const saveFileToIndexedDB = async (file: File, id: string, type: FileType): Prom
 
 const loadFileFromIndexedDB = async (id: string): Promise<StoredFileData | null> => {
   const db = await openDB();
-  
+
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readonly');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.get(id);
-    
+
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result || null);
   });
@@ -105,12 +112,12 @@ const loadFileFromIndexedDB = async (id: string): Promise<StoredFileData | null>
 
 const deleteFileFromIndexedDB = async (id: string): Promise<void> => {
   const db = await openDB();
-  
+
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.delete(id);
-    
+
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve();
   });
@@ -118,12 +125,12 @@ const deleteFileFromIndexedDB = async (id: string): Promise<void> => {
 
 const getAllFileIdsFromIndexedDB = async (): Promise<string[]> => {
   const db = await openDB();
-  
+
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readonly');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.getAllKeys();
-    
+
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result as string[]);
   });
@@ -135,6 +142,47 @@ const getAllFileIdsFromIndexedDB = async (): Promise<string[]> => {
 
 const generateId = (): string => {
   return `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
+/**
+ * Generate a thumbnail from the first page of a PDF
+ */
+const generatePdfThumbnail = async (file: File, width = 340, height = 400): Promise<string | null> => {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1);
+
+    // Calculate scale to fit thumbnail size while maintaining aspect ratio
+    const viewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(width / viewport.width, height / viewport.height);
+    const scaledViewport = page.getViewport({ scale });
+
+    // Create canvas and render
+    const canvas = document.createElement('canvas');
+    canvas.width = scaledViewport.width;
+    canvas.height = scaledViewport.height;
+    const context = canvas.getContext('2d');
+
+    if (!context) return null;
+
+    // White background
+    context.fillStyle = 'white';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    await page.render({
+      canvasContext: context,
+      viewport: scaledViewport,
+      // @ts-ignore - canvas is optional but types require it
+      canvas: canvas,
+    }).promise;
+
+    // Convert to data URL
+    return canvas.toDataURL('image/jpeg', 0.8);
+  } catch (error) {
+    console.error('Failed to generate PDF thumbnail:', error);
+    return null;
+  }
 };
 
 // ============================================================================
@@ -152,6 +200,12 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const id = generateId();
     const objectUrl = URL.createObjectURL(file);
 
+    // Generate thumbnail for PDFs
+    let thumbnailUrl: string | undefined;
+    if (type === 'pdf') {
+      thumbnailUrl = await generatePdfThumbnail(file) || undefined;
+    }
+
     const uploadedFile: UploadedFile = {
       id,
       name: file.name,
@@ -160,11 +214,12 @@ export const useFileStore = create<FileStore>((set, get) => ({
       objectUrl,
       size: file.size,
       uploadedAt: new Date().toISOString(),
+      thumbnailUrl,
     };
 
     // Save to IndexedDB for persistence
     try {
-      await saveFileToIndexedDB(file, id, type);
+      await saveFileToIndexedDB(file, id, type, thumbnailUrl);
       console.log(`📁 File saved to IndexedDB: ${file.name}`);
     } catch (error) {
       console.error('Failed to save file to IndexedDB:', error);
@@ -256,6 +311,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
         objectUrl,
         size: storedData.size,
         uploadedAt: storedData.uploadedAt,
+        thumbnailUrl: storedData.thumbnailUrl,
       };
 
       // Add to in-memory store
@@ -279,7 +335,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     try {
       const fileIds = await getAllFileIdsFromIndexedDB();
       console.log(`📁 Found ${fileIds.length} files in IndexedDB`);
-      
+
       for (const fileId of fileIds) {
         await get().loadFileFromStorage(fileId);
       }

@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, FolderPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderPlus } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useNotesStore } from '@/store/notesStore';
+import { useFileStore } from '@/store/fileStore';
 import { createNote } from '@/utils/tauri';
 import SidebarSection from './SidebarSection';
 import SidebarItem from './SidebarItem';
@@ -24,28 +25,55 @@ interface ProjectItemProps {
 
 const ProjectItem: React.FC<ProjectItemProps> = ({ project, isActive, onSelect }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
   const { buildTreeForProject, addNote, setActiveNote } = useNotesStore();
-  
+  const { deleteProject, setActiveProject, activeProjectId, getTreeItemsByProject } = useProjectStore();
+  const { setActiveFile } = useFileStore();
+
   const projectNotes = buildTreeForProject(project.id);
+
+  // Get files for this project
+  const projectFiles = getTreeItemsByProject(project.id).filter((item) =>
+    ['pdf', 'video', 'audio', 'image'].includes(item.type)
+  );
+
+  const getFileIcon = (type: string) => {
+    switch (type) {
+      case 'pdf': return '📕';
+      case 'video': return '🎥';
+      case 'audio': return '🎵';
+      case 'image': return '🖼️';
+      default: return '📄';
+    }
+  };
+
+  // Close menu on outside click
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
 
   const handleAddNote = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
+    setShowMenu(false);
     try {
-      // Create note in database (backend doesn't know about new fields)
       const dbNote = await createNote({
         title: 'Untitled',
         icon: '📄',
         parent_id: null,
       });
-
-      // Merge with new fields for the store (project_id is the key!)
       const noteWithProject = {
         ...dbNote,
-        project_id: project.id,  // This is what makes it appear in Projects
+        project_id: project.id,
         type: 'note' as const,
         is_pinned: false,
       };
-
       addNote(noteWithProject);
       setActiveNote(noteWithProject.id);
       setIsExpanded(true);
@@ -53,6 +81,15 @@ const ProjectItem: React.FC<ProjectItemProps> = ({ project, isActive, onSelect }
       console.error('Failed to create note:', error);
     }
   }, [project.id, addNote, setActiveNote]);
+
+  const handleDelete = useCallback(() => {
+    setShowMenu(false);
+    if (!confirm(`Delete project "${project.name}"? All notes in this project will be deleted.`)) return;
+    deleteProject(project.id);
+    if (activeProjectId === project.id) {
+      setActiveProject(null);
+    }
+  }, [project.id, project.name, deleteProject, activeProjectId, setActiveProject]);
 
   const getProgressColor = (progress: number) => {
     if (progress >= 80) return 'bg-green-500';
@@ -66,7 +103,7 @@ const ProjectItem: React.FC<ProjectItemProps> = ({ project, isActive, onSelect }
       <div
         className={`
           flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer
-          transition-colors duration-150 group
+          transition-colors duration-150 group relative
           ${isActive ? 'bg-[#1f2937]' : 'hover:bg-[#161b22]'}
         `}
         onClick={onSelect}
@@ -100,26 +137,59 @@ const ProjectItem: React.FC<ProjectItemProps> = ({ project, isActive, onSelect }
           </div>
         )}
 
-        {/* Add note button */}
-        <button
-          className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={handleAddNote}
-          title="Add note to project"
-        >
-          <Plus size={12} />
-        </button>
+        {/* 3-dot menu */}
+        <div ref={menuRef} className="relative">
+          <button
+            className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+          >
+            ⋯
+          </button>
+          {showMenu && (
+            <div className="absolute right-0 top-full mt-1 bg-[#1c2128] border border-gray-700 rounded-lg shadow-xl z-50 min-w-[120px] py-1">
+              <button
+                className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700"
+                onClick={(e) => { e.stopPropagation(); handleAddNote(e); }}
+              >
+                + Add note
+              </button>
+              <button
+                className="w-full px-3 py-1.5 text-left text-xs text-red-400 hover:bg-gray-700"
+                onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+              >
+                Delete project
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Project Notes */}
+      {/* Project Files & Notes */}
       {isExpanded && (
         <div className="ml-2 mt-1">
+          {/* Files first */}
+          {projectFiles.length > 0 && (
+            <div className="mb-1">
+              {projectFiles.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => item.filePath && setActiveFile(item.filePath)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-md transition-colors text-left"
+                >
+                  <span>{getFileIcon(item.type)}</span>
+                  <span className="truncate">{item.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Then notes */}
           {projectNotes.length > 0 ? (
             projectNotes.map((note) => (
               <SidebarItem key={note.id} note={note} depth={0} />
             ))
-          ) : (
+          ) : projectFiles.length === 0 && (
             <div className="px-4 py-3 text-sm text-gray-600 italic">
-              No notes in this project
+              No content yet
             </div>
           )}
         </div>
@@ -130,6 +200,13 @@ const ProjectItem: React.FC<ProjectItemProps> = ({ project, isActive, onSelect }
 
 const ProjectsSection: React.FC<ProjectsSectionProps> = ({ isExpanded, onToggle }) => {
   const { projects, activeProjectId, setActiveProject, addProject } = useProjectStore();
+  const { setActiveNote } = useNotesStore();
+
+  // Handle selecting a project - clears active note to show dashboard
+  const handleSelectProject = useCallback((projectId: string) => {
+    setActiveNote(null); // Clear any active note
+    setActiveProject(projectId); // Set the active project
+  }, [setActiveNote, setActiveProject]);
 
   const handleNewProject = useCallback(() => {
     const project = addProject({
@@ -137,8 +214,9 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({ isExpanded, onToggle 
       type: 'general',
       icon: '📁',
     });
+    setActiveNote(null); // Clear any active note
     setActiveProject(project.id);
-  }, [addProject, setActiveProject]);
+  }, [addProject, setActiveProject, setActiveNote]);
 
   return (
     <SidebarSection
@@ -164,7 +242,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = ({ isExpanded, onToggle 
             key={project.id}
             project={project}
             isActive={activeProjectId === project.id}
-            onSelect={() => setActiveProject(project.id)}
+            onSelect={() => handleSelectProject(project.id)}
           />
         ))}
 

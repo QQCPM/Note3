@@ -28,13 +28,13 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
 
   const loadContent = async () => {
     if (!fileType) return;
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       let rawContent = '';
-      
+
       if (fileType === 'ai') {
         let memory = await memoryService.loadAIMemory();
         if (!memory) {
@@ -44,7 +44,7 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
         const { serializeAIMemory } = await import('@/services/memoryParser');
         rawContent = serializeAIMemory(memory);
       } else if (fileType === 'project') {
-        let memory = activeProjectId 
+        let memory = activeProjectId
           ? await memoryService.loadProjectMemory(activeProjectId)
           : null;
         if (!memory) {
@@ -62,7 +62,7 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
         const { serializeDailyMemory } = await import('@/services/memoryParser');
         rawContent = serializeDailyMemory(memory);
       }
-      
+
       setContent(rawContent);
       setOriginalContent(rawContent);
       setHasChanges(false);
@@ -76,10 +76,10 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
 
   const handleSave = async () => {
     if (!fileType || !hasChanges) return;
-    
+
     setIsSaving(true);
     setError(null);
-    
+
     try {
       if (fileType === 'ai') {
         const { parseAIMemory } = await import('@/services/memoryParser');
@@ -94,7 +94,7 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
         const memory = parseDailyMemory(content);
         await memoryService.saveDailyMemory(memory, activeProjectId || undefined);
       }
-      
+
       setOriginalContent(content);
       setHasChanges(false);
     } catch (err) {
@@ -121,7 +121,7 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
         }
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [hasChanges, handleSave]);
@@ -138,8 +138,8 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
       case 'project':
         return {
           icon: <Target size={20} />,
-          name: 'Project.md',
-          description: 'Project goals, roadmap, and progress tracking',
+          name: 'Plan.md',
+          description: 'Learning plans, roadmaps, and progress tracking',
           color: 'green',
         };
       case 'daily':
@@ -193,7 +193,7 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
             {hasChanges && <span className="unsaved-dot" />}
           </span>
         </div>
-        
+
         <div className="header-actions">
           <button
             className={`icon-btn ${!isPreview ? 'active' : ''}`}

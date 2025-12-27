@@ -42,14 +42,24 @@ const StartingPage: React.FC = () => {
 
     // Use shared AI store for messages (synced with AgentTab)
     const {
-        messages,
+        globalSession,
         isLoading,
         currentThinkingSteps,
         addMessage,
         setLoading,
         clearCurrentThinking,
         addPendingEdit,
+        switchSession,
     } = useAIStore();
+
+    // Get messages from globalSession (StartingPage always uses global session)
+    const activeTab = globalSession.tabs.find(t => t.id === globalSession.activeTabId);
+    const messages = activeTab?.messages || [];
+
+    // Ensure we're using global session when on StartingPage
+    React.useEffect(() => {
+        switchSession(null); // null = global session
+    }, [switchSession]);
 
     const [inputValue, setInputValue] = useState('');
     const [selectedModel, setSelectedModel] = useState<'gpt' | 'gemini'>('gpt');

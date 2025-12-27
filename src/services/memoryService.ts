@@ -74,7 +74,7 @@ class MemoryService {
       const basePath = await getMemoryBasePath();
       const filePath = `${basePath}/${AI_MEMORY_FILE}`;
       const content = await readMemoryFile(filePath);
-      
+
       if (!content) {
         return null;
       }
@@ -95,7 +95,7 @@ class MemoryService {
       const filePath = `${basePath}/${AI_MEMORY_FILE}`;
       const content = serializeAIMemory(memory);
       await writeMemoryFile(filePath, content);
-      
+
       this.state.ai = memory;
       this.state.lastUpdated.ai = new Date().toISOString();
     } catch (error) {
@@ -119,7 +119,7 @@ class MemoryService {
       ],
       blockedDates: [],
     };
-    
+
     await this.saveAIMemory(defaultMemory);
     return defaultMemory;
   }
@@ -131,7 +131,7 @@ class MemoryService {
   async loadProjectMemory(projectId: string): Promise<ProjectMemory | null> {
     try {
       let filePath: string;
-      
+
       // Try project path first, fall back to global memory folder
       const projectPath = await getProjectPath(projectId);
       if (projectPath) {
@@ -143,7 +143,7 @@ class MemoryService {
       }
 
       const content = await readMemoryFile(filePath);
-      
+
       if (!content) {
         return null;
       }
@@ -161,7 +161,7 @@ class MemoryService {
   async saveProjectMemory(projectId: string, memory: ProjectMemory): Promise<void> {
     try {
       let filePath: string;
-      
+
       // Try project path first, fall back to global memory folder
       const projectPath = await getProjectPath(projectId);
       if (projectPath) {
@@ -174,7 +174,7 @@ class MemoryService {
 
       const content = serializeProjectMemory(memory);
       await writeMemoryFile(filePath, content);
-      
+
       this.state.project = memory;
       this.state.lastUpdated.project = new Date().toISOString();
     } catch (error) {
@@ -190,7 +190,7 @@ class MemoryService {
   async loadDailyMemory(projectId?: string): Promise<DailyMemory | null> {
     try {
       let filePath: string;
-      
+
       if (projectId) {
         const projectPath = await getProjectPath(projectId);
         if (projectPath) {
@@ -206,7 +206,7 @@ class MemoryService {
       }
 
       const content = await readMemoryFile(filePath);
-      
+
       if (!content) {
         return null;
       }
@@ -224,7 +224,7 @@ class MemoryService {
   async saveDailyMemory(memory: DailyMemory, projectId?: string): Promise<void> {
     try {
       let filePath: string;
-      
+
       if (projectId) {
         const projectPath = await getProjectPath(projectId);
         if (projectPath) {
@@ -241,7 +241,7 @@ class MemoryService {
 
       const content = serializeDailyMemory(memory);
       await writeMemoryFile(filePath, content);
-      
+
       this.state.daily = memory;
       this.state.lastUpdated.daily = new Date().toISOString();
     } catch (error) {
@@ -257,14 +257,14 @@ class MemoryService {
   async syncDailyToDashboard(): Promise<void> {
     const { useDashboardStore } = await import('@/store/dashboardStore');
     const daily = this.state.daily;
-    
+
     if (!daily) {
       return;
     }
 
     const store = useDashboardStore.getState();
     const now = new Date().toISOString();
-    
+
     // Convert daily tasks to dashboard format
     const scheduledTasks = daily.tasks.map((task) => ({
       id: task.id,
@@ -306,7 +306,7 @@ class MemoryService {
         'tired': 'struggling',
         'frustrated': 'overwhelmed',
       };
-      
+
       store.setTodayReflection({
         id: `reflection-${daily.date}`,
         date: daily.date,
@@ -324,10 +324,10 @@ class MemoryService {
   async syncDashboardToDaily(projectId?: string): Promise<void> {
     const { useDashboardStore } = await import('@/store/dashboardStore');
     const store = useDashboardStore.getState();
-    
+
     const todayPlan = store.todayPlan;
     const todayReflection = store.todayReflection;
-    
+
     if (!todayPlan) {
       return;
     }

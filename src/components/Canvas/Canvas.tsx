@@ -8,6 +8,7 @@ import KnowledgeGraph3D from './KnowledgeGraph3D';
 import StartingPage from '../StartingPage/StartingPage';
 import { FilePreview } from '../FileViewer';
 import { Dashboard, MemoryFileEditor } from '../Dashboard';
+import { ProjectDashboard } from '../ProjectDashboard';
 
 interface CanvasProps {
   activeMemoryFile?: string | null;
@@ -19,8 +20,8 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
   const { activeNoteId } = useNotesStore();
   const { setBlocks, blocks } = useBlocksStore();
   const { canvasMode } = useUIStore();
-  const { getActiveFile } = useFileStore();
-  const { selectedItemId, getTreeItemById } = useProjectStore();
+  const { getActiveFile, setActiveFile } = useFileStore();
+  const { selectedItemId, getTreeItemById, activeProjectId } = useProjectStore();
   const [activeNote, setActiveNote] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -32,9 +33,9 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
   // Load note when activeNoteId changes
   useEffect(() => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/035c0fba-b1bf-4c61-a637-d95f11522c3b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Canvas.tsx:useEffect',message:'activeNoteId changed',data:{activeNoteId,selectedItemId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/035c0fba-b1bf-4c61-a637-d95f11522c3b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'Canvas.tsx:useEffect', message: 'activeNoteId changed', data: { activeNoteId, selectedItemId }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'C' }) }).catch(() => { });
     // #endregion
-    
+
     if (activeNoteId) {
       const startTime = performance.now();
       console.log(`📝 Loading note: ${activeNoteId}`);
@@ -48,7 +49,7 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
       if (generatedNoteContent) {
         const notesStore = useNotesStore.getState();
         const storeNote = notesStore.getNoteById(activeNoteId);
-        
+
         if (storeNote) {
           setActiveNote({
             id: storeNote.id,
@@ -78,7 +79,7 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
       ])
         .then(([note, noteBlocks]) => {
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/035c0fba-b1bf-4c61-a637-d95f11522c3b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Canvas.tsx:fetchNote',message:'Note fetched from DB',data:{noteId:activeNoteId,fetchedNoteTitle:note?.title,fetchedNoteId:note?.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H'})}).catch(()=>{});
+          fetch('http://127.0.0.1:7242/ingest/035c0fba-b1bf-4c61-a637-d95f11522c3b', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'Canvas.tsx:fetchNote', message: 'Note fetched from DB', data: { noteId: activeNoteId, fetchedNoteTitle: note?.title, fetchedNoteId: note?.id }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H' }) }).catch(() => { });
           // #endregion
           console.log(`📊 Fetched note and ${noteBlocks.length} blocks`);
           setActiveNote(note);
@@ -100,8 +101,8 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
         {activeMemoryFile ? (
-          <MemoryFileEditor 
-            fileType={activeMemoryFile as 'ai' | 'project' | 'daily'} 
+          <MemoryFileEditor
+            fileType={activeMemoryFile as 'ai' | 'project' | 'daily'}
             onClose={() => onCloseMemoryFile?.()}
           />
         ) : (
@@ -129,10 +130,26 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
     );
   }
 
-  // File preview mode
-  if (isFileSelected && activeFile) {
+  // File preview mode - show when there's an active file
+  // Check both: selectedItem being a file OR activeFile existing
+  const shouldShowFilePreview = activeFile && (
+    (isFileSelected) ||
+    (activeFile.type && ['pdf', 'video', 'audio', 'image'].includes(activeFile.type))
+  );
+
+  if (shouldShowFilePreview) {
     return (
-      <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg relative">
+        {/* Close button */}
+        <button
+          onClick={() => setActiveFile(null)}
+          className="absolute top-4 right-4 z-50 p-2 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+          title="Close preview"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
         <FilePreview
           file={activeFile.file}
           fileUrl={activeFile.objectUrl}
@@ -143,7 +160,16 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
     );
   }
 
-  // No active note - show starting page
+  // Project Dashboard mode - show when project is active but no note selected
+  if (activeProjectId && !activeNoteId) {
+    return (
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
+        <ProjectDashboard projectId={activeProjectId} />
+      </main>
+    );
+  }
+
+  // No active note and no project - show starting page
   if (!activeNoteId) {
     return <StartingPage />;
   }

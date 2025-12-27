@@ -3,6 +3,7 @@ import { useBlocksStore } from '@/store/blocksStore';
 import { searchWeb, type SearchResult } from './webSearch';
 import { tauriAI, type Tool } from './tauriAI';
 import { aiToolsService } from './aiTools';
+import { memoryService } from './memoryService';
 
 /**
  * AI Edit Service
@@ -128,7 +129,7 @@ function getToolDescription(toolName: string, args: any): string {
 function buildCitationsFromSearch(results: SearchResult[]): string {
   const aiStore = useAIStore.getState();
   const citationTexts: string[] = [];
-  
+
   results.forEach((result) => {
     const citation = aiStore.addCitation({
       title: result.title,
@@ -139,7 +140,7 @@ function buildCitationsFromSearch(results: SearchResult[]): string {
     });
     citationTexts.push(`[${citation.id}] ${result.title}: ${result.snippet}`);
   });
-  
+
   return citationTexts.join('\n');
 }
 
@@ -286,11 +287,56 @@ export const AI_EDIT_TOOLS: Tool[] = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'read_memory_file',
+      description: 'Read the content of a memory file (AI.md, Plan.md, or Daily.md). Use this to see the current preferences, learning plans, or daily schedules.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file_type: {
+            type: 'string',
+            enum: ['ai', 'plan', 'daily'],
+            description: 'Which memory file to read: "ai" for AI.md (preferences), "plan" for Plan.md (learning roadmaps), "daily" for Daily.md (today\'s schedule)',
+          },
+        },
+        required: ['file_type'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'write_memory_file',
+      description: 'Update a memory file (AI.md, Plan.md, or Daily.md). Use this to save changes to preferences, learning plans, or daily schedules. The content should be valid markdown.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file_type: {
+            type: 'string',
+            enum: ['ai', 'plan', 'daily'],
+            description: 'Which memory file to write: "ai" for AI.md, "plan" for Plan.md, "daily" for Daily.md',
+          },
+          content: {
+            type: 'string',
+            description: 'The new markdown content for the file',
+          },
+          reason: {
+            type: 'string',
+            description: 'Brief explanation of what was changed',
+          },
+        },
+        required: ['file_type', 'content', 'reason'],
+      },
+    },
+  },
 ];
 
 interface StreamChatOptions {
   blockId: string;
   userMessage: string;
+  conversationHistory?: Array<{ role: string; content: string }>; // Previous messages from session
   onStream?: (chunk: string) => void;
   onToolCall?: (toolName: string, args: any) => void;
   onComplete?: () => void;
@@ -399,9 +445,25 @@ async function streamWithTauriAI(options: StreamChatOptions): Promise<void> {
     }
   }
 
+  // Load memory context from MD files (AI.md, Project.md, Daily.md)
+  let memoryContext = '';
+  try {
+    memoryContext = await memoryService.getFullContext();
+    if (memoryContext) {
+      console.log('📚 Loaded memory context from MD files');
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to load memory context:', error);
+  }
+
   // System prompt that instructs AI to use tools
   const systemPrompt = `You are an INTELLIGENT AI assistant that understands context and chooses the RIGHT tool for the job.
 
+${memoryContext ? `===========================================
+USER MEMORY & PREFERENCES (from MD files):
+===========================================
+${memoryContext}
+` : ''}
 CURRENT CONTEXT:
 - Current Block ID: ${blockId}
 - Current Note ID: ${noteId}
@@ -729,11 +791,23 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
     const allTools = await getAllAvailableTools();
     console.log(`🛠️ Loaded ${allTools.length} tools (4 core + ${allTools.length - 4} advanced)`);
 
-    // Initialize conversation history
+    // Initialize conversation history with system prompt + previous messages + current message
     const conversationHistory: any[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage }
     ];
+
+    // Add previous conversation history if provided (for memory)
+    if (options.conversationHistory && options.conversationHistory.length > 0) {
+      // Filter out system messages and add user/assistant messages
+      const previousMessages = options.conversationHistory.filter(
+        msg => msg.role === 'user' || msg.role === 'assistant'
+      );
+      conversationHistory.push(...previousMessages);
+      console.log(`📜 Added ${previousMessages.length} previous messages to context`);
+    }
+
+    // Add current user message
+    conversationHistory.push({ role: 'user', content: userMessage });
 
     let maxTurns = 15; // Allow enough turns for multi-step workflows (search + add 10 rows)
     let currentTurn = 0;
@@ -750,7 +824,7 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
       const trimmedHistory = trimConversationHistory(conversationHistory, 200000); // 200K chars ≈ 50K tokens
 
       const result = await tauriAI.chatWithTools(trimmedHistory, allTools);
-      
+
       // Complete the thought step
       completeThoughtStep(aiStore, thoughtStepId, 'Analyzed request');
 
@@ -1167,6 +1241,116 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                 content: `[Error executing ${functionName}]: ${error}`,
               });
             }
+          } else if (functionName === 'read_memory_file') {
+            // Read memory file
+            console.log(`📖 Reading memory file: ${parsedArgs.file_type}`);
+            try {
+              let content = '';
+              const fileType = parsedArgs.file_type;
+
+              if (fileType === 'ai') {
+                const memory = await memoryService.loadAIMemory();
+                if (memory) {
+                  const { serializeAIMemory } = await import('@/services/memoryParser');
+                  content = serializeAIMemory(memory);
+                } else {
+                  content = '[AI.md not found - file does not exist yet]';
+                }
+              } else if (fileType === 'plan') {
+                const memory = await memoryService.loadProjectMemory('global');
+                if (memory) {
+                  const { serializeProjectMemory } = await import('@/services/memoryParser');
+                  content = serializeProjectMemory(memory);
+                } else {
+                  content = '[Plan.md not found - file does not exist yet]';
+                }
+              } else if (fileType === 'daily') {
+                const memory = await memoryService.loadDailyMemory();
+                if (memory) {
+                  const { serializeDailyMemory } = await import('@/services/memoryParser');
+                  content = serializeDailyMemory(memory);
+                } else {
+                  content = '[Daily.md not found - file does not exist yet]';
+                }
+              }
+
+              onStream?.(`\n📖 Read ${fileType}.md (${content.length} chars)\n`);
+
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'complete',
+                  details: `Read ${fileType}.md`,
+                });
+              }
+
+              conversationHistory.push({
+                role: 'user',
+                content: `[Content of ${fileType === 'plan' ? 'Plan' : fileType.toUpperCase()}.md]:\n${content}`,
+              });
+
+              shouldContinue = true;
+            } catch (error) {
+              console.error(`❌ Failed to read memory file:`, error);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: `Error: ${error}`,
+                });
+              }
+              conversationHistory.push({
+                role: 'user',
+                content: `[Error reading memory file]: ${error}`,
+              });
+            }
+          } else if (functionName === 'write_memory_file') {
+            // Write memory file
+            console.log(`✏️ Writing memory file: ${parsedArgs.file_type}`);
+            try {
+              const fileType = parsedArgs.file_type;
+              const content = parsedArgs.content;
+
+              if (fileType === 'ai') {
+                const { parseAIMemory } = await import('@/services/memoryParser');
+                const memory = parseAIMemory(content);
+                await memoryService.saveAIMemory(memory);
+              } else if (fileType === 'plan') {
+                const { parseProjectMemory } = await import('@/services/memoryParser');
+                const memory = parseProjectMemory(content);
+                await memoryService.saveProjectMemory('global', memory);
+              } else if (fileType === 'daily') {
+                const { parseDailyMemory } = await import('@/services/memoryParser');
+                const memory = parseDailyMemory(content);
+                await memoryService.saveDailyMemory(memory);
+              }
+
+              onStream?.(`\n✅ Updated ${fileType === 'plan' ? 'Plan' : fileType.toUpperCase()}.md: ${parsedArgs.reason}\n`);
+
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'complete',
+                  details: parsedArgs.reason,
+                });
+              }
+
+              conversationHistory.push({
+                role: 'user',
+                content: `[Successfully updated ${fileType === 'plan' ? 'Plan' : fileType.toUpperCase()}.md]: ${parsedArgs.reason}`,
+              });
+
+              // Don't continue - confirm the change to user
+            } catch (error) {
+              console.error(`❌ Failed to write memory file:`, error);
+              if (currentStepId) {
+                aiStore.updateThinkingStep(currentStepId, {
+                  status: 'error',
+                  details: `Error: ${error}`,
+                });
+              }
+              conversationHistory.push({
+                role: 'user',
+                content: `[Error writing memory file]: ${error}`,
+              });
+            }
           }
         }
 
@@ -1420,11 +1604,267 @@ export async function applyEdit(editId: string): Promise<void> {
   console.log('✅ Edit applied successfully');
 }
 
-/**
- * Reject edit
- */
 export function rejectEdit(editId: string): void {
   const aiStore = useAIStore.getState();
   aiStore.rejectEdit(editId);
   console.log('❌ Edit rejected');
+}
+
+// ============================================================================
+// GLOBAL CHAT WITH MEMORY TOOLS
+// ============================================================================
+
+/**
+ * Tools available in global chat mode (memory file operations only)
+ */
+const GLOBAL_CHAT_TOOLS: Tool[] = [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'read_memory_file',
+      description: 'Read the content of a memory file (AI.md, Plan.md, or Daily.md). Use this to see the current preferences, learning plans, or daily schedules.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file_type: {
+            type: 'string',
+            enum: ['ai', 'plan', 'daily'],
+            description: 'Which memory file to read: "ai" for AI.md (preferences), "plan" for Plan.md (learning roadmaps), "daily" for Daily.md (today\'s schedule)',
+          },
+        },
+        required: ['file_type'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'write_memory_file',
+      description: 'Update a memory file (AI.md, Plan.md, or Daily.md). Use this to save changes to preferences, learning plans, or daily schedules. The content should be valid markdown.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file_type: {
+            type: 'string',
+            enum: ['ai', 'plan', 'daily'],
+            description: 'Which memory file to write: "ai" for AI.md, "plan" for Plan.md, "daily" for Daily.md',
+          },
+          content: {
+            type: 'string',
+            description: 'The new markdown content for the file',
+          },
+          reason: {
+            type: 'string',
+            description: 'Brief explanation of what was changed',
+          },
+        },
+        required: ['file_type', 'content', 'reason'],
+      },
+    },
+  },
+];
+
+interface GlobalChatOptions {
+  userMessage: string;
+  conversationHistory?: Array<{ role: string; content: string }>;
+  onStream?: (chunk: string) => void;
+  onComplete?: () => void;
+  onError?: (error: Error) => void;
+}
+
+/**
+ * Stream global chat with memory file tools
+ * Used for Dashboard chat when no note is active
+ */
+export async function streamGlobalChat(options: GlobalChatOptions): Promise<void> {
+  const { userMessage, conversationHistory = [], onStream, onComplete, onError } = options;
+  const aiStore = useAIStore.getState();
+
+  console.log('🌐 Starting global chat with memory tools');
+  aiStore.setLoading(true);
+  aiStore.addThinkingStep({
+    type: 'thought',
+    status: 'running',
+    description: 'Thinking...',
+  });
+
+  try {
+    // Load memory context for system prompt
+    let memoryContext = '';
+    try {
+      memoryContext = await memoryService.getFullContext();
+    } catch (e) {
+      console.warn('Could not load memory context:', e);
+    }
+
+    const systemPrompt = `You are a helpful AI assistant for personal learning and productivity.
+
+${memoryContext ? `YOUR CURRENT MEMORY (from MD files):
+${memoryContext}
+
+` : ''}You have access to tools to READ and WRITE memory files:
+- Use read_memory_file to see current AI.md (preferences), Plan.md (learning plans), or Daily.md (schedules)
+- Use write_memory_file to UPDATE these files when the user asks you to modify plans, add tasks, etc.
+
+When the user asks you to save something to a plan, add a learning roadmap, or update their schedule:
+1. First READ the current file to understand its structure
+2. Then WRITE the updated content preserving the existing format
+
+When creating learning plans or roadmaps:
+- Structure by day with clear headers
+- Use checkboxes [ ] for actionable tasks
+- Keep each day scannable, not dense paragraphs
+- Group resources at the end
+- Match the actual timeframe (1 week = 7 days, not "Month 1")
+
+Be helpful, concise, and proactive about using these tools when relevant.`;
+
+    // Build messages array (cast to any for flexibility with tool handling)
+    const messages: Array<{ role: string; content: string }> = [
+      { role: 'system', content: systemPrompt },
+    ];
+
+    // Add conversation history
+    if (conversationHistory.length > 0) {
+      const prevMessages = conversationHistory.filter(
+        msg => msg.role === 'user' || msg.role === 'assistant'
+      );
+      messages.push(...prevMessages);
+    }
+
+    // Add current user message
+    messages.push({ role: 'user', content: userMessage });
+
+    // Call AI with tools
+    let fullResponse = '';
+    let maxIterations = 5;
+    let iteration = 0;
+
+    while (iteration < maxIterations) {
+      iteration++;
+      console.log(`🔄 Global chat iteration ${iteration}`);
+
+      const response = await tauriAI.chatWithTools(
+        messages.map(m => ({ role: m.role as 'system' | 'user' | 'assistant', content: m.content })),
+        GLOBAL_CHAT_TOOLS
+      );
+
+      // Check for tool calls
+      if (response.tool_calls && response.tool_calls.length > 0) {
+        for (const toolCall of response.tool_calls) {
+          const functionName = toolCall.name;
+          const args = typeof toolCall.arguments === 'string'
+            ? JSON.parse(toolCall.arguments)
+            : toolCall.arguments || {};
+
+          console.log(`🔧 Global chat tool call: ${functionName}`, args);
+
+          // Update thinking step
+          aiStore.addThinkingStep({
+            type: 'tool',
+            status: 'running',
+            description: functionName === 'read_memory_file'
+              ? `Reading ${args.file_type}.md...`
+              : `Writing ${args.file_type}.md...`,
+          });
+
+          try {
+            if (functionName === 'read_memory_file') {
+              let content = '';
+              const fileType = args.file_type;
+
+              if (fileType === 'ai') {
+                const memory = await memoryService.loadAIMemory();
+                if (memory) {
+                  const { serializeAIMemory } = await import('@/services/memoryParser');
+                  content = serializeAIMemory(memory);
+                } else {
+                  content = '[AI.md not found]';
+                }
+              } else if (fileType === 'plan') {
+                const memory = await memoryService.loadProjectMemory('global');
+                if (memory) {
+                  const { serializeProjectMemory } = await import('@/services/memoryParser');
+                  content = serializeProjectMemory(memory);
+                } else {
+                  content = '[Plan.md not found]';
+                }
+              } else if (fileType === 'daily') {
+                const memory = await memoryService.loadDailyMemory();
+                if (memory) {
+                  const { serializeDailyMemory } = await import('@/services/memoryParser');
+                  content = serializeDailyMemory(memory);
+                } else {
+                  content = '[Daily.md not found]';
+                }
+              }
+
+              onStream?.(`📖 Read ${fileType}.md\n`);
+              messages.push({
+                role: 'user',
+                content: `[Content of ${fileType === 'plan' ? 'Plan' : fileType.toUpperCase()}.md]:\n${content}`,
+              });
+
+            } else if (functionName === 'write_memory_file') {
+              const fileType = args.file_type;
+              const content = args.content;
+
+              if (fileType === 'ai') {
+                const { parseAIMemory } = await import('@/services/memoryParser');
+                const memory = parseAIMemory(content);
+                await memoryService.saveAIMemory(memory);
+              } else if (fileType === 'plan') {
+                const { parseProjectMemory } = await import('@/services/memoryParser');
+                const memory = parseProjectMemory(content);
+                await memoryService.saveProjectMemory('global', memory);
+              } else if (fileType === 'daily') {
+                const { parseDailyMemory } = await import('@/services/memoryParser');
+                const memory = parseDailyMemory(content);
+                await memoryService.saveDailyMemory(memory);
+              }
+
+              onStream?.(`✅ Updated ${fileType === 'plan' ? 'Plan' : fileType.toUpperCase()}.md\n`);
+              messages.push({
+                role: 'user',
+                content: `[Successfully updated ${fileType === 'plan' ? 'Plan' : fileType.toUpperCase()}.md]: ${args.reason}`,
+              });
+            }
+          } catch (toolError) {
+            console.error(`Tool error: ${functionName}`, toolError);
+            messages.push({
+              role: 'user',
+              content: `[Error in ${functionName}]: ${toolError}`,
+            });
+          }
+        }
+        // Continue to get AI's response after tool calls
+        continue;
+      }
+
+      // No tool calls - we have the final response
+      fullResponse = response.content || '';
+      break;
+    }
+
+    // Clear thinking and add response
+    aiStore.clearCurrentThinking();
+    aiStore.addMessage({
+      role: 'assistant',
+      content: fullResponse || 'I processed your request.',
+    });
+
+    onStream?.(fullResponse);
+    onComplete?.();
+
+  } catch (error) {
+    console.error('❌ Global chat error:', error);
+    aiStore.clearCurrentThinking();
+    aiStore.addMessage({
+      role: 'assistant',
+      content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    });
+    onError?.(error as Error);
+  } finally {
+    aiStore.setLoading(false);
+  }
 }

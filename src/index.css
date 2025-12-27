@@ -1733,6 +1733,43 @@ body {
   margin-right: -100%;
 }
 
+/* Floating Sidebar Mode */
+.sidebar.floating-sidebar {
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(88, 166, 255, 0.15);
+}
+
+.sidebar.floating-sidebar header {
+  border-radius: 16px 16px 0 0;
+  background: rgba(22, 27, 34, 0.6);
+  backdrop-filter: blur(12px);
+}
+
+.sidebar.floating-sidebar .tab-button {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+/* Floating mode transitions */
+.sidebar.floating-sidebar {
+  animation: floatIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+
 /* Compact Mode Switcher (unused now, keeping for backwards compatibility) */
 .mode-switcher-compact {
   display: inline-flex;
