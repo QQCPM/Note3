@@ -6,14 +6,14 @@ import { ask } from '@tauri-apps/plugin-dialog';
 const ContextMenu: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const { contextMenu, hideContextMenu } = useUIStore();
-  const { 
-    addNote, 
-    updateNote: updateNoteInStore, 
-    deleteNote: deleteNoteInStore, 
-    getNoteById, 
-    expandNote, 
+  const {
+    addNote,
+    updateNote: updateNoteInStore,
+    deleteNote: deleteNoteInStore,
+    getNoteById,
+    expandNote,
     setActiveNote,
-    togglePinned 
+    togglePinned
   } = useNotesStore();
 
   // In the new unified model, we only deal with notes
@@ -66,7 +66,7 @@ const ContextMenu: React.FC = () => {
         icon: '📝',
         parent_id: contextMenu.noteId,
       });
-      
+
       // Merge with new fields - inherit project from parent
       const subPage = {
         ...dbNote,
@@ -74,7 +74,7 @@ const ContextMenu: React.FC = () => {
         type: 'note' as const,
         is_pinned: false,
       };
-      
+
       addNote(subPage);
       expandNote(contextMenu.noteId);
       setActiveNote(subPage.id);
@@ -100,7 +100,7 @@ const ContextMenu: React.FC = () => {
         icon: '📁',
         parent_id: contextMenu.noteId,
       });
-      
+
       // Merge with new fields - inherit project from parent
       const folder = {
         ...dbFolder,
@@ -108,7 +108,7 @@ const ContextMenu: React.FC = () => {
         type: 'folder' as const,
         is_pinned: false,
       };
-      
+
       addNote(folder);
       expandNote(contextMenu.noteId);
       hideContextMenu();
@@ -145,7 +145,7 @@ const ContextMenu: React.FC = () => {
         icon: note.icon,
         parent_id: note.parent_id,
       });
-      
+
       // Merge with new fields - keep same project as original
       const duplicated = {
         ...dbNote,
@@ -153,7 +153,7 @@ const ContextMenu: React.FC = () => {
         type: note.type,
         is_pinned: false,
       };
-      
+
       addNote(duplicated);
       hideContextMenu();
     } catch (error) {

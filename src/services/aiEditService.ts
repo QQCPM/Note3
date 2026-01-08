@@ -215,7 +215,7 @@ export const AI_EDIT_TOOLS: Tool[] = [
     type: 'function' as const,
     function: {
       name: 'edit_block',
-      description: 'Edit the content of a text block on the canvas. Use this when the user asks you to add, modify, or improve TEXT content (explanations, articles, notes). Keywords: "write about", "make a note about", "explain", "describe", "tell me about". Do NOT use this for structured tables - use create_database instead.',
+      description: 'Edit/modify the content of a text block on the canvas. Use this ONLY when the user explicitly wants to CHANGE, ADD, or MODIFY the note content. Keywords that signal editing: "add to my note", "write in the note", "update this", "modify", "insert", "change". Do NOT use this for questions - if user is asking a question ("what is", "explain to me", "how does", "why", "tell me about"), just respond directly without editing.',
       parameters: {
         type: 'object',
         properties: {
@@ -456,9 +456,23 @@ async function streamWithTauriAI(options: StreamChatOptions): Promise<void> {
     console.warn('⚠️ Failed to load memory context:', error);
   }
 
+  // Format conversation history for context
+  let chatHistoryContext = '';
+  if (options.conversationHistory && options.conversationHistory.length > 0) {
+    const recentMessages = options.conversationHistory.slice(-10); // Last 10 messages
+    chatHistoryContext = recentMessages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+  }
+
   // System prompt that instructs AI to use tools
   const systemPrompt = `You are an INTELLIGENT AI assistant that understands context and chooses the RIGHT tool for the job.
 
+${chatHistoryContext ? `===========================================
+CURRENT CHAT SESSION (REMEMBER THIS!):
+===========================================
+${chatHistoryContext}
+
+IMPORTANT: The above is your conversation with this user. Remember what they told you!
+` : ''}
 ${memoryContext ? `===========================================
 USER MEMORY & PREFERENCES (from MD files):
 ===========================================
@@ -472,6 +486,25 @@ CURRENT BLOCK CONTENT:
 \`\`\`
 ${currentBlockContent}
 \`\`\`
+
+===========================================
+CRITICAL: DISTINGUISH Q&A FROM EDITING
+===========================================
+
+**QUESTION vs EDIT - VERY IMPORTANT!**
+
+If the user is asking a QUESTION about the note (seeking understanding):
+- "What is this note about?" → Just RESPOND with explanation, NO tools needed
+- "Explain this to me" → Just RESPOND with explanation, NO tools needed  
+- "What does X mean?" → Just RESPOND with explanation, NO tools needed
+- "How does this work?" → Just RESPOND with explanation, NO tools needed
+- "Why is X important?" → Just RESPOND with explanation, NO tools needed
+
+If the user wants to MODIFY the note:
+- "Add X to my note" → Use edit_block
+- "Write about X in the note" → Use edit_block
+- "Update this with more info" → Use edit_block
+- "Insert a section about X" → Use edit_block
 
 ===========================================
 OUTPUT STYLE - BE CONCISE:
@@ -1257,10 +1290,10 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                   content = '[AI.md not found - file does not exist yet]';
                 }
               } else if (fileType === 'plan') {
-                const memory = await memoryService.loadProjectMemory('global');
+                const memory = await memoryService.loadPlanMemory();
                 if (memory) {
-                  const { serializeProjectMemory } = await import('@/services/memoryParser');
-                  content = serializeProjectMemory(memory);
+                  const { serializePlanMemory } = await import('@/services/memoryParser');
+                  content = serializePlanMemory(memory);
                 } else {
                   content = '[Plan.md not found - file does not exist yet]';
                 }
@@ -1314,13 +1347,19 @@ NOW USE YOUR INTELLIGENCE TO CHOOSE THE RIGHT TOOL! 🧠`;
                 const memory = parseAIMemory(content);
                 await memoryService.saveAIMemory(memory);
               } else if (fileType === 'plan') {
-                const { parseProjectMemory } = await import('@/services/memoryParser');
-                const memory = parseProjectMemory(content);
-                await memoryService.saveProjectMemory('global', memory);
+                const { parsePlanMemory } = await import('@/services/memoryParser');
+                const memory = parsePlanMemory(content);
+                await memoryService.savePlanMemory(memory);
+                // Reload to refresh UI
+                await memoryService.loadPlanMemory();
+                console.log('🔄 Refreshed plan memory after write');
               } else if (fileType === 'daily') {
                 const { parseDailyMemory } = await import('@/services/memoryParser');
                 const memory = parseDailyMemory(content);
                 await memoryService.saveDailyMemory(memory);
+                // Sync to dashboard to refresh UI
+                await memoryService.syncDailyToDashboard();
+                console.log('🔄 Synced daily to dashboard after write');
               }
 
               onStream?.(`\n✅ Updated ${fileType === 'plan' ? 'Plan' : fileType.toUpperCase()}.md: ${parsedArgs.reason}\n`);
@@ -1697,8 +1736,22 @@ export async function streamGlobalChat(options: GlobalChatOptions): Promise<void
       console.warn('Could not load memory context:', e);
     }
 
+    // Format conversation history for context  
+    let chatHistoryContext = '';
+    if (conversationHistory.length > 0) {
+      const recentMessages = conversationHistory.slice(-10); // Last 10 messages
+      chatHistoryContext = recentMessages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+    }
+
     const systemPrompt = `You are a helpful AI assistant for personal learning and productivity.
 
+${chatHistoryContext ? `===========================================
+CURRENT CHAT SESSION (REMEMBER THIS!):
+===========================================
+${chatHistoryContext}
+
+IMPORTANT: The above is your conversation with this user. Remember what they told you!
+` : ''}
 ${memoryContext ? `YOUR CURRENT MEMORY (from MD files):
 ${memoryContext}
 
@@ -1734,6 +1787,8 @@ Be helpful, concise, and proactive about using these tools when relevant.`;
 
     // Add current user message
     messages.push({ role: 'user', content: userMessage });
+
+
 
     // Call AI with tools
     let fullResponse = '';
@@ -1782,10 +1837,10 @@ Be helpful, concise, and proactive about using these tools when relevant.`;
                   content = '[AI.md not found]';
                 }
               } else if (fileType === 'plan') {
-                const memory = await memoryService.loadProjectMemory('global');
+                const memory = await memoryService.loadPlanMemory();
                 if (memory) {
-                  const { serializeProjectMemory } = await import('@/services/memoryParser');
-                  content = serializeProjectMemory(memory);
+                  const { serializePlanMemory } = await import('@/services/memoryParser');
+                  content = serializePlanMemory(memory);
                 } else {
                   content = '[Plan.md not found]';
                 }
@@ -1814,9 +1869,9 @@ Be helpful, concise, and proactive about using these tools when relevant.`;
                 const memory = parseAIMemory(content);
                 await memoryService.saveAIMemory(memory);
               } else if (fileType === 'plan') {
-                const { parseProjectMemory } = await import('@/services/memoryParser');
-                const memory = parseProjectMemory(content);
-                await memoryService.saveProjectMemory('global', memory);
+                const { parsePlanMemory } = await import('@/services/memoryParser');
+                const memory = parsePlanMemory(content);
+                await memoryService.savePlanMemory(memory);
               } else if (fileType === 'daily') {
                 const { parseDailyMemory } = await import('@/services/memoryParser');
                 const memory = parseDailyMemory(content);
@@ -1858,6 +1913,160 @@ Be helpful, concise, and proactive about using these tools when relevant.`;
 
   } catch (error) {
     console.error('❌ Global chat error:', error);
+    aiStore.clearCurrentThinking();
+    aiStore.addMessage({
+      role: 'assistant',
+      content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    });
+    onError?.(error as Error);
+  } finally {
+    aiStore.setLoading(false);
+  }
+}
+
+// ============================================================================
+// FILE CHAT (PDF/Document context) - Uses Gemini 3 Pro
+// ============================================================================
+
+interface FileChatOptions {
+  userMessage: string;
+  fileName: string;
+  fileId: string;
+  file?: File; // Optional File object for PDF extraction
+  conversationHistory?: Array<{ role: string; content: string }>;
+  pdfContext?: string; // Pre-extracted PDF text (if available)
+  onStream?: (chunk: string) => void;
+  onComplete?: () => void;
+  onError?: (error: Error) => void;
+}
+
+/**
+ * Stream chat for file context (PDF viewing)
+ * Uses Gemini 3 Pro for document understanding
+ */
+export async function streamFileChat(options: FileChatOptions): Promise<void> {
+  const {
+    userMessage,
+    fileName,
+    fileId,
+    file,
+    conversationHistory = [],
+    pdfContext: providedPdfContext,
+    onStream,
+    onComplete,
+    onError
+  } = options;
+
+  const aiStore = useAIStore.getState();
+
+  console.log(`📄 Starting file chat for: ${fileName}`);
+  aiStore.setLoading(true);
+  aiStore.addThinkingStep({
+    type: 'thought',
+    status: 'running',
+    description: 'Analyzing document...',
+  });
+
+  try {
+    // Import gemini service and pdf extractor
+    const { geminiService } = await import('./geminiService');
+    const { extractPDFText } = await import('./pdfExtractor');
+
+    // Check if Gemini is available
+    if (!geminiService.isInitialized) {
+      throw new Error('Gemini service not initialized. Please configure your Gemini API key in settings.');
+    }
+
+    // Extract PDF content if file is provided and no context yet
+    let pdfContent = providedPdfContext || '';
+
+    if (!pdfContent && file && fileName.toLowerCase().endsWith('.pdf')) {
+      aiStore.addThinkingStep({
+        type: 'tool',
+        status: 'running',
+        description: 'Extracting PDF content...',
+      });
+
+      try {
+        console.log('📖 Extracting PDF text...');
+        const extractResult = await extractPDFText(file);
+        // Gemini 3 Pro has 1M+ token context - allow up to 100k chars (~25k words, ~50 pages)
+        const maxChars = 100000;
+        pdfContent = extractResult.fullText.substring(0, maxChars);
+        const isTruncated = extractResult.fullText.length > maxChars;
+        console.log(`📖 Extracted ${extractResult.wordCount} words from ${extractResult.totalPages} pages${isTruncated ? ' (truncated)' : ''}`);
+      } catch (extractError) {
+        console.warn('⚠️ PDF extraction failed:', extractError);
+        pdfContent = '[Could not extract PDF text - PDF may be image-based or corrupted]';
+      }
+    }
+
+    // Build document context
+    let documentContext = `You are a helpful AI assistant helping the user understand a document.
+
+DOCUMENT INFORMATION:
+- File Name: "${fileName}"
+- File ID: ${fileId}
+`;
+
+    if (pdfContent) {
+      documentContext += `
+DOCUMENT CONTENT:
+---
+${pdfContent}
+${pdfContent.length >= 100000 ? '\n[Content truncated - very long document]' : ''}
+---
+`;
+    } else {
+      documentContext += `
+NOTE: No text content was extracted from this document. It may be an image-based PDF.
+`;
+    }
+
+    documentContext += `
+INSTRUCTIONS:
+- Answer questions about the document content clearly and helpfully
+- Explain concepts, formulas, or diagrams mentioned in the document
+- If asked about something not in the document, say so clearly
+- Use markdown formatting for readability
+- Be educational and thorough`;
+
+    // Build conversation context
+    let conversationContext = '';
+    if (conversationHistory.length > 0) {
+      conversationContext = '\n\nPrevious conversation:\n';
+      for (const msg of conversationHistory.slice(-6)) { // Last 6 messages
+        conversationContext += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n`;
+      }
+    }
+
+    // Call Gemini 3 Pro
+    console.log('📤 Sending to Gemini 3 Pro...');
+    aiStore.addThinkingStep({
+      type: 'thought',
+      status: 'running',
+      description: 'Generating response with Gemini 3 Pro...',
+    });
+
+    const response = await geminiService.chat(
+      userMessage,
+      documentContext + conversationContext
+    );
+
+    console.log('📥 Gemini response received');
+
+    // Clear thinking and add response
+    aiStore.clearCurrentThinking();
+    aiStore.addMessage({
+      role: 'assistant',
+      content: response || 'I could not generate a response.',
+    });
+
+    onStream?.(response);
+    onComplete?.();
+
+  } catch (error) {
+    console.error('❌ File chat error:', error);
     aiStore.clearCurrentThinking();
     aiStore.addMessage({
       role: 'assistant',

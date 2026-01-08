@@ -9,3 +9,5 @@ export { useTransitionStore } from './transitionStore';
 export { useProjectStore, useActiveProject, useActiveProjectTree, useIsExpanded, useFilteredItems } from './projectStore';
 export { useFileStore } from './fileStore';
 export { useDashboardStore, useCurrentTask, useTodayProgress } from './dashboardStore';
+export { usePDFCaptureStore } from './pdfCaptureStore';
+export { useCourseStore, useActiveCourse, useActiveLesson, useCourseViewMode, useIsGenerating } from './courseStore';

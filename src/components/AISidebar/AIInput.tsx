@@ -1,10 +1,12 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useNotesStore, useBlocksStore } from '@/store';
 import { useAIStore, type AIMessage } from '@/store/aiStore';
-import { useUIStore } from '@/store/uiStore';
+import { usePDFCaptureStore } from '@/store/pdfCaptureStore';
+import { useFileStore } from '@/store/fileStore';
 import { streamAIEditChat } from '@/services/aiEditService';
+import { explainCapturedRegion } from '@/services/pdfVisionService';
 import { createBlock } from '@/utils/tauri';
-import { ArrowUp, Paperclip, Globe, FileText, Loader2, AtSign } from 'lucide-react';
+import { ArrowUp, Paperclip, Globe, FileText, Loader2, AtSign, Image, X, Sparkles, File as FileIcon } from 'lucide-react';
 import type { NoteWithChildren } from '@/types';
 
 // Helper to flatten note tree
@@ -34,7 +36,7 @@ interface AIInputProps {
   windowId?: string;
 }
 
-const AIInput: React.FC<AIInputProps> = ({ windowId }) => {
+const AIInput: React.FC<AIInputProps> = ({ windowId: _windowId }) => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { activeNoteId, getNoteById, notes } = useNotesStore();
@@ -42,25 +44,108 @@ const AIInput: React.FC<AIInputProps> = ({ windowId }) => {
   const {
     addMessage,
     activeNoteId: aiActiveNoteId,
-    globalSession,
-    noteSessions
+    activeFileName,
   } = useAIStore();
-  const { getWindowById } = useUIStore();
+
+  // PDF Capture context
+  const { currentCapture, clearCapture } = usePDFCaptureStore();
+
   const activeNote = activeNoteId ? getNoteById(activeNoteId) : null;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Handle quick explain for captured PDF region
+  const handleQuickExplain = async () => {
+    if (!currentCapture || isLoading) return;
+
+    setIsLoading(true);
+
+    // Add user message
+    addMessage({
+      role: 'user',
+      content: `📷 [Captured region from "${currentCapture.pdfName}" - Page ${currentCapture.pageNumber}]\n\nPlease explain what this shows.`,
+    });
+
+    try {
+      const explanation = await explainCapturedRegion(currentCapture, 'Please explain what this shows and help me understand it.');
+
+      addMessage({
+        role: 'assistant',
+        content: explanation,
+      });
+
+      // Clear capture after successful explanation
+      clearCapture();
+    } catch (error) {
+      console.error('Failed to explain captured region:', error);
+      addMessage({
+        role: 'assistant',
+        content: `Error: ${error instanceof Error ? error.message : 'Failed to analyze the captured region. Please check your Gemini API key in settings.'}`,
+      });
+    }
+
+    setIsLoading(false);
+  };
+
+  // Handle send with captured context
+  const handleSendWithCapture = async (userQuestion: string) => {
+    if (!currentCapture) return;
+
+    setIsLoading(true);
+
+    // Add user message
+    addMessage({
+      role: 'user',
+      content: `📷 [About captured region from "${currentCapture.pdfName}" - Page ${currentCapture.pageNumber}]\n\n${userQuestion}`,
+    });
+
+    try {
+      const explanation = await explainCapturedRegion(currentCapture, userQuestion);
+
+      addMessage({
+        role: 'assistant',
+        content: explanation,
+      });
+
+      // Clear capture after response
+      clearCapture();
+    } catch (error) {
+      console.error('Failed to explain captured region:', error);
+      addMessage({
+        role: 'assistant',
+        content: `Error: ${error instanceof Error ? error.message : 'Failed to analyze the captured region.'}`,
+      });
+    }
+
+    setIsLoading(false);
+  };
+
   // Get current session messages for conversation history
+  // IMPORTANT: Must use session.activeTabId to match addMessage behavior
   const getCurrentSessionMessages = (): AIMessage[] => {
-    const session = aiActiveNoteId
-      ? noteSessions[aiActiveNoteId]
-      : globalSession;
+    const store = useAIStore.getState();
+    const currentNoteId = store.activeNoteId;
 
-    if (!session) return [];
+    // Get session directly from state (not via getOrCreateSession which might create empty)
+    const session = currentNoteId === null
+      ? store.globalSession
+      : store.noteSessions[currentNoteId];
 
-    // Use window's activeTabId if available
-    const windowData = windowId ? getWindowById(windowId) : null;
-    const activeTabId = windowData?.activeTabId || session.activeTabId;
-    const activeTab = session.tabs.find(t => t.id === activeTabId);
+    if (!session) {
+      console.log('🔍 getCurrentSessionMessages: No session for', currentNoteId);
+      return [];
+    }
+
+    // CRITICAL: Use session.activeTabId - this is where addMessage stores messages
+    // Do NOT use windowTabId which can be stale/different
+    const activeTab = session.tabs.find(t => t.id === session.activeTabId);
+
+    console.log('🔍 Session messages:', {
+      noteId: currentNoteId,
+      activeTabId: session.activeTabId,
+      tabFound: !!activeTab,
+      messageCount: activeTab?.messages?.length || 0,
+    });
+
     return activeTab?.messages || [];
   };
 
@@ -116,7 +201,12 @@ const AIInput: React.FC<AIInputProps> = ({ windowId }) => {
     setMentionQuery(null);
     setIsLoading(true);
 
-    await handleSmartAgent(userMessage);
+    // If there's a captured PDF context, use vision-based explanation
+    if (currentCapture) {
+      await handleSendWithCapture(userMessage);
+    } else {
+      await handleSmartAgent(userMessage);
+    }
     setIsLoading(false);
   };
 
@@ -132,29 +222,42 @@ const AIInput: React.FC<AIInputProps> = ({ windowId }) => {
       content: userMessage,
     });
 
-    // Global mode: No active note - use chat with memory file tools
-    if (!activeNoteId) {
-      console.log('🌐 AIInput: Global mode (no active note) - using streamGlobalChat');
+    // Detect if we're in file context (PDF viewing) vs actual note
+    const isFileContext = aiActiveNoteId?.startsWith('file:');
+
+    // File mode: Viewing a PDF or other file - use streamFileChat
+    if (isFileContext && activeFileName) {
+      console.log('📄 AIInput: File mode - using streamFileChat with Gemini 3 Pro', `(file: ${activeFileName})`);
+
+      // Get file ID from session ID (remove 'file:' prefix)
+      const fileId = aiActiveNoteId!.replace('file:', '');
+
+      // Get the actual file from fileStore for PDF extraction
+      const fileData = useFileStore.getState().getFile(fileId);
+      const file = fileData?.file;
 
       try {
-        // Import the global chat function which has memory file tools
-        const { streamGlobalChat } = await import('@/services/aiEditService');
+        // Import the file chat function
+        const { streamFileChat } = await import('@/services/aiEditService');
 
-        await streamGlobalChat({
+        await streamFileChat({
           userMessage: userMessage,
+          fileName: activeFileName,
+          fileId: fileId,
+          file: file, // Pass File object for PDF extraction
           conversationHistory: conversationHistory,
           onStream: (chunk) => {
-            console.log('📥 Global chat stream:', chunk.substring(0, 50));
+            console.log('📥 File chat stream:', chunk.substring(0, 50));
           },
           onComplete: () => {
-            console.log('✅ Global chat completed');
+            console.log('✅ File chat completed');
           },
           onError: (error) => {
-            console.error('❌ Global chat error:', error);
+            console.error('❌ File chat error:', error);
           },
         });
       } catch (error) {
-        console.error('❌ Global chat error:', error);
+        console.error('❌ File chat error:', error);
         const aiStore = useAIStore.getState();
         aiStore.clearCurrentThinking();
         aiStore.setLoading(false);
@@ -165,6 +268,57 @@ const AIInput: React.FC<AIInputProps> = ({ windowId }) => {
       }
       return;
     }
+
+    // Global mode: Dashboard/AI Secretary - ALWAYS use specialist mode
+    if (!aiActiveNoteId) {
+      console.log('🤖 AIInput: Dashboard Secretary mode - ALWAYS using specialist AI');
+
+      const aiStore = useAIStore.getState();
+      aiStore.setLoading(true);
+      aiStore.addThinkingStep({
+        type: 'thought',
+        status: 'running',
+        description: 'AI Secretary analyzing...',
+      });
+
+      try {
+        // Import the secretary-only function (always uses LangGraph)
+        const { sendSecretaryChatMessage } = await import('@/services/chatService');
+
+        const result = await sendSecretaryChatMessage(
+          userMessage,
+          conversationHistory
+        );
+
+        // Complete thinking step with context
+        const steps = aiStore.currentThinkingSteps;
+        if (steps.length > 0) {
+          aiStore.updateThinkingStep(steps[steps.length - 1].id, {
+            status: 'complete',
+            description: result.pendingRoadmap
+              ? `Created learning plan: ${result.pendingRoadmap.name}`
+              : 'Processed request via AI Secretary',
+          });
+        }
+        aiStore.setLoading(false);
+
+        // Add response message
+        addMessage({
+          role: 'assistant',
+          content: result.error ? `Error: ${result.error}` : result.message,
+        });
+      } catch (error) {
+        console.error('❌ Dashboard Secretary error:', error);
+        aiStore.clearCurrentThinking();
+        aiStore.setLoading(false);
+        addMessage({
+          role: 'assistant',
+          content: `Error: ${error instanceof Error ? error.message : 'Failed to get response'}`,
+        });
+      }
+      return;
+    }
+
 
     // Note mode: Use block editing with streamAIEditChat
     const targetBlock = await getTargetBlock();
@@ -312,11 +466,78 @@ const AIInput: React.FC<AIInputProps> = ({ windowId }) => {
       )}
 
       <div className="bg-[#0d1117] rounded-lg border border-[#21262d] p-3 flex flex-col gap-2 transition-all hover:border-[#30363d]">
-        {/* Context indicator */}
-        {activeNote && (
+        {/* Captured PDF Context Preview */}
+        {currentCapture && (
+          <div className="bg-[#161b22] rounded-lg border border-[#30363d] p-3 mb-1">
+            <div className="flex items-start gap-3">
+              {/* Thumbnail */}
+              <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden border border-[#30363d] bg-[#0d1117]">
+                <img
+                  src={currentCapture.imageDataUrl}
+                  alt="Captured region"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <Image size={12} className="text-[#58a6ff]" />
+                  <span className="text-xs text-[#c9d1d9] font-medium truncate">
+                    {currentCapture.pdfName}
+                  </span>
+                </div>
+                <span className="text-[10px] text-[#6e7681]">
+                  Page {currentCapture.pageNumber}
+                </span>
+                {currentCapture.extractedText && (
+                  <p className="text-[10px] text-[#8b949e] mt-1 line-clamp-2">
+                    "{currentCapture.extractedText.substring(0, 80)}..."
+                  </p>
+                )}
+              </div>
+
+              {/* Clear button */}
+              <button
+                onClick={clearCapture}
+                className="flex-shrink-0 p-1 rounded hover:bg-[#21262d] text-[#6e7681] hover:text-[#f85149] transition-colors"
+                title="Remove capture"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Quick actions */}
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                onClick={handleQuickExplain}
+                disabled={isLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#238636] text-white text-xs font-medium rounded-md hover:bg-[#2ea043] transition-colors disabled:opacity-50"
+              >
+                <Sparkles size={12} />
+                Explain This
+              </button>
+              <span className="text-[10px] text-[#6e7681]">
+                or ask a specific question below
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Context indicator - Show file name when file is active, or note title when note is active */}
+        {(activeFileName || activeNote) && !currentCapture && (
           <div className="flex items-center gap-2 px-1 pb-1">
-            <FileText className="w-3 h-3 text-[#58a6ff]" />
-            <span className="text-xs text-[#7d8590] truncate flex-1">{activeNote.title}</span>
+            {activeFileName ? (
+              <>
+                <FileIcon className="w-3 h-3 text-[#f0883e]" />
+                <span className="text-xs text-[#7d8590] truncate flex-1">{activeFileName}</span>
+              </>
+            ) : activeNote ? (
+              <>
+                <FileText className="w-3 h-3 text-[#58a6ff]" />
+                <span className="text-xs text-[#7d8590] truncate flex-1">{activeNote.title}</span>
+              </>
+            ) : null}
           </div>
         )}
 
@@ -324,7 +545,7 @@ const AIInput: React.FC<AIInputProps> = ({ windowId }) => {
         <textarea
           ref={textareaRef}
           className="w-full bg-transparent border-none outline-none text-[#c9d1d9] text-sm placeholder-[#6e7681] resize-none min-h-[44px] max-h-[120px] px-1"
-          placeholder={activeNote ? "Ask about this note... (@ to reference)" : "What's on your mind?"}
+          placeholder={currentCapture ? "Ask about the captured region..." : (activeFileName ? `Ask about ${activeFileName}...` : (activeNote ? "Ask about this note... (@ to reference)" : "What's on your mind?"))}
           rows={2}
           value={message}
           onChange={handleInputChange}

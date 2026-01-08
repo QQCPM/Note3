@@ -5,6 +5,7 @@ import { useBlocksStore } from '@/store';
 import TextBlock from '@/components/Blocks/TextBlock';
 import HeadingBlock from '@/components/Blocks/HeadingBlock';
 import TaskBlock from '@/components/Blocks/TaskBlock';
+import QuizBlock from '@/components/Blocks/QuizBlock';
 import WebBlock from '@/components/Blocks/WebBlock';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
@@ -124,7 +125,7 @@ const SortableBlock: React.FC<SortableBlockProps> = React.memo(({ block, childre
               ⋮⋮
             </div>
           </div>
-          
+
           {/* Delete Menu */}
           {showDeleteMenu && (
             <div className="absolute left-0 top-6 bg-[#161b22] border border-[#30363d] rounded shadow-lg py-1 min-w-[120px] z-30">
@@ -145,8 +146,8 @@ const SortableBlock: React.FC<SortableBlockProps> = React.memo(({ block, childre
 }, (prevProps, nextProps) => {
   // Custom comparison: only re-render if block data actually changed
   return prevProps.block.id === nextProps.block.id &&
-         prevProps.block.data === nextProps.block.data &&
-         prevProps.block.position === nextProps.block.position;
+    prevProps.block.data === nextProps.block.data &&
+    prevProps.block.position === nextProps.block.position;
 });
 
 const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
@@ -285,6 +286,8 @@ const CanvasContent: React.FC<CanvasContentProps> = ({ note, blocks }) => {
         );
       case 'task':
         return <TaskBlock block={block} />;
+      case 'quiz':
+        return <QuizBlock block={block} />;
       case 'web':
         return <WebBlock block={block} />;
       default:

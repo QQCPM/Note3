@@ -146,11 +146,14 @@ interface AIStore {
   noteSessions: Record<string, NoteSession>;  // noteId → session (using Record for persistence)
   globalSession: NoteSession;                  // Dashboard/general chat
   activeNoteId: string | null;                 // Currently active note
+  activeFileId: string | null;                 // Currently active file (PDF, etc.)
+  activeFileName: string | null;               // Name of the active file
 
   // Session actions
   getOrCreateSession: (noteId: string | null) => NoteSession;
   getActiveSession: () => NoteSession;
   switchSession: (noteId: string | null) => void;
+  setActiveFile: (fileId: string | null, fileName?: string) => void;  // Switch to file context
 
   // Tab actions
   createTab: (noteId: string | null, name?: string) => SessionTab;
@@ -224,6 +227,8 @@ export const useAIStore = create<AIStore>()(
       noteSessions: {},
       globalSession: createDefaultSession(null),
       activeNoteId: null,
+      activeFileId: null,
+      activeFileName: null,
       isLoading: false,
       currentRequest: null,
       currentThinkingSteps: [],
@@ -265,9 +270,27 @@ export const useAIStore = create<AIStore>()(
       },
 
       switchSession: (noteId) => {
-        set({ activeNoteId: noteId });
+        // Clear file context when switching to a note
+        set({ activeNoteId: noteId, activeFileId: null, activeFileName: null });
         // Ensure session exists
         get().getOrCreateSession(noteId);
+      },
+
+      setActiveFile: (fileId, fileName) => {
+        if (fileId === null) {
+          // Clearing file context - switch back to note context or global
+          set({ activeFileId: null, activeFileName: null });
+        } else {
+          // Switch to file context - use file: prefix for session ID
+          const fileSessionId = `file:${fileId}`;
+          set({
+            activeFileId: fileId,
+            activeFileName: fileName || null,
+            activeNoteId: fileSessionId, // Use prefixed ID in the session system
+          });
+          // Ensure session exists for this file
+          get().getOrCreateSession(fileSessionId);
+        }
       },
 
       // ========================================================================
@@ -436,11 +459,13 @@ export const useAIStore = create<AIStore>()(
               currentCitations: message.role === 'assistant' ? [] : currentCitations,
             };
           } else {
-            const session = state.noteSessions[activeNoteId] || createDefaultSession(activeNoteId);
+            const existingSession = state.noteSessions[activeNoteId];
+            const session = existingSession || createDefaultSession(activeNoteId);
+            const updatedSession = updateSession(session);
             return {
               noteSessions: {
                 ...state.noteSessions,
-                [activeNoteId]: updateSession(session)
+                [activeNoteId]: updatedSession
               },
               currentThinkingSteps: message.role === 'assistant' ? [] : currentThinkingSteps,
               currentCitations: message.role === 'assistant' ? [] : currentCitations,

@@ -60,7 +60,7 @@ interface UIState {
 
 
   // Canvas Mode
-  canvasMode: 'note' | 'canvas' | 'dashboard' | 'graph';
+  canvasMode: 'note' | 'canvas' | 'dashboard' | 'graph' | 'course';
 
   // Menus & Modals
   contextMenu: ContextMenuState;
@@ -77,7 +77,7 @@ interface UIState {
   setAISidebarMode: (mode: 'docked' | 'floating') => void;
   setAIFloatingPosition: (pos: { x: number; y: number }) => void;
   setAIFloatingSize: (size: { width: number; height: number }) => void;
-  setCanvasMode: (mode: 'note' | 'canvas' | 'dashboard' | 'graph') => void;
+  setCanvasMode: (mode: 'note' | 'canvas' | 'dashboard' | 'graph' | 'course') => void;
 
   // AI Window Actions
   getPrimaryWindow: (sessionKey: string) => AIWindow | undefined;
@@ -194,6 +194,14 @@ export const useUIStore = create<UIState>()(
           };
         }
         if (mode === 'graph') {
+          return {
+            canvasMode: mode,
+            sidebarCollapsed: true,
+            aiSidebarCollapsed: true,
+          };
+        }
+        if (mode === 'course') {
+          // Course mode: full-screen experience, close AI sidebar by default
           return {
             canvasMode: mode,
             sidebarCollapsed: true,

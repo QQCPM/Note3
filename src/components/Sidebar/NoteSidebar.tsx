@@ -439,8 +439,8 @@ const NoteSidebar: React.FC = () => {
     <nav
       className="sidebar bg-[#010409] flex flex-col flex-shrink-0 rounded-2xl"
       style={{
-        width: '280px',
-        minWidth: '280px',
+        width: '260px',
+        minWidth: '260px',
         margin: '8px',
         height: 'calc(100vh - 16px)',
         overflow: 'hidden',

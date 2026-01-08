@@ -1,6 +1,6 @@
 // Block types matching database schema
 
-export type BlockType = 'text' | 'heading1' | 'heading2' | 'database' | 'artifact' | 'task' | 'web';
+export type BlockType = 'text' | 'heading1' | 'heading2' | 'database' | 'artifact' | 'task' | 'quiz' | 'web';
 
 // Tauri boundary type - has string data from Rust
 export interface TauriBlock {
@@ -36,6 +36,7 @@ export type BlockData =
   | DatabaseBlockData
   | ArtifactBlockData
   | TaskBlockData
+  | QuizBlockData
   | WebBlockData;
 
 // Text Block
@@ -116,6 +117,23 @@ export interface Task {
   completed: boolean;
   priority?: 'low' | 'medium' | 'high';
   due_date?: string;
+}
+
+// Quiz Block
+export interface QuizBlockData extends BlockLayout {
+  type: 'quiz';
+  title: string;
+  problems: QuizProblem[];
+}
+
+export interface QuizProblem {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation?: string;
+  selectedIndex?: number; // User's answer
+  revealed?: boolean; // Whether the answer has been revealed
 }
 
 // Web Block

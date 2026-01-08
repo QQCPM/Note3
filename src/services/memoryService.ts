@@ -6,6 +6,7 @@ import type {
   AIMemory,
   ProjectMemory,
   DailyMemory,
+  PlanMemory,
   SecretaryMemoryState,
 } from '@/types/memory';
 import {
@@ -15,12 +16,19 @@ import {
   serializeProjectMemory,
   parseDailyMemory,
   serializeDailyMemory,
+  parsePlanMemory,
+  serializePlanMemory,
 } from './memoryParser';
 
 // Default file names
 const AI_MEMORY_FILE = 'AI.md';
 const PROJECT_MEMORY_FILE = 'Project.md';
-const DAILY_MEMORY_FILE = 'Daily.md';
+const DAILY_MEMORY_FILE = 'Daily.md';  // Legacy - kept for backwards compatibility
+const TODAY_MEMORY_FILE = 'Today.md';  // Current day's plan
+const TOMORROW_MEMORY_FILE = 'Tomorrow.md';  // Next day's plan
+const PLAN_MEMORY_FILE = 'Plan.md';
+const PLANS_FOLDER = 'Plans';  // Folder for full roadmap archives
+const HISTORY_FOLDER = 'History';  // Folder for archived daily plans
 
 // ============================================
 // File Operations (via Tauri)
@@ -63,6 +71,47 @@ class MemoryService {
   // Get current memory state
   getState(): SecretaryMemoryState {
     return this.state;
+  }
+
+  // Helper to extract YYYY-MM-DD from various date formats
+  // Handles: "📅 Monday, January 5, 2026", "January 5, 2026", "2026-01-05"
+  private extractDateFromString(dateStr: string): string {
+    // Already in YYYY-MM-DD format?
+    const isoMatch = dateStr.match(/\d{4}-\d{2}-\d{2}/);
+    if (isoMatch) {
+      return isoMatch[0];
+    }
+
+    // Try parsing "January 5, 2026" or "Monday, January 5, 2026"
+    // Remove emojis and leading day names
+    const cleaned = dateStr.replace(/^.*?,\s*/, '').replace(/[^\w\s,]/g, '').trim();
+
+    // Match "Month Day, Year" pattern
+    const monthDayYear = cleaned.match(/(\w+)\s+(\d{1,2}),?\s+(\d{4})/);
+    if (monthDayYear) {
+      const [, monthName, day, year] = monthDayYear;
+      const months: Record<string, string> = {
+        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+        'september': '09', 'october': '10', 'november': '11', 'december': '12',
+      };
+      const month = months[monthName.toLowerCase()];
+      if (month) {
+        return `${year}-${month}-${day.padStart(2, '0')}`;
+      }
+    }
+
+    // Fall back to trying JavaScript's Date parser
+    try {
+      const parsed = new Date(cleaned);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+    } catch {
+      // Ignore parse errors
+    }
+
+    return ''; // Return empty if can't parse
   }
 
   // ============================================
@@ -122,6 +171,47 @@ class MemoryService {
 
     await this.saveAIMemory(defaultMemory);
     return defaultMemory;
+  }
+
+  // ============================================
+  // Plan Memory (Multi-Roadmap Support)
+  // ============================================
+
+  async loadPlanMemory(): Promise<PlanMemory | null> {
+    try {
+      const basePath = await getMemoryBasePath();
+      const filePath = `${basePath}/${PLAN_MEMORY_FILE}`;
+      const content = await readMemoryFile(filePath);
+
+      if (!content) {
+        // Return empty structure if file doesn't exist
+        return { activePlans: [], archivedPlans: [], thisWeek: null };
+      }
+
+      const result = parsePlanMemory(content);
+      console.log('[MemoryService] Loaded Plan.md:', {
+        activePlans: result.activePlans.map(p => ({ id: p.id, name: p.name, status: p.status })),
+        thisWeekTasks: result.thisWeek?.dailyTasks?.length || 0,
+      });
+      return result;
+    } catch (error) {
+      console.error('Failed to load plan memory:', error);
+      return { activePlans: [], archivedPlans: [], thisWeek: null };
+    }
+  }
+
+
+  async savePlanMemory(memory: PlanMemory): Promise<void> {
+    try {
+      const basePath = await getMemoryBasePath();
+      const filePath = `${basePath}/${PLAN_MEMORY_FILE}`;
+      const content = serializePlanMemory(memory);
+      await writeMemoryFile(filePath, content);
+      console.log('📝 [Memory] Plan.md saved successfully');
+    } catch (error) {
+      console.error('Failed to save plan memory:', error);
+      throw error;
+    }
   }
 
   // ============================================
@@ -251,53 +341,158 @@ class MemoryService {
   }
 
   // ============================================
+  // Today.md Operations (Current Day's Plan)
+  // ============================================
+
+  async loadTodayMemory(): Promise<DailyMemory | null> {
+    try {
+      const basePath = await getMemoryBasePath();
+      const filePath = `${basePath}/${TODAY_MEMORY_FILE}`;
+      const content = await readMemoryFile(filePath);
+
+      if (!content) {
+        // Fall back to legacy Daily.md if Today.md doesn't exist
+        return this.loadDailyMemory();
+      }
+
+      const memory = parseDailyMemory(content);
+      this.state.daily = memory;
+      this.state.lastUpdated.daily = new Date().toISOString();
+      return memory;
+    } catch (error) {
+      console.error('Failed to load today memory:', error);
+      return null;
+    }
+  }
+
+  async saveTodayMemory(memory: DailyMemory): Promise<void> {
+    try {
+      const basePath = await getMemoryBasePath();
+      const filePath = `${basePath}/${TODAY_MEMORY_FILE}`;
+      const content = serializeDailyMemory(memory);
+      await writeMemoryFile(filePath, content);
+
+      this.state.daily = memory;
+      this.state.lastUpdated.daily = new Date().toISOString();
+    } catch (error) {
+      console.error('Failed to save today memory:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // Tomorrow.md Operations (Next Day's Plan)
+  // ============================================
+
+  async loadTomorrowMemory(): Promise<DailyMemory | null> {
+    try {
+      const basePath = await getMemoryBasePath();
+      const filePath = `${basePath}/${TOMORROW_MEMORY_FILE}`;
+      const content = await readMemoryFile(filePath);
+
+      if (!content) {
+        return null;
+      }
+
+      const memory = parseDailyMemory(content);
+      this.state.tomorrow = memory;
+      return memory;
+    } catch (error) {
+      console.error('Failed to load tomorrow memory:', error);
+      return null;
+    }
+  }
+
+  async saveTomorrowMemory(memory: DailyMemory): Promise<void> {
+    try {
+      const basePath = await getMemoryBasePath();
+      const filePath = `${basePath}/${TOMORROW_MEMORY_FILE}`;
+      const content = serializeDailyMemory(memory);
+      await writeMemoryFile(filePath, content);
+
+      this.state.tomorrow = memory;
+    } catch (error) {
+      console.error('Failed to save tomorrow memory:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
   // Dashboard Sync
   // ============================================
 
   async syncDailyToDashboard(): Promise<void> {
     const { useDashboardStore } = await import('@/store/dashboardStore');
-    const daily = this.state.daily;
-
-    if (!daily) {
-      return;
-    }
-
     const store = useDashboardStore.getState();
     const now = new Date().toISOString();
 
-    // Convert daily tasks to dashboard format
-    const scheduledTasks = daily.tasks.map((task) => ({
-      id: task.id,
-      title: task.task,
-      description: task.reason || '',
-      scheduledTime: task.time,
-      durationMinutes: parseInt(task.duration) || 30,
-      type: task.type as 'learn' | 'practice' | 'review' | 'project' | 'break',
-      status: task.status,
-      aiGenerated: true,
-      aiReason: task.reason,
-    }));
+    // Helper to convert DailyMemory to DailyPlan format
+    const toPlanData = (daily: DailyMemory, isApproved: boolean) => {
+      const todayDate = new Date();
+      const todayStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+      const planDateStr = this.extractDateFromString(daily.date) || todayStr;
 
-    const totalMinutes = scheduledTasks.reduce((sum, t) => sum + t.durationMinutes, 0);
-    const completedMinutes = scheduledTasks
-      .filter(t => t.status === 'completed')
-      .reduce((sum, t) => sum + t.durationMinutes, 0);
+      const scheduledTasks = daily.tasks.map((task) => ({
+        id: task.id,
+        title: task.task,
+        description: task.reason || '',
+        scheduledTime: task.time,
+        durationMinutes: parseInt(task.duration) || 30,
+        type: task.type as 'learn' | 'practice' | 'review' | 'project' | 'break',
+        status: task.status,
+        aiGenerated: true,
+        aiReason: task.reason,
+      }));
 
-    // Update today's plan
-    store.setTodayPlan({
-      id: `plan-${daily.date}`,
-      date: daily.date,
-      tasks: scheduledTasks,
-      totalMinutes,
-      completedMinutes,
-      isApproved: true,
-      userModified: false,
-      createdAt: now,
-      updatedAt: now,
-    });
+      const totalMinutes = scheduledTasks.reduce((sum, t) => sum + t.durationMinutes, 0);
+      const completedMinutes = scheduledTasks
+        .filter(t => t.status === 'completed')
+        .reduce((sum, t) => sum + t.durationMinutes, 0);
 
-    // Update reflection if present
-    if (daily.reflection) {
+      return {
+        id: `plan-${planDateStr}`,
+        date: planDateStr,
+        tasks: scheduledTasks,
+        totalMinutes,
+        completedMinutes,
+        isApproved,
+        userModified: false,
+        createdAt: now,
+        updatedAt: now,
+        aiGeneratedAt: now,
+      };
+    };
+
+    // ============================================
+    // LOAD TODAY'S PLAN from Today.md
+    // ============================================
+    const todayMemory = await this.loadTodayMemory();
+    if (todayMemory) {
+      console.log('[MemoryService] Syncing Today.md to todayPlan:', todayMemory.date);
+      store.setTodayPlan(toPlanData(todayMemory, true));
+    }
+
+    // ============================================
+    // LOAD TOMORROW'S PLAN from Tomorrow.md
+    // ============================================
+    const tomorrowMemory = await this.loadTomorrowMemory();
+    if (tomorrowMemory) {
+      console.log('[MemoryService] Syncing Tomorrow.md to tomorrowPlan:', tomorrowMemory.date);
+      store.setTomorrowPlan(toPlanData(tomorrowMemory, false));
+    }
+
+    // Legacy fallback: If Today.md doesn't exist, try Daily.md
+    if (!todayMemory) {
+      const legacyDaily = await this.loadDailyMemory();
+      if (legacyDaily) {
+        console.log('[MemoryService] Using legacy Daily.md for today:', legacyDaily.date);
+        store.setTodayPlan(toPlanData(legacyDaily, true));
+      }
+    }
+
+    // Update reflection if present (from today's plan)
+    const reflectionSource = todayMemory || this.state.daily;
+    if (reflectionSource?.reflection) {
       // Map memory mood to dashboard mood
       const moodMap: Record<string, 'great' | 'good' | 'okay' | 'struggling' | 'overwhelmed'> = {
         'great': 'great',
@@ -308,12 +503,12 @@ class MemoryService {
       };
 
       store.setTodayReflection({
-        id: `reflection-${daily.date}`,
-        date: daily.date,
-        content: daily.reflection.notes || '',
-        mood: moodMap[daily.reflection.mood || 'okay'] || 'okay',
-        whatWentWell: daily.reflection.wins,
-        whatWasHard: daily.reflection.struggles,
+        id: `reflection-${reflectionSource.date}`,
+        date: reflectionSource.date,
+        content: reflectionSource.reflection.notes || '',
+        mood: moodMap[reflectionSource.reflection.mood || 'okay'] || 'okay',
+        whatWentWell: reflectionSource.reflection.wins,
+        whatWasHard: reflectionSource.reflection.struggles,
         aiProcessed: false,
         createdAt: now,
         updatedAt: now,
@@ -376,9 +571,112 @@ class MemoryService {
     await this.saveDailyMemory(daily, projectId);
   }
 
+  /**
+   * Sync tomorrow's plan from dashboard store to Tomorrow.md
+   * Called after any edit to tomorrow's plan (add/edit/remove task)
+   */
+  async syncTomorrowPlanToFile(): Promise<void> {
+    const { useDashboardStore } = await import('@/store/dashboardStore');
+    const tomorrowPlan = useDashboardStore.getState().tomorrowPlan;
+
+    if (!tomorrowPlan) {
+      console.log('[MemoryService] No tomorrow plan to sync');
+      return;
+    }
+
+    // Convert DailyPlan to DailyMemory format
+    const tomorrowMemory: DailyMemory = {
+      date: tomorrowPlan.date,
+      context: {
+        week: 1,
+        phase: '',
+        focus: this.state.tomorrow?.context?.focus || '',
+      },
+      tasks: tomorrowPlan.tasks.map(task => ({
+        id: task.id,
+        time: task.scheduledTime || '',
+        task: task.title,
+        type: task.type as 'learn' | 'practice' | 'review' | 'project' | 'break' | 'other',
+        duration: `${task.durationMinutes}min`,
+        status: task.status,
+        reason: task.aiReason,
+      })),
+      totalStudyTime: `${tomorrowPlan.totalMinutes}min`,
+      aiNotes: this.state.tomorrow?.aiNotes,
+    };
+
+    // Save to Tomorrow.md
+    await this.saveTomorrowMemory(tomorrowMemory);
+    console.log('[MemoryService] Synced tomorrow plan to Tomorrow.md');
+  }
+
+  /**
+   * Sync today's plan and reflection from dashboard store to Today.md
+   * Called after task updates or reflection submission
+   */
+  async syncTodayPlanToFile(): Promise<void> {
+    const { useDashboardStore } = await import('@/store/dashboardStore');
+    const store = useDashboardStore.getState();
+    const todayPlan = store.todayPlan;
+    const todayReflection = store.todayReflection;
+
+    if (!todayPlan) {
+      console.log('[MemoryService] No today plan to sync');
+      return;
+    }
+
+    // Map dashboard mood to memory mood
+    const moodMap: Record<string, 'great' | 'good' | 'okay' | 'tired' | 'frustrated'> = {
+      'great': 'great',
+      'good': 'good',
+      'okay': 'okay',
+      'struggling': 'tired',
+      'overwhelmed': 'frustrated',
+    };
+
+    // Convert DailyPlan to DailyMemory format
+    const todayMemory: DailyMemory = {
+      date: todayPlan.date,
+      context: {
+        week: 1,
+        phase: '',
+        focus: this.state.daily?.context?.focus || '',
+      },
+      tasks: todayPlan.tasks.map(task => ({
+        id: task.id,
+        time: task.scheduledTime || '',
+        task: task.title,
+        type: task.type as 'learn' | 'practice' | 'review' | 'project' | 'break' | 'other',
+        duration: `${task.durationMinutes}min`,
+        status: task.status,
+        reason: task.aiReason,
+      })),
+      totalStudyTime: `${todayPlan.totalMinutes}min`,
+      aiNotes: this.state.daily?.aiNotes,
+    };
+
+    // Add reflection if present
+    if (todayReflection) {
+      todayMemory.reflection = {
+        mood: moodMap[todayReflection.mood || 'okay'] || 'okay',
+        struggles: todayReflection.whatWasHard,
+        wins: todayReflection.whatWentWell,
+        notes: todayReflection.content,
+        completedCount: todayPlan.tasks.filter(t => t.status === 'completed').length,
+        totalCount: todayPlan.tasks.length,
+      };
+    }
+
+    // Save to Today.md
+    await this.saveTodayMemory(todayMemory);
+    console.log('[MemoryService] Synced today plan to Today.md');
+  }
+
   // ============================================
   // Auto-generate Sample Files
   // ============================================
+
+
 
   async initializeDefaultFiles(projectId?: string): Promise<void> {
     // Check and create AI.md if it doesn't exist
@@ -406,7 +704,9 @@ class MemoryService {
   }
 
   async createDefaultDailyMemory(projectId?: string): Promise<DailyMemory> {
-    const today = new Date().toISOString().split('T')[0];
+    // IMPORTANT: Use local date formatting to avoid timezone issues
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const defaultMemory: DailyMemory = {
       date: today,
       context: {
@@ -547,6 +847,220 @@ class MemoryService {
     }
 
     return context;
+  }
+
+  // ============================================
+  // Plans Archive Folder Operations
+  // ============================================
+
+  /**
+   * Get the Memory base directory path
+   */
+  async getMemoryDirectory(): Promise<string> {
+    return await getMemoryBasePath();
+  }
+
+  /**
+   * Get the Plans/ directory path
+   */
+  async getPlansDirectory(): Promise<string> {
+    const basePath = await getMemoryBasePath();
+    return `${basePath}/${PLANS_FOLDER}`;
+  }
+
+  /**
+   * Ensure Plans/ directory exists
+   */
+  async ensurePlansDirectory(): Promise<void> {
+    try {
+      const plansDir = await this.getPlansDirectory();
+      await invoke('ensure_directory', { path: plansDir });
+    } catch (error) {
+      console.warn('Failed to create Plans directory:', error);
+      // Fallback: try to create via writing a placeholder
+    }
+  }
+
+  /**
+   * Save full roadmap to Plans/ archive folder
+   * @param filename - e.g., "quantum-mechanics-2026-01.md"
+   * @param content - Full markdown content
+   */
+  async saveToPlanArchive(filename: string, content: string): Promise<string> {
+    try {
+      await this.ensurePlansDirectory();
+      const plansDir = await this.getPlansDirectory();
+      const filePath = `${plansDir}/${filename}`;
+      await writeMemoryFile(filePath, content);
+      console.log(`📁 [Memory] Saved to archive: ${filename}`);
+      return filePath;
+    } catch (error) {
+      console.error('Failed to save to plan archive:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Load full roadmap from Plans/ archive
+   * @param filename - e.g., "quantum-mechanics-2026-01.md"
+   */
+  async loadFromPlanArchive(filename: string): Promise<string | null> {
+    try {
+      const plansDir = await this.getPlansDirectory();
+      const filePath = `${plansDir}/${filename}`;
+      return await readMemoryFile(filePath);
+    } catch (error) {
+      console.error('Failed to load from plan archive:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Count total lessons from plan's archive file
+   * Counts "### Day X" headings in the detailed roadmap
+   * @param archivePath - e.g., "Plans/aws-fundamentals.md" or just "aws-fundamentals.md"
+   * @returns number of lessons found, or 0 if file not found
+   */
+  async getTotalLessonsFromArchive(archivePath: string): Promise<number> {
+    try {
+      // Extract filename from path
+      const filename = archivePath.split('/').pop() || archivePath;
+      const content = await this.loadFromPlanArchive(filename);
+
+      if (!content) {
+        console.log(`[Memory] No archive found for: ${filename}`);
+        return 0;
+      }
+
+      // Count "### Day X" patterns (matches "### Day 1", "### Day 2 | Title", etc.)
+      const dayMatches = content.match(/^###\s*Day\s+\d+/gim);
+      const lessonCount = dayMatches?.length || 0;
+
+      console.log(`[Memory] Found ${lessonCount} lessons in: ${filename}`);
+      return lessonCount;
+    } catch (error) {
+      console.error('Failed to count lessons from archive:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * List all archived plans in Plans/ folder
+   */
+  async listPlanArchives(): Promise<string[]> {
+    try {
+      const plansDir = await this.getPlansDirectory();
+      // Use list_memory_files (correct Tauri command, not list_directory)
+      const files = await invoke<string[]>('list_memory_files', { directory: plansDir });
+      // Extract just the filenames from full paths
+      return files.map(f => f.split('/').pop() || f).filter(f => f.endsWith('.md'));
+    } catch (error) {
+      console.warn('Failed to list plan archives:', error);
+      return [];
+    }
+  }
+
+
+  // ============================================
+  // History Folder Operations (Daily.md Archives)
+  // ============================================
+
+  /**
+   * Get the History/ directory path
+   */
+  async getHistoryDirectory(): Promise<string> {
+    const basePath = await getMemoryBasePath();
+    return `${basePath}/${HISTORY_FOLDER}`;
+  }
+
+  /**
+   * Ensure History/ directory exists
+   */
+  async ensureHistoryDirectory(): Promise<void> {
+    try {
+      const historyDir = await this.getHistoryDirectory();
+      await invoke('ensure_directory', { path: historyDir });
+    } catch (error) {
+      console.warn('Failed to create History directory:', error);
+    }
+  }
+
+  /**
+   * Archive current Daily.md to History/ folder before generating new plan
+   * @param date - Date string for the archive (YYYY-MM-DD). If omitted, uses today's date.
+   * @returns true if archived successfully, false if no Daily.md to archive
+   */
+  async archiveDailyPlan(date?: string): Promise<boolean> {
+    try {
+      // Load current Daily.md
+      const dailyMemory = await this.loadDailyMemory();
+      if (!dailyMemory) {
+        console.log('📁 [Memory] No Daily.md to archive');
+        return false;
+      }
+
+      // Use the date from Daily.md or provided date or today
+      const archiveDate = date || dailyMemory.date || new Date().toISOString().split('T')[0];
+
+      // Ensure History/ exists
+      await this.ensureHistoryDirectory();
+
+      // Serialize and save to History/
+      const { serializeDailyMemory } = await import('./memoryParser');
+      const content = serializeDailyMemory(dailyMemory);
+      const historyDir = await this.getHistoryDirectory();
+      const filePath = `${historyDir}/${archiveDate}.md`;
+
+      await writeMemoryFile(filePath, content);
+      console.log(`📁 [Memory] Archived Daily.md to History/${archiveDate}.md`);
+
+      return true;
+    } catch (error) {
+      console.error('Failed to archive Daily.md:', error);
+      return false;
+    }
+  }
+
+  /**
+   * List all archived daily plans in History/ folder
+   */
+  async listDailyHistory(): Promise<string[]> {
+    try {
+      const historyDir = await this.getHistoryDirectory();
+      const files = await invoke<string[]>('list_memory_files', { directory: historyDir });
+      // Extract just the date strings (filenames without .md)
+      return files
+        .map(f => f.split('/').pop() || f)
+        .filter(f => f.endsWith('.md'))
+        .map(f => f.replace('.md', ''))
+        .sort()
+        .reverse(); // Most recent first
+    } catch (error) {
+      console.warn('Failed to list daily history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Load a specific day from History/
+   * @param date - Date string (YYYY-MM-DD)
+   */
+  async loadFromHistory(date: string): Promise<DailyMemory | null> {
+    try {
+      const historyDir = await this.getHistoryDirectory();
+      const filePath = `${historyDir}/${date}.md`;
+      const content = await readMemoryFile(filePath);
+
+      if (!content) {
+        return null;
+      }
+
+      const { parseDailyMemory } = await import('./memoryParser');
+      return parseDailyMemory(content);
+    } catch (error) {
+      console.error(`Failed to load history for ${date}:`, error);
+      return null;
+    }
   }
 }
 

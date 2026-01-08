@@ -172,19 +172,20 @@ export function getCurrentTime(): string {
 }
 
 /**
- * Get current date in YYYY-MM-DD format
+ * Get current date in YYYY-MM-DD format (LOCAL timezone)
  */
 export function getCurrentDate(): string {
-  return new Date().toISOString().split('T')[0];
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /**
- * Get tomorrow's date in YYYY-MM-DD format
+ * Get tomorrow's date in YYYY-MM-DD format (LOCAL timezone)
  */
 export function getTomorrowDate(): string {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toISOString().split('T')[0];
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /**

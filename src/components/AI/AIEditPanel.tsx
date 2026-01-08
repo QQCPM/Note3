@@ -41,9 +41,18 @@ const AIEditPanel: React.FC<AIEditPanelProps> = ({ blockId, onClose }) => {
     setInputValue('');
     setStreamingText('');
 
+    // Get conversation history from the current session
+    const store = useAIStore.getState();
+    const session = store.getOrCreateSession(store.activeNoteId);
+    const activeTab = session?.tabs.find(t => t.id === session.activeTabId);
+    const conversationHistory = (activeTab?.messages || [])
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({ role: m.role, content: m.content }));
+
     await streamAIEditChat({
       blockId,
       userMessage: message,
+      conversationHistory, // Pass conversation history!
       onStream: (chunk) => {
         setStreamingText((prev) => prev + chunk);
       },

@@ -17,12 +17,12 @@ import { tauriAI, createMacM2UltraConfig, createMacM2ProConfig, createMacM2ProHy
 import { streamAIEditChat, applyEdit, rejectEdit } from './aiEditService';
 import { aiToolsService } from './aiTools';
 import { sendChatMessage, chatWithNoteEdit, type ChatMessage } from './chatService';
-import { 
-  analyzeNoteForRecommendations, 
-  generateMindmap, 
-  generateFlashcards, 
-  generateConcepts, 
-  generateExercises, 
+import {
+  analyzeNoteForRecommendations,
+  generateMindmap,
+  generateFlashcards,
+  generateConcepts,
+  generateExercises,
   generateResources,
   generateSlides,
   initializeGeminiService,
@@ -33,6 +33,7 @@ import {
 import { agenticAI } from './agenticAI';
 import { orchestrationService } from './orchestration';
 import { searchWeb, formatSearchResults } from './webSearch';
+import { initializeYouTubeSearch } from './courseGenerator/youtubeSearch';
 import { useAIStore } from '@/store/aiStore';
 
 // ============================================================================
@@ -54,7 +55,7 @@ export interface AISystemHealth {
   lastCheck: Date;
 }
 
-export type AISystemMode = 
+export type AISystemMode =
   | 'm2-ultra'      // Mac M2 Ultra 64GB+ - full local models
   | 'm2-pro'        // Mac M2 Pro 16GB - minimal local (embedding only) + cloud
   | 'm2-pro-hybrid' // Mac M2 Pro 16GB - local embedding + reranker + cloud
@@ -70,11 +71,11 @@ export interface AISystemConfig {
   autoInitialize?: boolean;
 }
 
-type AIEventType = 
-  | 'status-change' 
-  | 'health-update' 
-  | 'error' 
-  | 'chat-start' 
+type AIEventType =
+  | 'status-change'
+  | 'health-update'
+  | 'error'
+  | 'chat-start'
   | 'chat-complete'
   | 'tool-call'
   | 'edit-proposed'
@@ -110,7 +111,7 @@ class AISystemService {
     }
 
     this._initPromise = this._doInitialize(config);
-    
+
     try {
       await this._initPromise;
       return this._health!;
@@ -126,7 +127,7 @@ class AISystemService {
     try {
       // Step 1: Try to load persisted config
       let openaiKey = config.openaiApiKey;
-      
+
       if (!openaiKey) {
         const persistedConfig = await tauriAI.loadPersistedConfig();
         if (persistedConfig?.openai_api_key) {
@@ -138,7 +139,7 @@ class AISystemService {
       // Step 2: Create config based on mode
       const ollamaKey = config.ollamaApiKey || '';
       const mode = config.mode || (ollamaKey || config.useGlm46 ? 'demo' : 'm2-ultra');
-      
+
       switch (mode) {
         case 'm2-pro':
           console.log('💻 [AISystem] Using M2 Pro 16GB config (minimal local + cloud)');
@@ -178,10 +179,37 @@ class AISystemService {
         }
       }
 
-      // Step 5: Health check
+      // Step 5: Initialize YouTube search if API key is provided
+      const youtubeApiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
+      if (youtubeApiKey) {
+        try {
+          initializeYouTubeSearch(youtubeApiKey);
+          console.log('✅ [AISystem] YouTube search initialized');
+        } catch (youtubeError) {
+          console.warn('⚠️ [AISystem] YouTube search initialization failed:', youtubeError);
+          // Don't fail entire initialization if YouTube fails
+        }
+      }
+
+      // Step 6: Initialize Deep Research service (uses Gemini API key)
+      if (config.geminiApiKey) {
+        try {
+          const { initializeDeepResearch } = await import('./deepResearchService');
+          initializeDeepResearch(config.geminiApiKey);
+          console.log('✅ [AISystem] Deep Research service initialized');
+        } catch (deepResearchError) {
+          console.warn('⚠️ [AISystem] Deep Research initialization failed:', deepResearchError);
+        }
+      }
+
+      // Step 7: Knowledge service is now integrated in the Course Generator Worker
+      // No separate initialization needed - LlamaIndex is loaded lazily within the worker
+      console.log('ℹ️ [AISystem] Knowledge service integrated in Course Generator Worker');
+
+      // Step 8: Health check
       await this.checkHealth();
 
-      // Step 5: Determine final status
+      // Step 9: Determine final status
       if (this._health?.services.agent) {
         const allHealthy = Object.values(this._health.services).every(v => v);
         this._setStatus(allHealthy ? 'ready' : 'partial');
@@ -216,7 +244,7 @@ class AISystemService {
   async checkHealth(): Promise<AISystemHealth> {
     try {
       const health = await tauriAI.healthCheck();
-      
+
       this._health = {
         status: this._status,
         services: {
@@ -282,7 +310,7 @@ class AISystemService {
   async chat(messages: Message[]): Promise<string> {
     this._requireReady();
     this._emit('chat-start', { type: 'general' });
-    
+
     try {
       const response = await tauriAI.chat(messages);
       this._emit('chat-complete', { type: 'general', success: true });
@@ -307,7 +335,7 @@ class AISystemService {
   async chatWithNote(noteId: string, noteName: string, message: string, history: ChatMessage[] = []): Promise<string> {
     this._requireReady();
     this._emit('chat-start', { type: 'note-edit', noteId });
-    
+
     try {
       const response = await chatWithNoteEdit(noteId, noteName, message, history);
       this._emit('chat-complete', { type: 'note-edit', noteId, success: true });
@@ -331,7 +359,7 @@ class AISystemService {
   }): Promise<void> {
     this._requireReady();
     this._emit('chat-start', { type: 'edit', blockId: options.blockId });
-    
+
     const wrappedOnToolCall = (name: string, args: any) => {
       this._emit('tool-call', { name, args });
       options.onToolCall?.(name, args);
@@ -680,7 +708,7 @@ class AISystemService {
       this._eventListeners.set(event, new Set());
     }
     this._eventListeners.get(event)!.add(callback);
-    
+
     // Return unsubscribe function
     return () => this.off(event, callback);
   }

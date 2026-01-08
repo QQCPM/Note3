@@ -82,6 +82,28 @@ pub async fn delete_memory_file(path: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to delete file {}: {}", path, e))
 }
 
+/// Rename/move a memory file
+#[tauri::command]
+pub async fn rename_memory_file(old_path: String, new_path: String) -> Result<(), String> {
+    let from = PathBuf::from(&old_path);
+    let to = PathBuf::from(&new_path);
+    
+    if !from.exists() {
+        return Err(format!("Source file not found: {}", old_path));
+    }
+    
+    // Create parent directory if needed
+    if let Some(parent) = to.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+    }
+    
+    fs::rename(&from, &to)
+        .map_err(|e| format!("Failed to rename {} to {}: {}", old_path, new_path, e))
+}
+
 /// List all memory files in a directory
 #[tauri::command]
 pub async fn list_memory_files(directory: String) -> Result<Vec<String>, String> {

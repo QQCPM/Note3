@@ -1,0 +1,140 @@
+/* PDF Capture Toolbar - Modern Floating Pill Design */
+
+.pdf-capture-toolbar {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+
+    /* Pill shape */
+    padding: 6px 12px;
+    border-radius: 24px;
+
+    /* Glass effect */
+    background: rgba(13, 17, 23, 0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(88, 166, 255, 0.15);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+
+    /* Animation */
+    animation: fadeSlideUp 0.25s ease-out;
+}
+
+/* Capture button */
+.capture-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: none;
+    background: transparent;
+    color: #8b949e;
+    cursor: pointer;
+    border-radius: 18px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.capture-btn:hover {
+    background: rgba(88, 166, 255, 0.12);
+    color: #58a6ff;
+    transform: scale(1.02);
+}
+
+.capture-btn:active {
+    transform: scale(0.98);
+}
+
+.capture-label {
+    letter-spacing: 0.3px;
+}
+
+/* Active state */
+.capture-active {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    color: #58a6ff;
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: #58a6ff;
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(88, 166, 255, 0.6);
+}
+
+.hint {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+    opacity: 0.9;
+}
+
+.cancel-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: #6e7681;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all 0.15s ease;
+}
+
+.cancel-btn:hover {
+    background: rgba(248, 81, 73, 0.2);
+    color: #f85149;
+}
+
+/* Animations */
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.4);
+        opacity: 0.6;
+    }
+}
+
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .capture-label {
+        display: none;
+    }
+
+    .hint {
+        max-width: 120px;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+}

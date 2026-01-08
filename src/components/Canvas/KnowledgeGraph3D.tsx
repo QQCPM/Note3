@@ -501,11 +501,10 @@ const KnowledgeGraph3D: React.FC = () => {
           {groups.slice(0, 6).map((group) => (
             <div
               key={group.id}
-              className={`flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer transition-all ${
-                focusedNode?.groupId === group.id
-                  ? 'bg-white/5'
-                  : 'hover:bg-white/5'
-              }`}
+              className={`flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer transition-all ${focusedNode?.groupId === group.id
+                ? 'bg-white/5'
+                : 'hover:bg-white/5'
+                }`}
               onClick={() => {
                 const node = graphData.nodes.find(n => n.id === group.id);
                 if (node) focusOnNode(node);

@@ -109,7 +109,11 @@ fn main() {
             write_memory_file,
             memory_file_exists,
             delete_memory_file,
+            rename_memory_file,
             list_memory_files,
+            // Course Generation (Deep Research proxy)
+            course_deep_research,
+            course_deep_research_stream,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

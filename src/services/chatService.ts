@@ -3,15 +3,140 @@ import { useTransitionStore } from '@/store/transitionStore';
 import { useBlocksStore } from '@/store/blocksStore';
 import { createBlock } from '@/utils/tauri';
 import { streamAIEditChat } from './aiEditService';
-import { processSecretaryMessage, isPlanningRequest } from './secretaryService';
+import { isPlanningRequest, refreshSecretarySession } from './secretaryService';
+// NOTE: LangGraph is lazy-loaded to prevent loading at app startup
+// This fixes: "SyntaxError: Importing binding name 'default' cannot be resolved by star export entries"
+import type { SecretaryResponse } from './langgraph/secretaryGraph';
 import type { TextBlockData } from '@/types';
+
+// ============================================================================
+// EPHEMERAL SESSION ID - Resets on app refresh
+// ============================================================================
+
+// Generate once per app load - all Dashboard conversations share this until refresh
+const ephemeralSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+// ============================================================================
+// DASHBOARD SECRETARY MODE (Always uses LangGraph)
+// ============================================================================
+
+/**
+ * Send message to AI Secretary (Dashboard mode)
+ * 
+ * ALWAYS routes to LangGraph Secretary with full tool access.
+ * Uses ephemeral thread - conversation resets on app refresh.
+ * 
+ * @param userMessage - The user's message
+ * @param conversationHistory - Previous messages in the conversation
+ * @returns SecretaryResponse with AI message and any tool results
+ */
+export async function sendSecretaryChatMessage(
+  userMessage: string,
+  conversationHistory: Array<{ role: string; content: string }> = [],
+): Promise<SecretaryResponse> {
+  // Ephemeral thread ID - resets when app refreshes
+  const threadId = `secretary-${ephemeralSessionId}`;
+
+  console.log('🤖 [chatService] Dashboard Secretary mode - specialist AI');
+  console.log(`🔑 [chatService] Thread ID: ${threadId}`);
+  console.log(`📜 [chatService] History: ${conversationHistory.length} messages`);
+
+  try {
+    // Dynamic import to avoid loading LangGraph at startup
+    const { invokeSecretary } = await import('./langgraph');
+    const result = await invokeSecretary(userMessage, threadId);
+
+    // Keep session alive for follow-up messages
+    refreshSecretarySession();
+
+    // Log tool usage for debugging
+    if (result.pendingRoadmap) {
+      console.log('📋 [Secretary] Pending roadmap:', result.pendingRoadmap.name);
+    }
+    if (result.calendarEvents.length > 0) {
+      console.log('📅 [Secretary] Calendar events:', result.calendarEvents);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('❌ [chatService] Secretary error:', error);
+    return {
+      message: `I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+      pendingRoadmap: null,
+      awaitingConfirmation: false,
+      calendarEvents: [],
+      error: error instanceof Error ? error.message : 'Failed to process request',
+    };
+  }
+}
+
+// ============================================================================
+// STARTINGPAGE SECRETARY ROUTING (Conditional - only for planning requests)
+// ============================================================================
+
+/**
+ * Route a message to the Secretary if it's a planning request
+ * 
+ * This is the SINGLE SOURCE OF TRUTH for secretary routing.
+ * Both AIInput.tsx and sendChatMessage() should use this function.
+ * 
+ * @param userMessage - The user's message
+ * @param conversationHistory - Previous messages in the conversation
+ * @param threadId - Thread ID for conversation persistence (default: 'global-secretary')
+ * @returns SecretaryResponse if handled, null if not a planning request
+ */
+export async function routeToSecretaryIfPlanning(
+  userMessage: string,
+  _conversationHistory: Array<{ role: string; content: string }> = [],
+  threadId: string = 'global-secretary'
+): Promise<SecretaryResponse | null> {
+  // Check if this is a planning/scheduling request
+  if (!isPlanningRequest(userMessage)) {
+    return null; // Not a planning request, caller should handle normally
+  }
+
+  console.log('📅 [chatService] Detected planning request, routing to LangGraph Secretary...');
+  console.log(`📅 [chatService] Thread ID: ${threadId}`);
+
+  try {
+    // Dynamic import to avoid loading LangGraph at startup
+    const { invokeSecretary } = await import('./langgraph');
+    const result = await invokeSecretary(userMessage, threadId);
+
+    // Keep session alive so follow-up messages continue routing to secretary
+    refreshSecretarySession();
+    console.log('📅 [chatService] Secretary session refreshed for follow-ups');
+
+    // Log state updates for debugging
+    if (result.pendingRoadmap) {
+      console.log('📋 [chatService] Pending roadmap created:', result.pendingRoadmap.name);
+    }
+    if (result.calendarEvents.length > 0) {
+      console.log('📅 [chatService] Calendar events:', result.calendarEvents);
+    }
+    if (result.error) {
+      console.error('❌ [chatService] LangGraph Secretary error:', result.error);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('❌ [chatService] LangGraph Secretary failed:', error);
+    return {
+      message: '',
+      pendingRoadmap: null,
+      awaitingConfirmation: false,
+      calendarEvents: [],
+      error: error instanceof Error ? error.message : 'Failed to process planning request',
+    };
+  }
+}
 
 /**
  * Chat Service
  *
  * Handles AI chat functionality in StartingPage
  * - Regular chat (no note context)
- * - Planning/scheduling (routed to Secretary)
+ * - Planning/scheduling (routed to LangGraph Secretary)
  * - Chat with note context (@mention)
  * - Manages conversation history
  * - Converts highlights to context
@@ -101,22 +226,19 @@ export async function sendChatMessage(
   userMessage: string
 ): Promise<string> {
   try {
-    // Check if this is a planning/scheduling request
-    if (isPlanningRequest(userMessage)) {
-      console.log('📅 Detected planning request, routing to Secretary...');
+    // Convert history for planning detection
+    const historyForCheck = conversationHistory.map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
 
-      const secretaryResponse = await processSecretaryMessage(
-        userMessage,
-        convertToAIMessages(conversationHistory)
-      );
-
-      // Return the secretary's message
-      // The actions are logged for debugging, could be used for UI feedback
-      if (secretaryResponse.actions.length > 0) {
-        console.log('🔧 Secretary actions:', secretaryResponse.actions);
+    // Use unified secretary routing (single source of truth)
+    const secretaryResult = await routeToSecretaryIfPlanning(userMessage, historyForCheck);
+    if (secretaryResult) {
+      if (secretaryResult.error) {
+        throw new Error(secretaryResult.error);
       }
-
-      return secretaryResponse.message;
+      return secretaryResult.message;
     }
 
     console.log('💬 Sending chat message to AI...');

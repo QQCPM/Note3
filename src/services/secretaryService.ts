@@ -9,7 +9,8 @@
 
 import { tauriAI, type Message, type Tool } from './tauriAI';
 import { memoryService } from './memoryService';
-import * as dailyPlanService from './dailyPlanService';
+// Note: dailyPlanService was imported for future use but is currently unused
+// import * as dailyPlanService from './dailyPlanService';
 import type {
     SecretaryResponse,
     SecretaryAction,
@@ -45,10 +46,10 @@ When you call a tool, call it. Do not just say you will call it.
 3. User confirms → CALL save_roadmap with start_date
 
 ## Date Handling
-- Today: ${new Date().toISOString().split('T')[0]}
+- Today: ${(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()}
 - "after New Year 2026" = 2026-01-01
 - "next Monday" = calculate the actual date
-- "tomorrow" = ${new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+- "tomorrow" = ${(() => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()}
 
 ## WRONG vs RIGHT
 ❌ WRONG: "Here's your roadmap: Week 1... Week 2..." (just text, no tool call)
@@ -223,7 +224,16 @@ function getToolsForAI(): Tool[] {
 // Temporary storage for roadmap being created (before save)
 let pendingRoadmap: RoadmapData | null = null;
 
-async function executeCreateRoadmap(args: {
+// Helper to sanitize filenames (remove special chars)
+function sanitizeFilename(name: string): string {
+    return name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric with hyphens
+        .replace(/^-+|-+$/g, '')       // Trim leading/trailing hyphens
+        .substring(0, 50);              // Limit length
+}
+
+export async function executeCreateRoadmap(args: {
     topic: string;
     duration_days: number;
     study_days?: string[];
@@ -349,6 +359,10 @@ Generate the complete JSON now.`;
         detailMessage += `Tell me when you want to start (e.g., "tomorrow", "next Monday") and I'll add it to your calendar.\n\n`;
         detailMessage += `💡 You can also ask me to modify any part before saving.`;
 
+        // Store the full content for archiving (strip the "ready to save" footer)
+        const archiveContent = detailMessage.split('---\n\n✅')[0].trim() + '\n';
+        pendingRoadmap.rawContent = archiveContent;
+
         return {
             success: true,
             data: pendingRoadmap,
@@ -362,9 +376,10 @@ Generate the complete JSON now.`;
     }
 }
 
-async function executeSaveRoadmap(args: {
+export async function executeSaveRoadmap(args: {
     roadmap_name: string;
     start_date?: string;
+    end_date?: string;      // AI can calculate and provide this directly
     project_id?: string;
 }): Promise<ToolCallResult> {
     try {
@@ -375,36 +390,92 @@ async function executeSaveRoadmap(args: {
             };
         }
 
-        const projectId = args.project_id || 'default-project';
         const startDate = args.start_date || new Date().toISOString().split('T')[0];
 
-        // Convert to the format expected by dailyPlanService
-        const roadmapContent = `
-# ${pendingRoadmap.name}
-
-## Overview
-- Topic: ${pendingRoadmap.topic}
-- Duration: ${pendingRoadmap.totalDays} days
-- Study Days: ${pendingRoadmap.studyDays.join(', ')}
-- Hours per Day: ${pendingRoadmap.dailyHours}
-- Start Date: ${startDate}
-
-## Phases
-${pendingRoadmap.phases.map(p => `### ${p.name} (Weeks ${p.weeks})\n${p.topics.map(t => `- ${t}`).join('\n')}`).join('\n\n')}
-
-## Daily Schedule
-${pendingRoadmap.dailyTopics.map(d => `Day ${d.day}: ${d.topic} (${d.type}, ${d.duration})`).join('\n')}
-`;
-
-        // Process through dailyPlanService
-        await dailyPlanService.processRoadmap(roadmapContent, projectId);
-
-        // Update the start date in memory
-        const projectMemory = await memoryService.loadProjectMemory(projectId);
-        if (projectMemory) {
-            projectMemory.timeline.startDate = startDate;
-            await memoryService.saveProjectMemory(projectId, projectMemory);
+        // Use AI-provided end_date if available, otherwise calculate from totalDays
+        let endDate: string;
+        if (args.end_date) {
+            endDate = args.end_date;
+            console.log(`📅 [Secretary] Using AI-provided end date: ${endDate}`);
+        } else {
+            // Fallback: calculate from start + totalDays
+            const endDateObj = new Date(startDate);
+            endDateObj.setDate(endDateObj.getDate() + pendingRoadmap.totalDays);
+            endDate = endDateObj.toISOString().split('T')[0];
         }
+
+        // Generate short plan ID from topic (more unique than name prefix)
+        // e.g., "MLE and ML Algorithms" -> "MM", "Rocket Engineering" -> "RE"
+        const topicWords = pendingRoadmap.topic
+            .replace(/[^a-zA-Z\s]/g, '')  // Remove non-letter chars (numbers, parentheses, etc.)
+            .split(/\s+/)
+            .filter(w => w.length > 2 && !/^(and|the|for|with|from|into)$/i.test(w));
+        let basePlanId = topicWords
+            .slice(0, 2)
+            .map(w => w.charAt(0).toUpperCase())
+            .join('') || 'PL';
+
+        // Check for uniqueness against existing plans
+        const existingMemory = await memoryService.loadPlanMemory();
+        const existingIds = existingMemory ? existingMemory.activePlans.map(p => p.id) : [];
+        let planId = basePlanId;
+        let counter = 1;
+        while (existingIds.includes(planId)) {
+            planId = `${basePlanId}${counter}`;
+            counter++;
+        }
+
+        // Calculate total weeks
+        const totalWeeks = Math.ceil(pendingRoadmap.totalDays / 7);
+
+        // Build full markdown content for archive
+        const fullContent = pendingRoadmap.rawContent || buildRoadmapMarkdown(pendingRoadmap);
+
+        // Extract weekly themes from the content
+        const weeklyThemes = extractWeeklyThemes(fullContent, totalWeeks);
+
+        // Create condensed plan entry
+        const condensedPlan: import('@/types/memory').CondensedPlan = {
+            id: planId,
+            name: pendingRoadmap.name,
+            topic: pendingRoadmap.topic,
+            startDate: startDate,
+            endDate: endDate,
+            studyDays: pendingRoadmap.studyDays,
+            dailyHours: pendingRoadmap.dailyHours,
+            currentWeek: 1,
+            totalWeeks: totalWeeks,
+            status: 'active',
+            weeklyThemes: weeklyThemes,
+            archivePath: ''
+        };
+
+        // Save full content to Plans/ archive folder
+        const archiveFilename = `${sanitizeFilename(pendingRoadmap.name)}-${startDate}.md`;
+        try {
+            const archivePath = await memoryService.saveToPlanArchive(archiveFilename, fullContent);
+            condensedPlan.archivePath = archivePath;
+            console.log(`📁 [Secretary] Full roadmap archived: ${archiveFilename}`);
+        } catch (archiveError) {
+            console.warn('Failed to save to archive, continuing:', archiveError);
+        }
+
+        // Load existing Plan.md
+        let planMemory = await memoryService.loadPlanMemory();
+        if (!planMemory) {
+            planMemory = { activePlans: [], archivedPlans: [], thisWeek: null };
+        }
+
+        // Add the new plan
+        planMemory.activePlans.push(condensedPlan);
+
+        // Generate This Week section (uses today's date)
+        planMemory.thisWeek = generateThisWeekPlan(planMemory.activePlans);
+
+        console.log(`📋 [Secretary] Saving condensed plan: "${condensedPlan.name}" (${totalWeeks} weeks)`);
+
+        // Save updated Plan.md
+        await memoryService.savePlanMemory(planMemory);
 
         // Clear pending roadmap
         const savedName = pendingRoadmap.name;
@@ -412,10 +483,11 @@ ${pendingRoadmap.dailyTopics.map(d => `Day ${d.day}: ${d.topic} (${d.type}, ${d.
 
         return {
             success: true,
-            data: { projectId, startDate, name: savedName },
-            message: `Saved "${savedName}"! First study day: ${startDate}`
+            data: { planId, startDate, name: savedName },
+            message: `✅ Saved "${savedName}"! Plan starts ${startDate}. Full roadmap archived.`
         };
     } catch (error) {
+        console.error('❌ [Secretary] Error saving roadmap:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Failed to save roadmap'
@@ -423,20 +495,370 @@ ${pendingRoadmap.dailyTopics.map(d => `Day ${d.day}: ${d.topic} (${d.type}, ${d.
     }
 }
 
-async function executeGenerateDailyPlan(args: { date?: string }): Promise<ToolCallResult> {
+/**
+ * Delete an existing plan from Plan.md
+ * AI uses this when user wants to modify/replace an existing plan
+ */
+export async function executeDeletePlan(args: {
+    plan_id?: string;      // Short ID like "SS", "AP"
+    plan_name?: string;    // Full or partial plan name
+}): Promise<ToolCallResult> {
     try {
-        // Get active project from dashboard store
-        const { useDashboardStore } = await import('@/store/dashboardStore');
-        const projectId = useDashboardStore.getState().activeRoadmapId || 'default-project';
+        if (!args.plan_id && !args.plan_name) {
+            return {
+                success: false,
+                error: 'Please provide either plan_id or plan_name to delete.'
+            };
+        }
 
-        const plan = await dailyPlanService.generateDailyPlan(projectId, args.date);
+        // Load current plans
+        const planMemory = await memoryService.loadPlanMemory();
+        if (!planMemory || planMemory.activePlans.length === 0) {
+            return {
+                success: false,
+                error: 'No active plans found to delete.'
+            };
+        }
+
+        // Find the plan to delete
+        const planIndex = planMemory.activePlans.findIndex(p => {
+            if (args.plan_id && p.id === args.plan_id) return true;
+            if (args.plan_name && p.name.toLowerCase().includes(args.plan_name.toLowerCase())) return true;
+            return false;
+        });
+
+        if (planIndex === -1) {
+            return {
+                success: false,
+                error: `Could not find plan with ID "${args.plan_id}" or name "${args.plan_name}".`
+            };
+        }
+
+        const deletedPlan = planMemory.activePlans[planIndex];
+        console.log(`🗑️ [Secretary] Deleting plan: ${deletedPlan.id} - ${deletedPlan.name}`);
+
+        // Remove the plan
+        planMemory.activePlans.splice(planIndex, 1);
+
+        // Regenerate This Week section without the deleted plan
+        planMemory.thisWeek = generateThisWeekPlan(planMemory.activePlans);
+
+        // Save updated Plan.md
+        await memoryService.savePlanMemory(planMemory);
+
+        return {
+            success: true,
+            data: { deletedPlanId: deletedPlan.id, deletedPlanName: deletedPlan.name },
+            message: `✅ Deleted plan "${deletedPlan.name}" (${deletedPlan.id})`
+        };
+    } catch (error) {
+        console.error('❌ [Secretary] Error deleting plan:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to delete plan'
+        };
+    }
+}
+
+/**
+ * Update specific fields of an existing plan without recreating it
+ * AI uses this for surgical edits like changing dates, study days, etc.
+ */
+export async function executeUpdatePlan(args: {
+    plan_id?: string;           // Short ID like "SS", "AP"
+    plan_name?: string;         // Full or partial plan name
+    start_date?: string;        // New start date (YYYY-MM-DD)
+    end_date?: string;          // New end date (YYYY-MM-DD)
+    study_days?: string[];      // New study days like ["Mon", "Wed", "Sat"]
+    daily_hours?: number;       // New hours per day
+    current_week?: number;      // Update current week progress
+}): Promise<ToolCallResult> {
+    try {
+        if (!args.plan_id && !args.plan_name) {
+            return {
+                success: false,
+                error: 'Please provide either plan_id or plan_name to update.'
+            };
+        }
+
+        // Load current plans
+        const planMemory = await memoryService.loadPlanMemory();
+        if (!planMemory || planMemory.activePlans.length === 0) {
+            return {
+                success: false,
+                error: 'No active plans found to update.'
+            };
+        }
+
+        // Find the plan to update
+        const planIndex = planMemory.activePlans.findIndex(p => {
+            if (args.plan_id && p.id === args.plan_id) return true;
+            if (args.plan_name && p.name.toLowerCase().includes(args.plan_name.toLowerCase())) return true;
+            return false;
+        });
+
+        if (planIndex === -1) {
+            return {
+                success: false,
+                error: `Could not find plan with ID "${args.plan_id}" or name "${args.plan_name}".`
+            };
+        }
+
+        const plan = planMemory.activePlans[planIndex];
+        const changes: string[] = [];
+
+        // Apply updates
+        if (args.start_date) {
+            plan.startDate = args.start_date;
+            changes.push(`start date → ${args.start_date}`);
+        }
+        if (args.end_date) {
+            plan.endDate = args.end_date;
+            changes.push(`end date → ${args.end_date}`);
+        }
+        if (args.study_days) {
+            plan.studyDays = args.study_days;
+            changes.push(`study days → ${args.study_days.join(', ')}`);
+        }
+        if (args.daily_hours !== undefined) {
+            plan.dailyHours = args.daily_hours;
+            changes.push(`daily hours → ${args.daily_hours}h`);
+        }
+        if (args.current_week !== undefined) {
+            plan.currentWeek = args.current_week;
+            changes.push(`current week → W${args.current_week}`);
+        }
+
+        if (changes.length === 0) {
+            return {
+                success: false,
+                error: 'No updates provided. Specify at least one field to change.'
+            };
+        }
+
+        console.log(`✏️ [Secretary] Updating plan ${plan.id}: ${changes.join(', ')}`);
+
+        // Regenerate This Week section with updated plan
+        planMemory.thisWeek = generateThisWeekPlan(planMemory.activePlans);
+
+        // Save updated Plan.md
+        await memoryService.savePlanMemory(planMemory);
+
+        return {
+            success: true,
+            data: { planId: plan.id, planName: plan.name, changes },
+            message: `✅ Updated "${plan.name}" (${plan.id}): ${changes.join(', ')}`
+        };
+    } catch (error) {
+        console.error('❌ [Secretary] Error updating plan:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to update plan'
+        };
+    }
+}
+
+/**
+ * List all current plans so AI can query the state
+ * Returns summary of active plans for AI decision-making
+ */
+export async function executeListPlans(): Promise<ToolCallResult> {
+    try {
+        const planMemory = await memoryService.loadPlanMemory();
+
+        if (!planMemory || planMemory.activePlans.length === 0) {
+            return {
+                success: true,
+                data: { plans: [], count: 0 },
+                message: 'No active plans found.'
+            };
+        }
+
+        const plans = planMemory.activePlans.map(p => ({
+            id: p.id,
+            name: p.name,
+            startDate: p.startDate,
+            endDate: p.endDate,
+            studyDays: p.studyDays,
+            currentWeek: p.currentWeek,
+            totalWeeks: p.totalWeeks,
+            dailyHours: p.dailyHours,
+            status: p.status
+        }));
+
+        const planList = plans.map(p =>
+            `• ${p.id}: "${p.name}" (${p.startDate} to ${p.endDate}, ${p.studyDays.join('/')}, W${p.currentWeek}/${p.totalWeeks})`
+        ).join('\n');
+
+        return {
+            success: true,
+            data: { plans, count: plans.length },
+            message: `Found ${plans.length} active plan(s):\n${planList}`
+        };
+    } catch (error) {
+        console.error('❌ [Secretary] Error listing plans:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to list plans'
+        };
+    }
+}
+
+/**
+ * Build markdown content from pending roadmap data
+ */
+function buildRoadmapMarkdown(roadmap: RoadmapData): string {
+    let content = `# ${roadmap.name}\n\n`;
+    content += `**Topic:** ${roadmap.topic}\n`;
+    content += `**Duration:** ${roadmap.totalDays} days\n`;
+    content += `**Study Days:** ${roadmap.studyDays.join(', ')}\n`;
+    content += `**Hours/Day:** ${roadmap.dailyHours}h\n\n`;
+    content += `---\n\n`;
+
+    // Add daily topics if available
+    if (roadmap.dailyTopics && roadmap.dailyTopics.length > 0) {
+        content += `## Daily Schedule\n\n`;
+        for (const day of roadmap.dailyTopics) {
+            content += `### Day ${day.day}: ${day.topic}\n`;
+            // Access tasks with type assertion since it may exist in some formats
+            if ((day as any).tasks) {
+                content += `${(day as any).tasks}\n`;
+            }
+            content += '\n';
+        }
+    }
+
+    return content;
+}
+
+/**
+ * Unified daily plan structure
+ */
+interface UnifiedDailyPlan {
+    date: string;
+    dayOfWeek: string;
+    blocks: {
+        planId: string;
+        planName: string;
+        topic: string;
+        hours: number;
+        tasks: string[];
+    }[];
+    totalHours: number;
+    isEmpty: boolean;
+}
+
+/**
+ * Generate unified daily plan from condensed Plan.md
+ * Combines tasks from all active plans for the specified day
+ */
+async function generateUnifiedDailyPlan(date?: string): Promise<UnifiedDailyPlan> {
+    const targetDate = date ? new Date(date) : new Date();
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayOfWeek = dayNames[targetDate.getDay()];
+    const dateStr = targetDate.toISOString().split('T')[0];
+
+    // Load condensed Plan.md
+    const planMemory = await memoryService.loadPlanMemory();
+
+    if (!planMemory || !planMemory.thisWeek || planMemory.thisWeek.dailyTasks.length === 0) {
+        return {
+            date: dateStr,
+            dayOfWeek,
+            blocks: [],
+            totalHours: 0,
+            isEmpty: true,
+        };
+    }
+
+    // Filter tasks for today's day of week
+    const todaysTasks = planMemory.thisWeek.dailyTasks.filter(
+        task => task.day === dayOfWeek
+    );
+
+    if (todaysTasks.length === 0) {
+        return {
+            date: dateStr,
+            dayOfWeek,
+            blocks: [],
+            totalHours: 0,
+            isEmpty: true,
+        };
+    }
+
+    // Build blocks from tasks, looking up plan details
+    const blocks: UnifiedDailyPlan['blocks'] = [];
+    let totalHours = 0;
+
+    for (const task of todaysTasks) {
+        // Find the plan details
+        const plan = planMemory.activePlans.find(p => p.id === task.planId);
+        if (!plan) continue;
+
+        const hours = plan.dailyHours || 2;
+        totalHours += hours;
+
+        blocks.push({
+            planId: plan.id,
+            planName: plan.name,
+            topic: task.topic,
+            hours: hours,
+            tasks: task.subtasks || [`Study: ${task.topic}`],
+        });
+    }
+
+    return {
+        date: dateStr,
+        dayOfWeek,
+        blocks,
+        totalHours,
+        isEmpty: blocks.length === 0,
+    };
+}
+
+export async function executeGenerateDailyPlan(args: { date?: string }): Promise<ToolCallResult> {
+    try {
+        // Generate unified plan from condensed Plan.md
+        const plan = await generateUnifiedDailyPlan(args.date);
+
+        if (plan.isEmpty) {
+            // Check if it's a rest day or no plans
+            const planMemory = await memoryService.loadPlanMemory();
+            if (!planMemory || planMemory.activePlans.length === 0) {
+                return {
+                    success: true,
+                    data: plan,
+                    message: `📅 **${plan.dayOfWeek}, ${plan.date}**\n\nNo active learning plans found. Create a roadmap first!`
+                };
+            }
+
+            return {
+                success: true,
+                data: plan,
+                message: `📅 **${plan.dayOfWeek}, ${plan.date}**\n\n🎉 **Rest day!** No study sessions scheduled for ${plan.dayOfWeek}.`
+            };
+        }
+
+        // Format the response
+        let message = `📅 **${plan.dayOfWeek}, ${plan.date}**\n\n`;
+        message += `**Total Study Time:** ${plan.totalHours} hours\n\n---\n\n`;
+
+        for (const block of plan.blocks) {
+            message += `## ${block.planName} (${block.hours}h)\n`;
+            message += `**Topic:** ${block.topic}\n\n`;
+            for (const task of block.tasks) {
+                message += `- ${task}\n`;
+            }
+            message += '\n';
+        }
 
         return {
             success: true,
             data: plan,
-            message: `Generated plan for ${args.date || 'today'} with ${plan.tasks.length} tasks.`
+            message: message
         };
     } catch (error) {
+        console.error('❌ [Secretary] Error generating daily plan:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Failed to generate daily plan'
@@ -444,7 +866,7 @@ async function executeGenerateDailyPlan(args: { date?: string }): Promise<ToolCa
     }
 }
 
-async function executeMarkDayOff(args: { date: string; reason?: string }): Promise<ToolCallResult> {
+export async function executeMarkDayOff(args: { date: string; reason?: string }): Promise<ToolCallResult> {
     try {
         // Load AI memory and add blocked date
         const aiMemory = await memoryService.loadAIMemory();
@@ -469,7 +891,7 @@ async function executeMarkDayOff(args: { date: string; reason?: string }): Promi
     }
 }
 
-async function executeAddCalendarEvent(args: {
+export async function executeAddCalendarEvent(args: {
     title: string;
     date: string;
     time: string;
@@ -502,7 +924,7 @@ async function executeAddCalendarEvent(args: {
     }
 }
 
-async function executeUpdatePreferences(args: {
+export async function executeUpdatePreferences(args: {
     study_days?: string[];
     daily_hours?: number;
     focus_time?: string;
@@ -572,6 +994,204 @@ async function executeTool(name: string, args: any): Promise<ToolCallResult> {
             return executeUpdatePreferences(args);
         default:
             return { success: false, error: `Unknown tool: ${name}` };
+    }
+}
+
+// ============================================================================
+// GENERIC MEMORY FILE EXECUTORS
+// AI uses these like a text editor to read/modify any memory file
+// ============================================================================
+
+/**
+ * Read any file from the Memory folder
+ */
+export async function executeReadMemoryFile(args: {
+    path: string;
+}): Promise<ToolCallResult> {
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+
+        // Get memory directory
+        const memoryDir = await memoryService.getMemoryDirectory();
+        const fullPath = `${memoryDir}/${args.path}`;
+
+        // Read file content
+        const content = await invoke<string>('read_memory_file', { path: fullPath });
+
+        return {
+            success: true,
+            data: { content, path: args.path },
+            message: `Read "${args.path}" (${content.length} chars)`
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : `Failed to read: ${args.path}`
+        };
+    }
+}
+
+/**
+ * Write content to any file in the Memory folder
+ */
+export async function executeWriteMemoryFile(args: {
+    path: string;
+    content: string;
+}): Promise<ToolCallResult> {
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+
+        // Get memory directory
+        const memoryDir = await memoryService.getMemoryDirectory();
+        const fullPath = `${memoryDir}/${args.path}`;
+
+        // Write file content
+        await invoke('write_memory_file', { path: fullPath, content: args.content });
+
+        console.log(`📝 [Secretary] Wrote to: ${args.path} (${args.content.length} chars)`);
+
+        // ============================================
+        // REFRESH UI AFTER WRITING PLAN/DAILY FILES
+        // ============================================
+        const fileName = args.path.toLowerCase();
+
+        if (fileName === 'plan.md' || fileName.endsWith('/plan.md')) {
+            // Reload Plan.md and trigger UI refresh
+            console.log('🔄 [Secretary] Refreshing plan memory after Plan.md write');
+            await memoryService.loadPlanMemory();
+        }
+
+        // Today.md - sync to todayPlan
+        if (fileName === 'today.md' || fileName.endsWith('/today.md')) {
+            console.log('🔄 [Secretary] Refreshing Today.md and syncing to dashboard');
+            await memoryService.syncDailyToDashboard();
+        }
+
+        // Tomorrow.md - sync to tomorrowPlan
+        if (fileName === 'tomorrow.md' || fileName.endsWith('/tomorrow.md')) {
+            console.log('🔄 [Secretary] Refreshing Tomorrow.md and syncing to dashboard');
+            await memoryService.syncDailyToDashboard();
+        }
+
+        // Legacy Daily.md - still sync for backwards compatibility
+        if (fileName === 'daily.md' || fileName.endsWith('/daily.md')) {
+            console.log('🔄 [Secretary] Refreshing legacy Daily.md and syncing to dashboard');
+            await memoryService.syncDailyToDashboard();
+        }
+
+        return {
+            success: true,
+            data: { path: args.path, length: args.content.length },
+            message: `✅ Wrote to "${args.path}"`
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : `Failed to write: ${args.path}`
+        };
+    }
+}
+
+/**
+ * List files in the Memory folder or a subdirectory
+ */
+export async function executeListMemoryFiles(args: {
+    directory?: string;
+}): Promise<ToolCallResult> {
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+
+        // Get memory directory
+        const memoryDir = await memoryService.getMemoryDirectory();
+        const targetDir = args.directory ? `${memoryDir}/${args.directory}` : memoryDir;
+
+        // List files
+        const files = await invoke<string[]>('list_memory_files', { directory: targetDir });
+
+        if (files.length === 0) {
+            return {
+                success: true,
+                data: { files: [], directory: args.directory || '.' },
+                message: `No files found in ${args.directory || 'Memory folder'}`
+            };
+        }
+
+        const fileList = files.map(f => `- ${f}`).join('\n');
+
+        return {
+            success: true,
+            data: { files, count: files.length, directory: args.directory || '.' },
+            message: `Found ${files.length} file(s):\n${fileList}`
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : `Failed to list: ${args.directory || '.'}`
+        };
+    }
+}
+
+/**
+ * Delete a file from the Memory folder
+ */
+export async function executeDeleteMemoryFile(args: {
+    path: string;
+}): Promise<ToolCallResult> {
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+
+        // Get memory directory
+        const memoryDir = await memoryService.getMemoryDirectory();
+        const fullPath = `${memoryDir}/${args.path}`;
+
+        // Delete file
+        await invoke('delete_memory_file', { path: fullPath });
+
+        console.log(`🗑️ [Secretary] Deleted: ${args.path}`);
+
+        return {
+            success: true,
+            data: { path: args.path },
+            message: `✅ Deleted "${args.path}"`
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : `Failed to delete: ${args.path}`
+        };
+    }
+}
+
+/**
+ * Rename/move a file in the Memory folder
+ */
+export async function executeRenameMemoryFile(args: {
+    old_path: string;
+    new_path: string;
+}): Promise<ToolCallResult> {
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+
+        // Get memory directory
+        const memoryDir = await memoryService.getMemoryDirectory();
+        const oldFullPath = `${memoryDir}/${args.old_path}`;
+        const newFullPath = `${memoryDir}/${args.new_path}`;
+
+        // Rename file
+        await invoke('rename_memory_file', { oldPath: oldFullPath, newPath: newFullPath });
+
+        console.log(`✏️ [Secretary] Renamed: ${args.old_path} → ${args.new_path}`);
+
+        return {
+            success: true,
+            data: { old_path: args.old_path, new_path: args.new_path },
+            message: `✅ Renamed "${args.old_path}" to "${args.new_path}"`
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : `Failed to rename: ${args.old_path}`
+        };
     }
 }
 
@@ -795,7 +1415,12 @@ export function isPlanningRequest(message: string): boolean {
         /^(save|save it|yes|ok|okay|sure|do it|go ahead|confirm|proceed)\s*[!.]?$/i,
 
         // Duration patterns
-        /\b\d+\s*(month|week|hour|day)\b/i
+        /\b\d+\s*(month|week|hour|day)\b/i,
+
+        // Plan modification patterns (change/update/switch + weekday)
+        /\b(change|update|switch|move)\b.*\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+        /\b(change|modify|update|adjust|edit)\b.*\b(my|the|this)?\s*(plan|roadmap|schedule)/i,
+        /\b(delete|remove|cancel)\b.*\b(my|the|this)?\s*(plan|roadmap)/i,
     ];
 
     return patterns.some(pattern => pattern.test(message));
@@ -820,4 +1445,162 @@ export function clearPendingRoadmap(): void {
  */
 export function hasPendingRoadmap(): boolean {
     return pendingRoadmap !== null;
+}
+
+// ============================================================================
+// CONDENSED PLAN HELPERS
+// ============================================================================
+
+/**
+ * Extract weekly themes from full roadmap content
+ */
+function extractWeeklyThemes(content: string, totalWeeks: number): import('@/types/memory').WeeklyTheme[] {
+    const themes: import('@/types/memory').WeeklyTheme[] = [];
+
+    // Try to find week headers like "## Week 1: Topic" or "### Week 1 - Topic"
+    const weekMatches = content.matchAll(/##\s*Week\s*(\d+)[:\s-]*([^\n]+)/gi);
+
+    for (const match of weekMatches) {
+        const weekNum = parseInt(match[1]);
+        const theme = match[2].trim();
+        themes.push({
+            week: weekNum,
+            theme: theme,
+            status: weekNum === 1 ? 'current' : 'upcoming',
+        });
+    }
+
+    // If no weeks found, generate placeholder themes
+    if (themes.length === 0) {
+        for (let i = 1; i <= totalWeeks; i++) {
+            themes.push({
+                week: i,
+                theme: `Week ${i}`,
+                status: i === 1 ? 'current' : 'upcoming',
+            });
+        }
+    }
+
+    return themes;
+}
+
+/**
+ * Generate This Week section from active plans
+ * For each day of the week, check if each plan is active on that specific day
+ * Supports both legacy studyDays and new flexible schedule.dates
+ */
+function generateThisWeekPlan(
+    activePlans: import('@/types/memory').CondensedPlan[]
+): import('@/types/memory').ThisWeekPlan {
+    const dailyTasks: import('@/types/memory').DailyTaskEntry[] = [];
+
+    // Calculate the current week based on TODAY
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diffToMonday = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    const weekStart = new Date(today);
+    weekStart.setDate(diffToMonday);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    // For each day of the week (Mon to Sun)
+    for (let i = 0; i < 7; i++) {
+        const currentDayDate = new Date(weekStart);
+        currentDayDate.setDate(weekStart.getDate() + i);
+        currentDayDate.setHours(0, 0, 0, 0);
+        const currentDayStr = currentDayDate.toISOString().split('T')[0];
+        const dayName = dayNames[i];
+
+        // For each active plan, check if it should appear on this specific day
+        for (const plan of activePlans) {
+            if (plan.status !== 'active') continue;
+
+            // Parse plan start date as LOCAL time (not UTC)
+            const [year, month, day] = plan.startDate.split('-').map(Number);
+            const planStartDate = new Date(year, month - 1, day);
+
+            // Skip if plan hasn't started by this day
+            if (currentDayDate < planStartDate) {
+                continue;
+            }
+
+            // Check if this day is a study day - use flexible schedule if available
+            let isStudyDay = false;
+
+            if (plan.schedule?.dates && plan.schedule.dates.length > 0) {
+                // NEW: Use AI-computed schedule dates
+                isStudyDay = plan.schedule.dates.includes(currentDayStr);
+            } else {
+                // LEGACY: Fall back to studyDays array
+                isStudyDay = plan.studyDays.includes(dayName);
+            }
+
+            if (!isStudyDay) {
+                continue;
+            }
+
+            // This plan is active on this day - add the task
+            const currentTheme = plan.weeklyThemes.find(t => t.status === 'current')?.theme ||
+                plan.weeklyThemes[plan.currentWeek - 1]?.theme ||
+                `Week ${plan.currentWeek}`;
+
+            // Calculate day number and total sessions
+            // PRIORITY 1: Use schedule.dates (AI-computed actual lesson dates)
+            // PRIORITY 2: Fall back to counting study days from date range
+            let totalSessions = 0;
+            let dayNumber = 0;
+
+            if (plan.schedule?.dates && plan.schedule.dates.length > 0) {
+                // Use schedule.dates - this contains the actual lesson dates
+                totalSessions = plan.schedule.dates.length;
+                const dateIndex = plan.schedule.dates.indexOf(currentDayStr);
+                if (dateIndex >= 0) {
+                    dayNumber = dateIndex + 1;
+                }
+            } else {
+                // Fallback: count study days in date range (legacy plans)
+                const start = new Date(plan.startDate + 'T00:00:00');
+                const end = new Date(plan.endDate + 'T23:59:59');
+                const studyDaysArray = (plan.studyDays && plan.studyDays.length > 0)
+                    ? plan.studyDays
+                    : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+                const tempDate = new Date(start);
+                while (tempDate <= end) {
+                    const tempDayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][tempDate.getDay()];
+                    if (studyDaysArray.includes(tempDayName)) {
+                        totalSessions++;
+                        if (tempDate <= currentDayDate) {
+                            dayNumber = totalSessions;
+                        }
+                    }
+                    tempDate.setDate(tempDate.getDate() + 1);
+                }
+            }
+
+            dailyTasks.push({
+                day: dayName,
+                planId: plan.id,
+                topic: currentTheme,
+                dayNumber: dayNumber,
+                totalSessions: totalSessions,
+            });
+        }
+
+
+    }
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+
+    const formatDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const weekRange = `${formatDate(weekStart)} - ${formatDate(weekEnd)}`;
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+
+    return {
+        weekStart: weekStartStr,
+        weekRange: weekRange,
+        dailyTasks: dailyTasks,
+    };
 }

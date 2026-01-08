@@ -45,7 +45,7 @@ const RecommendTab: React.FC = () => {
   const [thinkingMessage, setThinkingMessage] = useState<string>('');
   const [thinkingMessageForType, setThinkingMessageForType] = useState<Record<string, string>>({});
   const [thinkingMessageKey, setThinkingMessageKey] = useState<number>(0);
-  const thinkingIntervalRef = useRef<number | null>(null);
+  const thinkingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   /* const [slideProgressMessage, setSlideProgressMessage] = useState<string>(''); // Moved to global store */
 
   // Get the current note content

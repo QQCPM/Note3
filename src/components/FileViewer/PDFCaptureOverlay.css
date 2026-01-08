@@ -1,0 +1,26 @@
+/* PDF Capture Overlay Styles */
+
+.pdf-capture-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 50;
+    pointer-events: none;
+}
+
+.pdf-capture-overlay.ready {
+    cursor: crosshair;
+    pointer-events: auto;
+}
+
+.pdf-capture-overlay.drawing {
+    cursor: crosshair;
+    pointer-events: auto;
+}
+
+/* Page wrapper needs relative positioning */
+.react-pdf__Page {
+    position: relative !important;
+}

@@ -9,6 +9,7 @@ export * from './project';
 export * from './dashboard';
 export * from './rootNode';
 export * from './memory';
+export * from './course';
 
 // UI State types
 export interface UIState {

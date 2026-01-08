@@ -5,7 +5,7 @@ import { useProjectStore } from '@/store/projectStore';
 import './MemoryFileEditor.css';
 
 interface MemoryFileEditorProps {
-  fileType: 'ai' | 'project' | 'daily' | null;
+  fileType: 'ai' | 'plan' | 'daily' | string | null;  // string for 'archive:filename'
   onClose: () => void;
 }
 
@@ -43,16 +43,70 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
         }
         const { serializeAIMemory } = await import('@/services/memoryParser');
         rawContent = serializeAIMemory(memory);
-      } else if (fileType === 'project') {
-        let memory = activeProjectId
-          ? await memoryService.loadProjectMemory(activeProjectId)
-          : null;
-        if (!memory) {
-          // Create default - use project-specific or global
-          memory = await memoryService.createDefaultProjectMemory(activeProjectId || 'global');
+      } else if (fileType === 'plan') {
+        // Load Plan.md as raw content to preserve AI-written format
+        // Don't parse/serialize - that loses freeform markdown
+        const { invoke } = await import('@tauri-apps/api/core');
+        const memoryDir = await memoryService.getMemoryDirectory();
+        try {
+          rawContent = await invoke<string>('read_memory_file', { path: `${memoryDir}/Plan.md` });
+        } catch {
+          // If file doesn't exist, create default structure
+          rawContent = `# Learning Plans
+
+## Active Plans
+
+*No active plans. Create one by asking the AI to plan your learning!*
+
+---
+
+## This Week
+
+*No weekly schedule yet.*
+
+---
+
+## Archived
+
+*No archived plans yet.*
+`;
         }
-        const { serializeProjectMemory } = await import('@/services/memoryParser');
-        rawContent = serializeProjectMemory(memory);
+      } else if (fileType === 'today') {
+        // Load Today.md directly as raw content
+        const { invoke } = await import('@tauri-apps/api/core');
+        const memoryDir = await memoryService.getMemoryDirectory();
+        try {
+          rawContent = await invoke<string>('read_memory_file', { path: `${memoryDir}/Today.md` });
+        } catch {
+          // If file doesn't exist, show placeholder
+          rawContent = `# 📅 Today's Plan
+
+## Schedule
+
+*No plan generated yet. Ask the AI to "prepare today's schedule"!*
+
+## Notes
+
+`;
+        }
+      } else if (fileType === 'tomorrow') {
+        // Load Tomorrow.md directly as raw content
+        const { invoke } = await import('@tauri-apps/api/core');
+        const memoryDir = await memoryService.getMemoryDirectory();
+        try {
+          rawContent = await invoke<string>('read_memory_file', { path: `${memoryDir}/Tomorrow.md` });
+        } catch {
+          // If file doesn't exist, show placeholder
+          rawContent = `# 📅 Tomorrow's Plan
+
+## Schedule
+
+*No plan generated yet. Ask the AI to "prepare tomorrow's schedule"!*
+
+## Notes
+
+`;
+        }
       } else if (fileType === 'daily') {
         let memory = await memoryService.loadDailyMemory(activeProjectId || undefined);
         if (!memory) {
@@ -61,6 +115,11 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
         }
         const { serializeDailyMemory } = await import('@/services/memoryParser');
         rawContent = serializeDailyMemory(memory);
+      } else if (fileType.startsWith('archive:')) {
+
+        // Load archive file from Plans/ folder
+        const archiveFilename = fileType.replace('archive:', '');
+        rawContent = await memoryService.loadFromPlanArchive(archiveFilename) || '# Archive not found';
       }
 
       setContent(rawContent);
@@ -85,14 +144,35 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
         const { parseAIMemory } = await import('@/services/memoryParser');
         const memory = parseAIMemory(content);
         await memoryService.saveAIMemory(memory);
-      } else if (fileType === 'project' && activeProjectId) {
-        const { parseProjectMemory } = await import('@/services/memoryParser');
-        const memory = parseProjectMemory(content);
-        await memoryService.saveProjectMemory(activeProjectId, memory);
+      } else if (fileType === 'plan') {
+        // Save Plan.md as raw content to preserve AI-written format
+        const { invoke } = await import('@tauri-apps/api/core');
+        const memoryDir = await memoryService.getMemoryDirectory();
+        await invoke('write_memory_file', { path: `${memoryDir}/Plan.md`, content });
+      } else if (fileType === 'today') {
+        // Save Today.md as raw content
+        const { invoke } = await import('@tauri-apps/api/core');
+        const memoryDir = await memoryService.getMemoryDirectory();
+        await invoke('write_memory_file', { path: `${memoryDir}/Today.md`, content });
+        console.log(`📝 [MemoryEditor] Saved Today.md`);
+      } else if (fileType === 'tomorrow') {
+        // Save Tomorrow.md as raw content
+        const { invoke } = await import('@tauri-apps/api/core');
+        const memoryDir = await memoryService.getMemoryDirectory();
+        await invoke('write_memory_file', { path: `${memoryDir}/Tomorrow.md`, content });
+        console.log(`📝 [MemoryEditor] Saved Tomorrow.md`);
       } else if (fileType === 'daily') {
         const { parseDailyMemory } = await import('@/services/memoryParser');
         const memory = parseDailyMemory(content);
         await memoryService.saveDailyMemory(memory, activeProjectId || undefined);
+      } else if (fileType.startsWith('archive:')) {
+
+        // Save archive file in Plans/ folder as raw content
+        const { invoke } = await import('@tauri-apps/api/core');
+        const archiveFilename = fileType.replace('archive:', '');
+        const plansDir = await memoryService.getPlansDirectory();
+        await invoke('write_memory_file', { path: `${plansDir}/${archiveFilename}`, content });
+        console.log(`📝 [MemoryEditor] Saved archive: ${archiveFilename}`);
       }
 
       setOriginalContent(content);
@@ -127,6 +207,15 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
   }, [hasChanges, handleSave]);
 
   const getFileInfo = () => {
+    if (fileType?.startsWith('archive:')) {
+      const filename = fileType.replace('archive:', '').replace('.md', '');
+      return {
+        icon: <Target size={20} />,
+        name: filename,
+        description: 'Full archived roadmap from Plans/ folder',
+        color: 'amber',
+      };
+    }
     switch (fileType) {
       case 'ai':
         return {
@@ -135,24 +224,39 @@ const MemoryFileEditor: React.FC<MemoryFileEditorProps> = ({ fileType, onClose }
           description: 'Global AI preferences and learning style configuration',
           color: 'purple',
         };
-      case 'project':
+      case 'plan':
         return {
           icon: <Target size={20} />,
           name: 'Plan.md',
           description: 'Learning plans, roadmaps, and progress tracking',
           color: 'green',
         };
+      case 'today':
+        return {
+          icon: <Calendar size={20} />,
+          name: 'Today.md',
+          description: "Today's scheduled tasks and activities",
+          color: 'blue',
+        };
+      case 'tomorrow':
+        return {
+          icon: <Calendar size={20} />,
+          name: 'Tomorrow.md',
+          description: "Tomorrow's planned schedule",
+          color: 'purple',
+        };
       case 'daily':
         return {
           icon: <Calendar size={20} />,
           name: 'Daily.md',
-          description: "Today's scheduled tasks and reflection",
+          description: "Today's scheduled tasks and reflection (legacy)",
           color: 'blue',
         };
       default:
         return null;
     }
   };
+
 
   if (!fileType) {
     return (

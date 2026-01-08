@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useNotesStore } from '@/store/notesStore';
+import { useFileStore } from '@/store/fileStore';
 import { useAIStore } from '@/store/aiStore';
 import { createNote, deleteNote as deleteNoteDb } from '@/utils/tauri';
 import { NoteWithChildren } from '@/types';
@@ -12,6 +13,7 @@ interface SidebarItemProps {
 
 const SidebarItem: React.FC<SidebarItemProps> = ({ note, depth = 0 }) => {
   const { activeNoteId, setActiveNote, expandedIds, toggleExpanded, addNote, deleteNote } = useNotesStore();
+  const { setActiveFile } = useFileStore();
   const { switchSession } = useAIStore();
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -32,6 +34,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ note, depth = 0 }) => {
   }, [showMenu]);
 
   const handleClick = () => {
+    setActiveFile(null);   // Close any open file (PDF/video/etc.)
     setActiveNote(note.id);
     switchSession(note.id); // Switch AI session to this note
   };

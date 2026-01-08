@@ -57,6 +57,7 @@ export interface RoadmapData {
         type: 'learn' | 'practice' | 'project' | 'review';
         duration: string;
     }[];
+    rawContent?: string;  // Full AI-generated roadmap content (rich markdown)
 }
 
 // ============================================================================

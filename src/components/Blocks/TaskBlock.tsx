@@ -1,44 +1,73 @@
-import React from 'react';
-import type { Block } from '@/types';
+import React, { useState, useEffect } from 'react';
+import type { Block, TaskBlockData, Task } from '@/types';
+import { updateBlock } from '@/utils/tauri';
 
 interface TaskBlockProps {
   block: Block;
 }
 
-const TaskBlock: React.FC<TaskBlockProps> = ({ block: _block }) => {
-  const handleCheckboxClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.currentTarget.classList.toggle('checked');
-    const text = e.currentTarget.nextElementSibling as HTMLSpanElement;
-    if (text) {
-      text.style.textDecoration = e.currentTarget.classList.contains('checked') ? 'line-through' : 'none';
-      text.style.opacity = e.currentTarget.classList.contains('checked') ? '0.6' : '1';
+const TaskBlock: React.FC<TaskBlockProps> = ({ block }) => {
+  const data = block.data as TaskBlockData;
+  const [tasks, setTasks] = useState<Task[]>(data.tasks || []);
+  const [title, setTitle] = useState(data.title || 'Tasks');
+
+  // Update local state when block data changes
+  useEffect(() => {
+    const newData = block.data as TaskBlockData;
+    setTasks(newData.tasks || []);
+    setTitle(newData.title || 'Tasks');
+  }, [block.data]);
+
+  const handleToggleTask = async (taskId: string) => {
+    const updatedTasks = tasks.map(task =>
+      task.id === taskId ? { ...task, completed: !task.completed } : task
+    );
+    setTasks(updatedTasks);
+
+    // Persist to database
+    try {
+      await updateBlock(block.id, {
+        ...data,
+        tasks: updatedTasks
+      });
+    } catch (err) {
+      console.error('Failed to update task block:', err);
     }
   };
 
   return (
     <div className="canvas-block task-block">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-semibold text-white">This Week's Tasks</div>
+        <div className="text-sm font-semibold text-white">{title}</div>
         <button className="text-xs text-gray-500 hover:text-white">•••</button>
       </div>
+
       <div className="space-y-1">
-        <div className="task-item">
-          <div className="task-checkbox checked" onClick={handleCheckboxClick}>✓</div>
-          <span className="text-sm" style={{ textDecoration: 'line-through', opacity: 0.6 }}>Review backpropagation notes</span>
-        </div>
-        <div className="task-item">
-          <div className="task-checkbox" onClick={handleCheckboxClick}></div>
-          <span className="text-sm">Complete CNN implementation</span>
-        </div>
-        <div className="task-item">
-          <div className="task-checkbox" onClick={handleCheckboxClick}></div>
-          <span className="text-sm">Study for midterm exam</span>
-        </div>
-        <div className="task-item">
-          <div className="task-checkbox" onClick={handleCheckboxClick}></div>
-          <span className="text-sm">Practice with TensorFlow</span>
-        </div>
+        {tasks.length > 0 ? (
+          tasks.map((task) => (
+            <div key={task.id} className="task-item">
+              <div
+                className={`task-checkbox ${task.completed ? 'checked' : ''}`}
+                onClick={() => handleToggleTask(task.id)}
+              >
+                {task.completed && '✓'}
+              </div>
+              <span
+                className="text-sm"
+                style={{
+                  textDecoration: task.completed ? 'line-through' : 'none',
+                  opacity: task.completed ? 0.6 : 1
+                }}
+              >
+                {task.text}
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="text-sm text-gray-500 italic">No tasks yet</div>
+        )}
       </div>
+
       <button className="mt-2 text-xs text-gray-500 hover:text-white">+ Add task</button>
     </div>
   );

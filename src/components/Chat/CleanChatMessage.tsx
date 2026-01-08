@@ -28,7 +28,7 @@ const CodeBlock: React.FC<{
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
-  
+
   const handleCopy = useCallback(async () => {
     const text = String(children).replace(/\n$/, '');
     await navigator.clipboard.writeText(text);
@@ -91,9 +91,9 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
   // Process content: normalize LaTeX and handle citations
   const processedContent = useMemo(() => {
     let processed = content;
-    
+
     // Fix common LaTeX issues from AI output:
-    
+
     // 1. Fix display math that spans multiple lines without proper delimiters
     // Convert inline $$ that spans lines to proper block format
     processed = processed.replace(/\$\$([^$]+)\$\$/g, (_match, formula) => {
@@ -104,11 +104,11 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
       }
       return `$$${trimmed}$$`;
     });
-    
+
     // 2. Fix cases where $$ is at end of line followed by text
     // e.g., "...formula,$$ where" -> proper separation
     processed = processed.replace(/\$\$\s*\n*where\s/gi, '$$\n\nwhere ');
-    
+
     // 3. Fix LaTeX that uses [ ] instead of $$ for display math (common AI mistake)
     // Match [ formula ] that looks like LaTeX (contains \frac, \int, etc.)
     processed = processed.replace(/\[\s*(\\[a-zA-Z]+[^[\]]*)\s*\]/g, (_match, formula) => {
@@ -118,7 +118,7 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
       }
       return _match;
     });
-    
+
     // 4. Fix incomplete display math (starts with $$ but doesn't end properly)
     // Look for $$ followed by content without closing $$
     const dollarParts = processed.split('$$');
@@ -127,7 +127,42 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
       // This is a heuristic - look for lines that look like LaTeX endings
       processed = processed.replace(/(\$\$[^$]+?)(\n\s*where|\n\s*for|\n\s*with|\n\s*such that)/gi, '$1$$$2');
     }
-    
+
+    // 5. Convert parenthesis-delimited LaTeX to dollar signs
+    // AI sometimes outputs (E_n=\hbar\omega) instead of $E_n=\hbar\omega$
+    // Match (content) where content contains LaTeX backslash commands
+    const latexCommandPattern = /\\(hbar|omega|alpha|beta|gamma|delta|epsilon|theta|phi|psi|sigma|lambda|mu|nu|pi|rho|tau|chi|eta|zeta|xi|kappa|nabla|partial|infty|frac|tfrac|sqrt|sum|int|prod|lim|sin|cos|tan|log|ln|exp|text|mathbf|mathbb|mathrm|mathcal|vec|hat|bar|dot|langle|rangle|left|right|cdot|times|div|pm|mp|leq|geq|neq|approx|equiv|propto|dagger|bra|ket)/;
+
+    // Match parentheses that contain LaTeX-like content
+    // Be careful: only match when it looks like LaTeX (has backslash commands OR subscripts/superscripts with backslash context)
+    processed = processed.replace(/\(([^()]*\\[a-zA-Z]+[^()]*)\)/g, (match, inner) => {
+      // Verify it contains LaTeX commands
+      if (latexCommandPattern.test(inner)) {
+        return `$${inner.trim()}$`;
+      }
+      return match;
+    });
+
+    // Also handle nested parentheses in LaTeX expressions, e.g., (E_n=\hbar\omega(n+\tfrac12))
+    // This catches cases like (\hbar\omega(n+...)) where there's nested ()
+    processed = processed.replace(/\(([^()]*\\[a-zA-Z]+[^()]*\([^()]*\)[^()]*)\)/g, (match, inner) => {
+      if (latexCommandPattern.test(inner)) {
+        return `$${inner.trim()}$`;
+      }
+      return match;
+    });
+
+    // Handle subscript/superscript patterns that look like LaTeX even without backslash prefix
+    // e.g., (L^2, L_z) or (E_n^{(1)}) - but only if they also have backslash commands nearby or look very LaTeX-y
+    processed = processed.replace(/\(([A-Za-z][_^][{]?[^()]+[}]?[^()]*)\)/g, (match, inner) => {
+      // Only convert if it has LaTeX-like patterns (subscripts, superscripts combined with certain chars)
+      // Check for common LaTeX patterns: backslash commands, braces for grouping
+      if (/\\[a-zA-Z]|[_^]\{|\{[^}]+\}/.test(inner)) {
+        return `$${inner.trim()}$`;
+      }
+      return match;
+    });
+
     return processed;
   }, [content, citations]);
 
@@ -149,10 +184,10 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
     if (typeof children !== 'string') {
       return <>{children}</>;
     }
-    
+
     // Split text by citation markers [1], [2], etc.
     const parts = children.split(/(\[\d+\])/g);
-    
+
     return (
       <>
         {parts.map((part, index) => {
@@ -211,11 +246,11 @@ const CleanChatMessage: React.FC<CleanChatMessageProps> = ({
                 ),
                 // Links
                 a: ({ href, children, ...props }) => (
-                  <a 
+                  <a
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 hover:underline transition-colors" 
+                    className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
                     {...props}
                   >
                     {children}

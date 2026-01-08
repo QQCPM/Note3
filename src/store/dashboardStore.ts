@@ -164,7 +164,16 @@ export const useDashboardStore = create<DashboardStore>()(
             },
           };
         });
+        // Sync task status change to file
+        import('@/services/memoryService').then(({ memoryService }) => {
+          if (isToday) {
+            memoryService.syncTodayPlanToFile();
+          } else {
+            memoryService.syncTomorrowPlanToFile();
+          }
+        });
       },
+
 
       approveTomorrowPlan: () => {
         set((state) => {
@@ -195,6 +204,10 @@ export const useDashboardStore = create<DashboardStore>()(
               updatedAt: new Date().toISOString(),
             },
           };
+        });
+        // Sync to Tomorrow.md after edit
+        import('@/services/memoryService').then(({ memoryService }) => {
+          memoryService.syncTomorrowPlanToFile();
         });
       },
 
@@ -229,8 +242,13 @@ export const useDashboardStore = create<DashboardStore>()(
               : null,
             isProcessingReflection: false,
           }));
+          // Sync reflection to Today.md after processing
+          import('@/services/memoryService').then(({ memoryService }) => {
+            memoryService.syncTodayPlanToFile();
+          });
         }, 1500);
       },
+
 
       // ========================================================================
       // AI ACTIONS
@@ -292,6 +310,10 @@ export const useDashboardStore = create<DashboardStore>()(
             },
           };
         });
+        // Sync to Tomorrow.md after add
+        import('@/services/memoryService').then(({ memoryService }) => {
+          memoryService.syncTomorrowPlanToFile();
+        });
       },
 
       removeTomorrowTask: (taskId) => {
@@ -310,6 +332,10 @@ export const useDashboardStore = create<DashboardStore>()(
               updatedAt: new Date().toISOString(),
             },
           };
+        });
+        // Sync to Tomorrow.md after remove
+        import('@/services/memoryService').then(({ memoryService }) => {
+          memoryService.syncTomorrowPlanToFile();
         });
       },
 
@@ -330,6 +356,10 @@ export const useDashboardStore = create<DashboardStore>()(
               updatedAt: new Date().toISOString(),
             },
           };
+        });
+        // Sync to Tomorrow.md after reorder
+        import('@/services/memoryService').then(({ memoryService }) => {
+          memoryService.syncTomorrowPlanToFile();
         });
       },
 
@@ -728,11 +758,16 @@ export const useDashboardStore = create<DashboardStore>()(
         }
       },
 
-      hasActiveRoadmap: async (projectId) => {
+      hasActiveRoadmap: async (_projectId) => {
         try {
-          const { hasRoadmap } = await import('@/services/dailyPlanService');
-          return await hasRoadmap(projectId);
-        } catch {
+          // Check Plan.md for active plans (new LangGraph Secretary system)
+          const { memoryService } = await import('@/services/memoryService');
+          const planMemory = await memoryService.loadPlanMemory();
+          const hasPlans = (planMemory?.activePlans?.length ?? 0) > 0;
+          console.log('[DashboardStore] hasActiveRoadmap:', hasPlans, 'plans:', planMemory?.activePlans?.length);
+          return hasPlans;
+        } catch (error) {
+          console.error('[DashboardStore] hasActiveRoadmap check failed:', error);
           return false;
         }
       },

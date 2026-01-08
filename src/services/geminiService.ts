@@ -259,6 +259,99 @@ class GeminiService {
   }
 
   /**
+   * Test the Gemini connection with a simple request
+   */
+  async testConnection(): Promise<string> {
+    this.requireInitialized();
+
+    try {
+      console.log('[GeminiService] Testing connection with gemini-2.5-flash...');
+      const response = await this.client!.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: 'Say "Hello! Gemini is working!" in exactly those words.',
+      });
+
+      const text = response.text || 'No response';
+      console.log('[GeminiService] Test successful:', text);
+      return text;
+    } catch (error) {
+      console.error('[GeminiService] Test connection failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Chat with an image - for vision-based understanding
+   * @param prompt The text prompt to send with the image
+   * @param imageBase64 Base64-encoded image data (without data URL prefix)
+   * @param mimeType The image MIME type (default: image/png)
+   */
+  async chatWithImage(
+    prompt: string,
+    imageBase64: string,
+    mimeType: string = 'image/png'
+  ): Promise<string> {
+    this.requireInitialized();
+
+    try {
+      console.log('[GeminiService] Sending vision request...');
+      const response = await this.client!.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType,
+                  data: imageBase64
+                }
+              }
+            ]
+          }
+        ],
+      });
+
+      console.log('[GeminiService] Vision response received');
+      return response.text || 'Unable to generate response.';
+    } catch (error) {
+      console.error('[GeminiService] Vision chat failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Simple text chat - for document understanding and Q&A
+   * @param prompt The text prompt to send
+   * @param systemContext Optional system context (like document content)
+   */
+  async chat(prompt: string, systemContext?: string): Promise<string> {
+    this.requireInitialized();
+
+    try {
+      console.log('[GeminiService] Sending chat request...');
+
+      // Build the full prompt with optional system context
+      let fullPrompt = prompt;
+      if (systemContext) {
+        fullPrompt = `${systemContext}\n\n---\n\nUser Question: ${prompt}`;
+      }
+
+      const response = await this.client!.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: fullPrompt,
+      });
+
+      console.log('[GeminiService] Chat response received');
+      return response.text || 'Unable to generate response.';
+    } catch (error) {
+      console.error('[GeminiService] Chat failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get the appropriate prompt template based on slide type
    */
   private getPromptTemplate(type: SlideOutline['type']): string {

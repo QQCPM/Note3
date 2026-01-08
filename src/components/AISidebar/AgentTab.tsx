@@ -18,8 +18,7 @@ interface TabBarProps {
 const TabBar: React.FC<TabBarProps> = ({ windowId }) => {
   const {
     activeNoteId,
-    globalSession,
-    noteSessions,
+    getOrCreateSession,
     createTab,
   } = useAIStore();
 
@@ -33,10 +32,8 @@ const TabBar: React.FC<TabBarProps> = ({ windowId }) => {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
-  // Get session and window data
-  const session = activeNoteId
-    ? noteSessions[activeNoteId] || { tabs: [], activeTabId: '' }
-    : globalSession;
+  // Get session using proper method that creates session if needed
+  const session = getOrCreateSession(activeNoteId);
 
   const window = windowId ? getWindowById(windowId) : null;
 
@@ -209,11 +206,12 @@ interface AgentTabProps {
 const AgentTab: React.FC<AgentTabProps> = ({ windowId }) => {
   const {
     activeNoteId,
-    globalSession,
-    noteSessions,
+    getOrCreateSession,
     isLoading,
     pendingEdits,
     currentThinkingSteps,
+    noteSessions,    // Subscribe to session changes for re-render
+    globalSession,   // Subscribe to global session changes
   } = useAIStore();
 
   const { getWindowById } = useUIStore();
@@ -221,14 +219,18 @@ const AgentTab: React.FC<AgentTabProps> = ({ windowId }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Get current session
-  const session = activeNoteId
-    ? noteSessions[activeNoteId]
-    : globalSession;
+  // Get current session directly from subscribed state (for reactivity)
+  const session = activeNoteId === null
+    ? globalSession
+    : (noteSessions[activeNoteId] || getOrCreateSession(activeNoteId));
 
-  // Get active tab - use window's activeTabId if available
+  // Get active tab - use window's activeTabId only if that tab exists in current session
+  // Otherwise fallback to session's activeTabId (fixes stale window tab ID from persisted state)
   const window = windowId ? getWindowById(windowId) : null;
-  const activeTabId = window?.activeTabId || session?.activeTabId;
+  const windowTabId = window?.activeTabId;
+  const windowTabExists = windowTabId && session?.tabs.some(t => t.id === windowTabId);
+  const activeTabId = windowTabExists ? windowTabId : session?.activeTabId;
+
   const activeTab = session?.tabs.find(t => t.id === activeTabId);
   const messages = activeTab?.messages || [];
 

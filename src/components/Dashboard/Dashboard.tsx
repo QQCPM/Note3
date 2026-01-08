@@ -1,44 +1,63 @@
 import React, { useEffect, useState } from 'react';
 import { useDashboardStore, useTodayProgress } from '@/store/dashboardStore';
-import { useProjectStore } from '@/store/projectStore';
 import { useAIStore } from '@/store/aiStore';
 import { useNotesStore } from '@/store';
 import { memoryService } from '@/services/memoryService';
-import { Upload } from 'lucide-react';
+import type { DailyTaskEntry } from '@/types/memory';
+import { Calendar, Loader2 } from 'lucide-react';
 import TodayPlan from './TodayPlan';
 import TomorrowPlan from './TomorrowPlan';
 import ReflectionSection from './ReflectionSection';
 import SecretaryPanel from './SecretaryPanel';
-import RoadmapImportModal from './RoadmapImportModal';
+import ActivePlansOverview from './ActivePlansOverview';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
+  const [isPreparingTomorrow, setIsPreparingTomorrow] = useState(false);
+  const [todaysFocus, setTodaysFocus] = useState<DailyTaskEntry[]>([]);
+  const [activePlanCount, setActivePlanCount] = useState(0);
 
   const {
     todayPlan,
     tomorrowPlan,
     showTomorrowPlan,
     showReflection,
-    roadmapDay,
     activeRoadmapId,
     isGeneratingPlan,
     initializeSampleData,
-    generateTodayPlanAsync,
-    generateTomorrowPlanAsync,
     hasActiveRoadmap,
     checkTimeBasedVisibility,
     transitionToNewDay,
   } = useDashboardStore();
 
-  const { getProjectById } = useProjectStore();
   const { switchSession } = useAIStore();
   const { setActiveNote } = useNotesStore();
   const todayProgress = useTodayProgress();
 
-  // Get active project info
-  const activeProject = activeRoadmapId ? getProjectById(activeRoadmapId) : null;
+  // Load Plan.md for Today's Focus header
+  useEffect(() => {
+    const loadPlanData = async () => {
+      try {
+        const memory = await memoryService.loadPlanMemory();
+        if (memory) {
+          setActivePlanCount(memory.activePlans?.filter(p => p.status === 'active').length ?? 0);
+
+          // Find today's tasks from This Week section
+          if (memory.thisWeek?.dailyTasks) {
+            const today = new Date();
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const todayName = dayNames[today.getDay()];
+            const todayTasks = memory.thisWeek.dailyTasks.filter(t => t.day === todayName);
+            setTodaysFocus(todayTasks);
+          }
+        }
+      } catch (error) {
+        console.error('[Dashboard] Failed to load Plan.md for header:', error);
+      }
+    };
+    loadPlanData();
+  }, []);
 
   // Clear active note AND AI session when entering Dashboard (use global session)
   useEffect(() => {
@@ -50,10 +69,27 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const initializeMemory = async () => {
       try {
+        // CRITICAL: Clean up stale todayPlan from localStorage FIRST
+        // This ensures TODAY section is empty if there's no plan for today
+        const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+        const storeState = useDashboardStore.getState();
+        const currentTodayPlan = storeState.todayPlan;
+
+        if (currentTodayPlan) {
+          // Check if todayPlan.date matches today (handles both YYYY-MM-DD and legacy formats)
+          const storedDate = currentTodayPlan.date;
+          const isForToday = storedDate === todayStr || storedDate.includes(new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' }));
+
+          if (!isForToday) {
+            console.log('🧹 [Dashboard] Clearing stale todayPlan (was for:', storedDate, ', today is:', todayStr, ')');
+            storeState.setTodayPlan(null);
+          }
+        }
+
         // Initialize default files if they don't exist
         await memoryService.initializeDefaultFiles(activeRoadmapId || undefined);
 
-        // Sync daily memory with dashboard
+        // Sync daily memory with dashboard (will route to correct slot based on date)
         await memoryService.syncDailyToDashboard();
       } catch (error) {
         console.error('Failed to initialize memory:', error);
@@ -63,32 +99,30 @@ const Dashboard: React.FC = () => {
     initializeMemory();
   }, [activeRoadmapId]);
 
-  // Initialize plans - use AI if roadmap exists, otherwise sample data
+  // Initialize plans - check if we have active plans, otherwise use sample data
   useEffect(() => {
     const initializePlans = async () => {
-      if (isInitialized || todayPlan) return;
+      if (isInitialized) return;
 
       try {
-        // Check if we have an active roadmap for AI generation
-        if (activeRoadmapId) {
-          const hasRoadmap = await hasActiveRoadmap(activeRoadmapId);
+        // Check if we have active plans in Plan.md (new LangGraph Secretary system)
+        const hasRoadmap = await hasActiveRoadmap(activeRoadmapId || '');
 
-          if (hasRoadmap) {
-            // Generate today's plan from roadmap
-            console.log('🚀 [Dashboard] Generating AI-powered daily plan...');
-            await generateTodayPlanAsync(activeRoadmapId);
+        if (hasRoadmap) {
+          // We have active plans - initializeMemory already synced Daily.md
+          // Just check the current state
+          const state = useDashboardStore.getState();
+          console.log('📋 [Dashboard] Plan state after sync:', {
+            todayPlan: state.todayPlan?.date || 'null',
+            tomorrowPlan: state.tomorrowPlan?.date || 'null',
+          });
 
-            // Generate tomorrow's plan if visible
-            if (showTomorrowPlan && !tomorrowPlan) {
-              await generateTomorrowPlanAsync(activeRoadmapId);
-            }
-          } else {
-            // No roadmap yet - use sample data for demo
-            console.log('📋 [Dashboard] No roadmap found, using sample data');
-            initializeSampleData();
+          if (!state.todayPlan && !state.tomorrowPlan) {
+            console.log('📋 [Dashboard] No Daily.md content yet - rest day or pending generation');
           }
         } else {
-          // No project selected - use sample data
+          // No active plans - use sample data for demo
+          console.log('📋 [Dashboard] No active plans in Plan.md, using sample data');
           initializeSampleData();
         }
 
@@ -103,13 +137,8 @@ const Dashboard: React.FC = () => {
     initializePlans();
   }, [
     activeRoadmapId,
-    todayPlan,
-    tomorrowPlan,
-    showTomorrowPlan,
     isInitialized,
     hasActiveRoadmap,
-    generateTodayPlanAsync,
-    generateTomorrowPlanAsync,
     initializeSampleData,
   ]);
 
@@ -142,29 +171,93 @@ const Dashboard: React.FC = () => {
     });
   };
 
+  // Handle "Prepare Tomorrow's Plan" button click
+  const handlePrepareTomorrow = async () => {
+    setIsPreparingTomorrow(true);
+    try {
+      // Archive current Daily.md to History/
+      await memoryService.archiveDailyPlan();
+      console.log('📅 [Dashboard] Archived current Daily.md');
+
+      // Import secretary and invoke directly
+      const { streamSecretary } = await import('@/services/langgraph/secretaryGraph');
+
+      // Calculate tomorrow's date
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      // Send request to AI secretary
+      const userMessage = `Prepare my study plan for tomorrow (${tomorrowStr}). Read my active plans from Plan.md, check what's scheduled for tomorrow in the This Week section, then generate a detailed time-blocked schedule and write it to Daily.md.`;
+
+      console.log('🤖 [Dashboard] Requesting AI to generate tomorrow plan...');
+
+      // Stream the response (secretary handles tool calls internally)
+      await streamSecretary(
+        userMessage,
+        'dashboard-secretary',
+        (chunk) => {
+          // Chunks are streamed - we could display them if needed
+          console.log('[Secretary chunk]', chunk);
+        }
+      );
+
+      // Reload Daily.md and sync to dashboard
+      await memoryService.syncDailyToDashboard();
+      console.log('✅ [Dashboard] Tomorrow\'s plan generated and synced');
+
+    } catch (error) {
+      console.error('Failed to prepare tomorrow\'s plan:', error);
+    } finally {
+      setIsPreparingTomorrow(false);
+    }
+  };
+
   return (
     <div className="dashboard">
       {/* Header */}
       <header className="dashboard-header">
         <div className="dashboard-header-left">
           <h1 className="dashboard-greeting">{getGreeting()}</h1>
-          {activeProject && (
+          {activePlanCount > 0 ? (
             <p className="dashboard-context">
-              Day {roadmapDay} of <span className="dashboard-project-name">{activeProject.name}</span>
+              {todaysFocus.length > 0 ? (
+                <>
+                  Today: <span className="dashboard-project-name">
+                    {todaysFocus.map(t => `${t.planId} - ${t.topic}`).join(' • ')}
+                  </span>
+                </>
+              ) : (
+                <>No plans scheduled for today</>
+              )}
             </p>
+          ) : (
+            <p className="dashboard-context">Get started by importing a learning roadmap</p>
           )}
         </div>
         <div className="dashboard-header-right">
           <button
-            className="header-import-btn"
-            onClick={() => setShowImportModal(true)}
+            className="header-prepare-btn"
+            onClick={handlePrepareTomorrow}
+            disabled={isPreparingTomorrow}
           >
-            <Upload className="w-4 h-4" />
-            Import Roadmap
+            {isPreparingTomorrow ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Calendar className="w-4 h-4" />
+            )}
+            {isPreparingTomorrow ? 'Preparing...' : 'Prepare Tomorrow'}
           </button>
           <span className="dashboard-date">{formatDate()}</span>
         </div>
       </header>
+
+      {/* Active Plans Overview - Condensed View */}
+      <ActivePlansOverview />
 
       {/* Main Content - Two Columns */}
       <div className="dashboard-content">
@@ -174,7 +267,6 @@ const Dashboard: React.FC = () => {
           <TodayPlan
             plan={todayPlan}
             progress={todayProgress}
-            onImportClick={() => setShowImportModal(true)}
             isGenerating={isGeneratingPlan}
           />
 
@@ -199,13 +291,6 @@ const Dashboard: React.FC = () => {
           <SecretaryPanel />
         </div>
       </div>
-
-      {/* Roadmap Import Modal */}
-      <RoadmapImportModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        projectId={activeRoadmapId || 'default-project'}
-      />
     </div>
   );
 };

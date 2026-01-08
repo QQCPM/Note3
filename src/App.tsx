@@ -11,6 +11,7 @@ import NotePreviewPanel from '@/components/NotePreview/NotePreviewPanel';
 import ContextMenu from '@/components/ContextMenu/ContextMenu';
 import GlobalDragLayer from '@/components/GlobalDragLayer/GlobalDragLayer';
 import { AISystem } from '@/services/AISystem';
+import { Course } from '@/components/Course';
 
 import HeaderDock from '@/components/CommandDock/HeaderDock';
 
@@ -174,24 +175,35 @@ function App() {
         {/* Header Dock - Persistent Top Left */}
         <HeaderDock />
 
-        {/* Left Sidebar - Context-aware: Notes or Memory Files */}
-        {canvasMode === 'dashboard' ? (
-          <MemorySidebar
-            activeFileId={activeMemoryFile}
-            onSelectFile={setActiveMemoryFile}
-          />
+        {/* Course Mode - Full screen experience with AI sidebar */}
+        {canvasMode === 'course' ? (
+          <>
+            <Course />
+            {/* AI Windows available in course mode */}
+            <AIWindowManager />
+          </>
         ) : (
-          <NoteSidebar />
+          <>
+            {/* Left Sidebar - Context-aware: Notes or Memory Files */}
+            {canvasMode === 'dashboard' ? (
+              <MemorySidebar
+                activeFileId={activeMemoryFile}
+                onSelectFile={setActiveMemoryFile}
+              />
+            ) : (
+              <NoteSidebar />
+            )}
+
+            {/* Main Canvas Area - passes activeMemoryFile when in dashboard mode */}
+            <Canvas
+              activeMemoryFile={activeMemoryFile}
+              onCloseMemoryFile={() => setActiveMemoryFile(null)}
+            />
+
+            {/* Right Side - AI Windows (primary + detached) */}
+            <AIWindowManager />
+          </>
         )}
-
-        {/* Main Canvas Area - passes activeMemoryFile when in dashboard mode */}
-        <Canvas
-          activeMemoryFile={activeMemoryFile}
-          onCloseMemoryFile={() => setActiveMemoryFile(null)}
-        />
-
-        {/* Right Side - AI Windows (primary + detached) */}
-        <AIWindowManager />
 
         {/* Note Preview Panel (overlay when visible) */}
         {notePanelVisible && <NotePreviewPanel />}

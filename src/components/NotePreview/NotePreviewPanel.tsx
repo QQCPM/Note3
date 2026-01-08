@@ -89,6 +89,7 @@ const MarkdownContent: React.FC<{ content: string; className?: string }> = ({ co
 import TextBlock from '@/components/Blocks/TextBlock';
 import HeadingBlock from '@/components/Blocks/HeadingBlock';
 import TaskBlock from '@/components/Blocks/TaskBlock';
+import QuizBlock from '@/components/Blocks/QuizBlock';
 import WebBlock from '@/components/Blocks/WebBlock';
 
 // Lazy load heavy components
@@ -104,15 +105,15 @@ const NotePreviewPanel: React.FC = () => {
   const { getNoteById } = useNotesStore();
   const { treeItems } = useProjectStore();
   const [loadingBlocks, setLoadingBlocks] = useState(false);
-  
+
   // State for generated notes (localStorage-based)
   const [generatedContent, setGeneratedContent] = useState<string | null>(null);
   const [isGeneratedNote, setIsGeneratedNote] = useState(false);
 
   // Get the note from notesStore or find title from treeItems
   const currentNote = currentEditingNoteId ? getNoteById(currentEditingNoteId) : null;
-  const treeItem = currentEditingNoteId 
-    ? treeItems.find(t => t.noteId === currentEditingNoteId || t.id === currentEditingNoteId) 
+  const treeItem = currentEditingNoteId
+    ? treeItems.find(t => t.noteId === currentEditingNoteId || t.id === currentEditingNoteId)
     : null;
   const noteTitle = currentNote?.title || treeItem?.name || 'Note Preview';
 
@@ -257,6 +258,8 @@ const NotePreviewPanel: React.FC = () => {
         );
       case 'task':
         return <TaskBlock block={block} />;
+      case 'quiz':
+        return <QuizBlock block={block} />;
       case 'web':
         return <WebBlock block={block} />;
       default:
@@ -340,7 +343,7 @@ const NotePreviewPanel: React.FC = () => {
                 <p className="loading-text">AI is generating content...</p>
               </div>
             )}
-            
+
             {/* Show pending edit with diff view */}
             {generatedNoteEdit ? (
               <div className="generated-note-content">
@@ -349,7 +352,7 @@ const NotePreviewPanel: React.FC = () => {
                   <span className="text-xs text-blue-400 uppercase tracking-wide font-semibold">Proposed Changes:</span>
                   <p className="text-sm text-gray-300 mt-1">{generatedNoteEdit.reason}</p>
                 </div>
-                
+
                 {/* Original content */}
                 <div className="original-content mb-4">
                   <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-2">Current Content</div>
@@ -357,7 +360,7 @@ const NotePreviewPanel: React.FC = () => {
                     <MarkdownContent content={generatedNoteEdit.originalContent} />
                   </div>
                 </div>
-                
+
                 {/* New content with green highlight */}
                 <div className="new-content-section">
                   <div className="new-content-label text-xs text-green-400 uppercase tracking-wide font-semibold mb-2 flex items-center gap-2">
@@ -365,8 +368,8 @@ const NotePreviewPanel: React.FC = () => {
                     New Content to Add
                   </div>
                   <div className="new-content-wrapper border-l-4 border-green-500 bg-green-500/10 pl-4 py-3 rounded-r">
-                    <MarkdownContent 
-                      content={generatedNoteEdit.proposedContent.slice(generatedNoteEdit.originalContent.length).trim()} 
+                    <MarkdownContent
+                      content={generatedNoteEdit.proposedContent.slice(generatedNoteEdit.originalContent.length).trim()}
                     />
                   </div>
                 </div>
@@ -375,7 +378,7 @@ const NotePreviewPanel: React.FC = () => {
               <div className="generated-note-content">
                 {/* Render the full content with markdown */}
                 <MarkdownContent content={generatedContent} />
-                
+
                 {/* Loading indicator when AI is still working */}
                 {isLoading && (
                   <div className="ai-working-indicator mt-4 flex items-center gap-2 text-purple-400">

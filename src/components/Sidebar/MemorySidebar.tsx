@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, Target, Calendar, Plus } from 'lucide-react';
+import { Brain, Target, Calendar, Plus, FolderArchive, ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import { useUIStore } from '@/store';
 import { useProjectStore } from '@/store/projectStore';
 import { memoryService } from '@/services/memoryService';
@@ -8,9 +8,14 @@ interface MemoryFile {
   id: string;
   name: string;
   icon: React.ReactNode;
-  type: 'ai' | 'project' | 'daily';
+  type: 'ai' | 'plan' | 'daily';
   exists: boolean;
   color: string;
+}
+
+interface ArchiveFile {
+  name: string;
+  path: string;
 }
 
 interface MemorySidebarProps {
@@ -22,18 +27,26 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
   const { sidebarCollapsed } = useUIStore();
   const { activeProjectId } = useProjectStore();
   const [memoryFiles, setMemoryFiles] = useState<MemoryFile[]>([]);
+  const [archiveFiles, setArchiveFiles] = useState<ArchiveFile[]>([]);
+  const [archiveExpanded, setArchiveExpanded] = useState(false);
 
   // Load memory file status
   useEffect(() => {
     loadMemoryFiles();
+    loadArchiveFiles();
   }, [activeProjectId]);
+
+  // Auto-refresh archive files every 5 seconds for real-time updates
+  useEffect(() => {
+    const interval = setInterval(loadArchiveFiles, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const loadMemoryFiles = async () => {
     try {
       const aiMemory = await memoryService.loadAIMemory();
-      const projectMemory = activeProjectId
-        ? await memoryService.loadProjectMemory(activeProjectId)
-        : null;
+      // Load Plan.md (roadmaps) - this is where the secretary saves roadmaps
+      const planMemory = await memoryService.loadPlanMemory();
       const dailyMemory = await memoryService.loadDailyMemory(activeProjectId || undefined);
 
       const files: MemoryFile[] = [
@@ -46,20 +59,28 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
           color: '#a855f7',
         },
         {
-          id: 'project',
+          id: 'plan',
           name: 'Plan.md',
           icon: <Target size={14} />,
-          type: 'project',
-          exists: !!projectMemory,
+          type: 'plan',
+          exists: !!(planMemory && planMemory.activePlans.length > 0),
           color: '#3fb950',
         },
         {
-          id: 'daily',
-          name: 'Daily.md',
+          id: 'today',
+          name: 'Today.md',
           icon: <Calendar size={14} />,
           type: 'daily',
-          exists: !!dailyMemory,
+          exists: !!dailyMemory,  // Will update once we load Today.md
           color: '#58a6ff',
+        },
+        {
+          id: 'tomorrow',
+          name: 'Tomorrow.md',
+          icon: <Calendar size={14} />,
+          type: 'daily',
+          exists: true,  // Show even if doesn't exist yet
+          color: '#a371f7',
         },
       ];
 
@@ -69,9 +90,24 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
     }
   };
 
+  const loadArchiveFiles = async () => {
+    try {
+      const archives = await memoryService.listPlanArchives();
+      setArchiveFiles(archives.map(name => ({ name, path: name })));
+    } catch (error) {
+      console.error('Failed to load archive files:', error);
+      setArchiveFiles([]);
+    }
+  };
+
   const handleFileClick = async (file: MemoryFile) => {
     // Always select the file - editor will handle creation if needed
     onSelectFile(file.id);
+  };
+
+  const handleArchiveClick = async (archive: ArchiveFile) => {
+    // Open an archive file (could extend to show in editor)
+    onSelectFile(`archive:${archive.name}`);
   };
 
   if (sidebarCollapsed) {
@@ -82,8 +118,8 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
     <nav
       className="sidebar bg-[#010409] flex flex-col flex-shrink-0 rounded-2xl"
       style={{
-        width: '240px',
-        minWidth: '240px',
+        width: '260px',
+        minWidth: '260px',
         margin: '8px',
         height: 'calc(100vh - 16px)',
         overflow: 'hidden',
@@ -103,8 +139,8 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
             key={file.id}
             onClick={() => handleFileClick(file)}
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md transition-all text-left mb-0.5 ${activeFileId === file.id
-                ? 'bg-[#1f6feb]/15 text-white'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b22]'
+              ? 'bg-[#1f6feb]/15 text-white'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b22]'
               }`}
           >
             <span style={{ color: file.color }}>{file.icon}</span>
@@ -114,6 +150,43 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
             )}
           </button>
         ))}
+
+        {/* Plans/ Archive Section */}
+        {archiveFiles.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-gray-800/50">
+            <button
+              onClick={() => setArchiveExpanded(!archiveExpanded)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              {archiveExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <FolderArchive size={14} className="text-amber-500/70" />
+              <span className="text-[11px] font-medium uppercase tracking-wider flex-1 text-left">
+                Plans/ Archive
+              </span>
+              <span className="text-[10px] text-gray-600">{archiveFiles.length}</span>
+            </button>
+
+            {archiveExpanded && (
+              <div className="mt-1 space-y-0.5">
+                {archiveFiles.map((archive) => (
+                  <button
+                    key={archive.name}
+                    onClick={() => handleArchiveClick(archive)}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-left transition-all ${activeFileId === `archive:${archive.name}`
+                      ? 'bg-[#1f6feb]/15 text-white'
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-[#161b22]'
+                      }`}
+                  >
+                    <FileText size={12} className="text-amber-500/50 ml-4" />
+                    <span className="text-[12px] truncate" title={archive.name}>
+                      {archive.name.replace('.md', '')}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Bottom hint */}
@@ -127,3 +200,4 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ activeFileId, onSelectFil
 };
 
 export default MemorySidebar;
+

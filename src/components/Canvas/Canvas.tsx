@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNotesStore, useBlocksStore, useUIStore, useFileStore, useProjectStore } from '@/store';
+import { useAIStore } from '@/store/aiStore';
 import { getNoteById, getBlocksByNote } from '@/utils/tauri';
 import CanvasHeader from './CanvasHeader';
 import CanvasContent from './CanvasContent';
@@ -17,7 +18,7 @@ interface CanvasProps {
 
 const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) => {
   // Single source of truth: activeNoteId determines what note is displayed
-  const { activeNoteId } = useNotesStore();
+  const { activeNoteId, setActiveNote: setActiveNoteId } = useNotesStore();
   const { setBlocks, blocks } = useBlocksStore();
   const { canvasMode } = useUIStore();
   const { getActiveFile, setActiveFile } = useFileStore();
@@ -29,6 +30,30 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
   const selectedItem = selectedItemId ? getTreeItemById(selectedItemId) : null;
   const isFileSelected = selectedItem && ['pdf', 'video', 'audio', 'image'].includes(selectedItem.type);
   const activeFile = getActiveFile();
+  const { setActiveFile: setAIActiveFile, switchSession } = useAIStore();
+
+  // When file preview is active, switch AI session to file context and clear note selection
+  useEffect(() => {
+    if (activeFile) {
+      console.log('📁 File active - switching AI to file session:', activeFile.name);
+      setActiveNoteId(null);  // Clear note selection in sidebar
+      setAIActiveFile(activeFile.id, activeFile.name);  // Switch AI to file-specific session
+    } else {
+      // File closed - clear file context from AI
+      setAIActiveFile(null);
+    }
+  }, [activeFile, setAIActiveFile, setActiveNoteId]);
+
+  // Sync AI session with active note (ensures AI sidebar uses correct note context)
+  useEffect(() => {
+    if (activeNoteId && !activeFile) {
+      console.log('🔄 Syncing AI session to note:', activeNoteId);
+      switchSession(activeNoteId);
+    } else if (!activeNoteId && !activeFile) {
+      // No note and no file - use global session
+      switchSession(null);
+    }
+  }, [activeNoteId, activeFile, switchSession]);
 
   // Load note when activeNoteId changes
   useEffect(() => {
@@ -102,7 +127,7 @@ const Canvas: React.FC<CanvasProps> = ({ activeMemoryFile, onCloseMemoryFile }) 
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0d1117] rounded-lg">
         {activeMemoryFile ? (
           <MemoryFileEditor
-            fileType={activeMemoryFile as 'ai' | 'project' | 'daily'}
+            fileType={activeMemoryFile as 'ai' | 'plan' | 'daily'}
             onClose={() => onCloseMemoryFile?.()}
           />
         ) : (
