@@ -1,0 +1,1 @@
+{"video_id": "f2Iew-kq3Xo", "language": "", "text": "", "segments": [], "source": "youtube", "error": "type object 'YouTubeTranscriptApi' has no attribute 'get_transcript'", "error_code": "unknown"}

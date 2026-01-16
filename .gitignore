@@ -82,3 +82,12 @@ notes-data/
 # Backups
 *.backup
 *.bak
+
+# Local env / venv
+coursegen_streamlit/.venv/
+.venv/
+venv/
+.env
+.env.*
+__pycache__/
+*.pyc

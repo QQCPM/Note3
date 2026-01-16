@@ -1,0 +1,26 @@
+{
+  "ranked_ids": [
+    "a1",
+    "a3",
+    "a2"
+  ],
+  "scores": {
+    "a1": 0.95,
+    "a2": 0.1,
+    "a3": 0.6
+  },
+  "rationales": {
+    "a1": "This video is the strongest candidate as its title and description directly address the lesson objectives: explaining MCP clearly and diving into its core components. It appears to be a conceptual overview suitable for an introduction.",
+    "a2": "This is a general news roundup video. While it might mention MCP, it lacks the structured educational focus required to teach the specific lesson objectives.",
+    "a3": "While highly relevant to the topic, this video focuses on a hands-on tutorial and coding ('build a tool-using agent'). It is less suitable for a general 'Introduction' lesson compared to a conceptual explanation, but still valuable as supplementary material."
+  },
+  "debug": {
+    "used_judge": true,
+    "cache_hit": false,
+    "topk": 3,
+    "rounds": 2,
+    "temperature": 0.1,
+    "judge_model": "models/gemini-3-pro-preview",
+    "errors": []
+  }
+}
